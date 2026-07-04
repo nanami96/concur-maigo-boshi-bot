@@ -1,0 +1,203 @@
+[
+  {
+    "id": "train-bus-daily",
+    "claimType": "train-bus",
+    "travelPurpose": "daily",
+    "expenseType": "交通費（電車・バス）",
+    "receiptRequired": "原則不要です。会社ルールで必要な場合のみ添付してください。",
+    "inputTips": [
+      "利用日、出発地、到着地、訪問先または目的を入力します。",
+      "定期区間と重なっていないか確認します。"
+    ],
+    "commentExample": "〇〇社訪問のため、東京駅から品川駅まで電車利用",
+    "notes": [
+      "IC履歴や乗換案内の金額と申請金額が合っているか確認してください。",
+      "私用移動は申請対象外です。"
+    ]
+  },
+  {
+    "id": "train-bus-business-trip",
+    "claimType": "train-bus",
+    "travelPurpose": "business-trip",
+    "expenseType": "旅費交通費（出張時の電車・バス）",
+    "receiptRequired": "高額な移動や会社ルールで必要な場合は、領収書または利用明細を添付してください。",
+    "inputTips": [
+      "出張先、移動区間、出張日を入力します。",
+      "出張申請がある場合は関連付けます。"
+    ],
+    "commentExample": "大阪出張に伴う新大阪駅から訪問先までのバス代",
+    "notes": [
+      "宿泊費や日当とは経費タイプを分けて入力してください。",
+      "出張に関する社内ルールがある場合はそちらを優先してください。"
+    ]
+  },
+  {
+    "id": "train-bus-commute",
+    "claimType": "train-bus",
+    "travelPurpose": "commute",
+    "expenseType": "通勤費・定期区間控除",
+    "receiptRequired": "定期券購入や会社指定の精算では領収書を添付してください。",
+    "inputTips": [
+      "定期区間内か、区間外の差額精算かを明記します。",
+      "通常の交通費として申請してよいか確認します。"
+    ],
+    "commentExample": "定期区間外の〇〇駅から△△駅までの差額精算",
+    "notes": [
+      "定期区間内の運賃を二重に申請しないよう注意してください。",
+      "迷う場合は経理または上長に確認してください。"
+    ]
+  },
+  {
+    "id": "train-bus-unknown",
+    "claimType": "train-bus",
+    "travelPurpose": "unknown",
+    "expenseType": "要確認（交通費）",
+    "receiptRequired": "判断材料として、利用明細や領収書があれば添付してください。",
+    "inputTips": [
+      "利用日、区間、目的、金額をできるだけ具体的に入力します。",
+      "迷った理由をコメントに残します。"
+    ],
+    "commentExample": "移動内容の経費タイプ判断に迷うため確認依頼",
+    "notes": [
+      "誤った経費タイプで申請すると差し戻しになる可能性があります。",
+      "会社の経費規程を優先してください。"
+    ]
+  },
+  {
+    "id": "taxi",
+    "claimType": "taxi",
+    "expenseType": "タクシー代",
+    "receiptRequired": "必要です。領収書を添付してください。",
+    "inputTips": [
+      "乗車区間、利用理由、同乗者がいる場合は同乗者名を入力します。",
+      "深夜対応、荷物運搬、公共交通機関が使えない等の理由を具体的に書きます。"
+    ],
+    "commentExample": "終電後の顧客対応終了により、〇〇オフィスから自宅までタクシー利用",
+    "notes": [
+      "タクシー利用は承認条件が厳しい場合があります。",
+      "理由が不明確だと差し戻しになる可能性があります。"
+    ]
+  },
+  {
+    "id": "shinkansen-business-trip",
+    "claimType": "shinkansen",
+    "travelPurpose": "business-trip",
+    "expenseType": "旅費交通費（新幹線）",
+    "receiptRequired": "必要です。領収書または予約明細を添付してください。",
+    "inputTips": [
+      "出張先、乗車区間、利用日を入力します。",
+      "指定席、自由席、変更やキャンセルがあれば分かるように記載します。"
+    ],
+    "commentExample": "大阪出張に伴う東京駅から新大阪駅までの新幹線代",
+    "notes": [
+      "出張申請や承認番号がある場合は関連付けてください。",
+      "宿泊費とは別の経費タイプで申請してください。"
+    ]
+  },
+  {
+    "id": "shinkansen-unknown",
+    "claimType": "shinkansen",
+    "travelPurpose": "unknown",
+    "expenseType": "要確認（新幹線）",
+    "receiptRequired": "領収書または予約明細を添付してください。",
+    "inputTips": [
+      "利用目的、乗車区間、金額、出張との関係を入力します。",
+      "判断に迷う理由をコメントに残します。"
+    ],
+    "commentExample": "新幹線利用の経費タイプ判断に迷うため確認依頼",
+    "notes": [
+      "高額になりやすいため、申請前に上長または経理へ確認してください。"
+    ]
+  },
+  {
+    "id": "airplane-business-trip",
+    "claimType": "airplane",
+    "travelPurpose": "business-trip",
+    "expenseType": "旅費交通費（航空券）",
+    "receiptRequired": "必要です。領収書、予約明細、搭乗情報を添付してください。",
+    "inputTips": [
+      "出張先、搭乗日、区間、航空会社を入力します。",
+      "変更やキャンセル料がある場合は内容を分けて記載します。"
+    ],
+    "commentExample": "福岡出張に伴う羽田空港から福岡空港までの航空券代",
+    "notes": [
+      "会社指定の予約方法や上限金額がある場合は確認してください。",
+      "マイル利用や個人負担分がある場合はコメントに残してください。"
+    ]
+  },
+  {
+    "id": "airplane-unknown",
+    "claimType": "airplane",
+    "travelPurpose": "unknown",
+    "expenseType": "要確認（航空券）",
+    "receiptRequired": "領収書、予約明細、搭乗情報を添付してください。",
+    "inputTips": [
+      "利用目的、搭乗区間、金額、出張との関係を入力します。",
+      "判断に迷う理由をコメントに残します。"
+    ],
+    "commentExample": "航空券利用の経費タイプ判断に迷うため確認依頼",
+    "notes": [
+      "航空券は金額が大きくなりやすいため、社内ルールを確認してください。"
+    ]
+  },
+  {
+    "id": "hotel",
+    "claimType": "hotel",
+    "expenseType": "宿泊費",
+    "receiptRequired": "必要です。ホテルの領収書または宿泊明細を添付してください。",
+    "inputTips": [
+      "宿泊日、宿泊先、出張先、宿泊理由を入力します。",
+      "朝食代など宿泊費以外が含まれる場合は内訳を確認します。"
+    ],
+    "commentExample": "大阪出張に伴う7月10日から1泊分の宿泊費",
+    "notes": [
+      "会社の宿泊上限金額を超えていないか確認してください。",
+      "個人的な追加料金は申請対象外になる場合があります。"
+    ]
+  },
+  {
+    "id": "meal",
+    "claimType": "meal",
+    "expenseType": "会議費・交際費",
+    "receiptRequired": "必要です。領収書を添付してください。",
+    "inputTips": [
+      "参加者、会社名、目的、人数を入力します。",
+      "社内会議か社外との会食か分かるように記載します。"
+    ],
+    "commentExample": "〇〇社との打ち合わせ後の会食、参加者4名",
+    "notes": [
+      "一人あたりの金額上限や事前承認の要否を確認してください。",
+      "私的な飲食は申請対象外です。"
+    ]
+  },
+  {
+    "id": "supplies",
+    "claimType": "supplies",
+    "expenseType": "消耗品費・備品購入費",
+    "receiptRequired": "必要です。領収書または購入明細を添付してください。",
+    "inputTips": [
+      "購入品名、用途、利用部署または利用者を入力します。",
+      "高額な備品は資産扱いになる場合があるため確認します。"
+    ],
+    "commentExample": "営業部で利用するWeb会議用ヘッドセット購入",
+    "notes": [
+      "私物との区別がつくように用途を明確にしてください。",
+      "会社指定の購買ルールがある場合はそちらを優先してください。"
+    ]
+  },
+  {
+    "id": "unknown",
+    "claimType": "unknown",
+    "expenseType": "要確認（経理・上長へ確認）",
+    "receiptRequired": "判断材料として、領収書や利用明細があれば添付してください。",
+    "inputTips": [
+      "何に使った費用か、いつ、どこで、いくら使ったかを整理します。",
+      "迷っている理由をコメントに残します。"
+    ],
+    "commentExample": "経費タイプ判断に迷うため、内容を確認のうえ申請したいです",
+    "notes": [
+      "無理に選ぶと差し戻しになる可能性があります。",
+      "社内規程や経理担当の案内を優先してください。"
+    ]
+  }
+]
