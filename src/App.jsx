@@ -141,10 +141,13 @@ export default function App() {
       <section className="chatPanel" aria-label="Concur迷子防止Botの質問">
         {messages.map((message, index) => (
           <ChatMessage key={index} speaker={message.speaker}>
-            <p>{message.text}</p>
+            {message.type === "question" ? (
+              <h2>{message.text}</h2>
+            ) : (
+              <p>{message.text}</p>
+            )}
           </ChatMessage>
         ))}
-
         {!result && (
           <ChatMessage>
             <h2>{currentQuestion.text}</h2>

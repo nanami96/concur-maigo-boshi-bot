@@ -1,116 +1,82 @@
 {
   "company": {
-    "id": "sample-company",
-    "name": "Sample Company",
-    "version": "1.0.0",
-    "updatedAt": "2026-07-05"
+    "company_id": "sample-company",
+    "company_name": "サンプル会社",
+    "default_policy_id": "normal_expense",
+    "language": "ja"
   },
   "policies": [
     {
-      "id": "normal-expense",
-      "name": "通常経費及び交通費",
-      "description": "通常の経費精算および交通費申請で使用するポリシー",
-      "active": true,
-      "displayOrder": 1
+      "policy_id": "normal_expense",
+      "policy_name": "通常経費及び交通費",
+      "enabled": "Y",
+      "display_order": 1
+    },
+    {
+      "policy_id": "overseas_expense",
+      "policy_name": "海外出張費",
+      "enabled": "Y",
+      "display_order": 2
     }
   ],
   "expenseTypes": [
     {
-      "id": "train",
-      "policyId": "normal-expense",
+      "id": "train_local",
+      "policyId": "normal_expense",
       "name": "電車・近隣交通費",
       "receiptRequired": false,
       "active": true,
-      "displayOrder": 1,
-      "note": "公共交通機関"
+      "note": ""
     },
     {
       "id": "taxi",
-      "policyId": "normal-expense",
+      "policyId": "normal_expense",
       "name": "タクシー",
       "receiptRequired": true,
       "active": true,
-      "displayOrder": 2,
-      "note": "理由入力が必要"
+      "note": ""
     },
     {
       "id": "hotel",
-      "policyId": "normal-expense",
+      "policyId": "normal_expense",
       "name": "宿泊費",
       "receiptRequired": true,
       "active": true,
-      "displayOrder": 3,
-      "note": "出張時のみ"
+      "note": ""
     }
   ],
   "questions": [
     {
       "id": "q-category",
       "text": "今日は何を申請しますか？",
-      "type": "single-select",
+      "type": "single_select",
       "displayOrder": 1,
       "options": [
         {
           "label": "電車・バス",
-          "value": "train",
-          "nextQuestionId": "q-transport-purpose"
+          "value": "電車・バス",
+          "nextQuestionId": "q-business-trip"
         },
         {
           "label": "タクシー",
-          "value": "taxi",
-          "nextQuestionId": "q-taxi-reason"
+          "value": "タクシー"
         },
         {
           "label": "ホテル",
-          "value": "hotel"
+          "value": "ホテル",
+          "nextQuestionId": "q-business-trip"
         }
       ]
     },
     {
-      "id": "q-transport-purpose",
-      "text": "どんな移動でしたか？",
-      "type": "single-select",
+      "id": "q-business-trip",
+      "text": "出張に関係ですか？",
+      "type": "yes_no",
       "displayOrder": 2,
       "options": [
         {
-          "label": "近隣・日常的な業務移動",
-          "value": "daily"
-        },
-        {
-          "label": "出張に伴う移動",
-          "value": "business-trip"
-        },
-        {
-          "label": "通勤・定期区間に関する移動",
-          "value": "commute"
-        },
-        {
-          "label": "判断できない",
-          "value": "unknown"
-        }
-      ]
-    },
-    {
-      "id": "q-taxi-reason",
-      "text": "タクシーを利用した理由は何ですか？",
-      "type": "single-select",
-      "displayOrder": 3,
-      "options": [
-        {
-          "label": "深夜・早朝の移動",
-          "value": "late-night"
-        },
-        {
-          "label": "荷物が多い",
-          "value": "heavy-luggage"
-        },
-        {
-          "label": "公共交通機関が使えない",
-          "value": "no-public-transport"
-        },
-        {
-          "label": "判断できない",
-          "value": "unknown"
+          "label": "はい",
+          "value": "yes"
         }
       ]
     }
@@ -120,65 +86,35 @@
       "id": "r001",
       "priority": 1,
       "conditions": {
-        "q-category": "train",
-        "q-transport-purpose": "daily"
+        "q-category": "電車・バス",
+        "q-business-trip": "yes"
       },
-      "resultExpenseTypeId": "train",
+      "resultExpenseTypeId": "train_local",
       "message": "電車・バスは「電車・近隣交通費」を選択してください。",
+      "warningMessage": "領収書が不要な場合でも会社規定に従ってください。",
       "active": true
     },
     {
       "id": "r002",
       "priority": 2,
       "conditions": {
-        "q-category": "train",
-        "q-transport-purpose": "business-trip"
+        "q-category": "タクシー"
       },
-      "resultExpenseTypeId": "train",
-      "message": "出張に伴う電車・バス移動も「電車・近隣交通費」を選択してください。",
+      "resultExpenseTypeId": "taxi",
+      "message": "タクシーは「タクシー」を選択してください。",
+      "warningMessage": "深夜・緊急時など利用理由をコメントに記載してください。",
       "active": true
     },
     {
       "id": "r003",
       "priority": 3,
       "conditions": {
-        "q-category": "taxi",
-        "q-taxi-reason": "late-night"
-      },
-      "resultExpenseTypeId": "taxi",
-      "message": "深夜・早朝のタクシー利用は「タクシー」を選択し、利用理由をコメントに記載してください。",
-      "active": true
-    },
-    {
-      "id": "r004",
-      "priority": 4,
-      "conditions": {
-        "q-category": "hotel"
+        "q-category": "ホテル",
+        "q-business-trip": "yes"
       },
       "resultExpenseTypeId": "hotel",
-      "message": "ホテル宿泊は「宿泊費」を選択してください。",
-      "active": true
-    },
-    {
-      "id": "r005",
-      "priority": 5,
-      "conditions": {
-        "q-category": "taxi",
-        "q-taxi-reason": "heavy-luggage"
-      },
-      "resultExpenseTypeId": "taxi",
-      "message": "荷物が多い場合のタクシー利用は「タクシー」を選択し、具体的な理由をコメントに記載してください。",
-      "active": true
-    },
-    {
-      "id": "r006",
-      "priority": 6,
-      "conditions": {
-        "q-category": "taxi",
-        "q-taxi-reason": "no-public-transport"
-      },
-      "resultExpenseTypeId": "taxi",
-      "message": "公共交通機関が使えない場合は「タクシー」を選択し、利用理由をコメントに記載してください。",
+      "message": "宿泊費を選択してください。",
+      "warningMessage": "領収書添付が必要です。",
       "active": true
     }
   ]
