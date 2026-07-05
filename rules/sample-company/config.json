@@ -1,7 +1,69 @@
 {
-  "company": {},
-  "policies": [],
-  "expenseTypes": [],
-  "questions": [],
+  "company": {
+    "id": "sample-company",
+    "name": "Sample Company",
+    "version": "1.0.0",
+    "updatedAt": "2026-07-05"
+  },
+  "policies": [
+    {
+      "id": "normal-expense",
+      "name": "通常経費及び交通費",
+      "description": "通常の経費精算および交通費申請で使用するポリシー",
+      "active": true,
+      "displayOrder": 1
+    }
+  ],
+  "expenseTypes": [
+    {
+      "id": "train",
+      "policyId": "normal-expense",
+      "name": "電車・近隣交通費",
+      "receiptRequired": false,
+      "active": true,
+      "displayOrder": 1,
+      "note": "公共交通機関"
+    },
+    {
+      "id": "taxi",
+      "policyId": "normal-expense",
+      "name": "タクシー",
+      "receiptRequired": true,
+      "active": true,
+      "displayOrder": 2,
+      "note": "理由入力が必要"
+    },
+    {
+      "id": "hotel",
+      "policyId": "normal-expense",
+      "name": "宿泊費",
+      "receiptRequired": true,
+      "active": true,
+      "displayOrder": 3,
+      "note": "出張時のみ"
+    }
+  ],
+  "questions": [
+    {
+      "id": "q-category",
+      "text": "今日は何を申請しますか？",
+      "type": "single-select",
+      "displayOrder": 1,
+      "options": [
+        {
+          "label": "電車・バス",
+          "value": "train"
+        },
+        {
+          "label": "タクシー",
+          "value": "taxi"
+        },
+        {
+          "label": "ホテル",
+          "value": "hotel"
+        }
+      ]
+    }
+  ],
   "rules": []
 }
