@@ -40,6 +40,7 @@ export default function App() {
   const [selectedAnswer, setSelectedAnswer] = useState("");
   const [result, setResult] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [history, setHistory] = useState([]);
   const selectedOption = currentQuestion.options.find(
     (option) => option.value === selectedAnswer,
   );
@@ -48,6 +49,14 @@ export default function App() {
     const selected = currentQuestion.options.find(
       (option) => option.value === answer,
     );
+
+    const snapshot = {
+      engine: engine.getSnapshot(),
+      currentQuestion,
+      selectedAnswer,
+      result,
+      messages,
+    };
 
     const nextQuestion = engine.submitAnswer(answer);
 
@@ -65,10 +74,13 @@ export default function App() {
       },
     ];
 
+    setHistory([...history, snapshot]);
+
     if (nextQuestion) {
       setMessages(newMessages);
       setCurrentQuestion(nextQuestion);
       setSelectedAnswer("");
+      setResult(null);
       return;
     }
 
@@ -77,11 +89,31 @@ export default function App() {
     setResult(nextResult);
     setSelectedAnswer(answer);
   }
+
+  function goBack() {
+    const previous = history[history.length - 1];
+
+    if (!previous) {
+      return;
+    }
+
+    engine.restoreSnapshot(previous.engine);
+
+    setCurrentQuestion(previous.currentQuestion);
+    setSelectedAnswer(previous.selectedAnswer);
+    setResult(previous.result);
+    setMessages(previous.messages);
+    setHistory(history.slice(0, -1));
+  }
+
   function resetAnswers() {
+    const firstQuestion = engine.reset();
+
     setSelectedAnswer("");
     setResult(null);
     setMessages([]);
-    setCurrentQuestion(engine.getFirstQuestion());
+    setCurrentQuestion(firstQuestion);
+    setHistory([]);
   }
   return (
     <main className="appShell">
@@ -93,6 +125,14 @@ export default function App() {
             質問に答えるだけで、申請に使う経費タイプと入力のコツを確認できます。
           </p>
         </div>
+        <button
+          className="resetButton"
+          type="button"
+          onClick={goBack}
+          disabled={history.length === 0}
+        >
+          戻る
+        </button>
         <button className="resetButton" type="button" onClick={resetAnswers}>
           最初から
         </button>

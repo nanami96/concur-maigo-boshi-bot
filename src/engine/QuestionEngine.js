@@ -59,4 +59,24 @@ export default class QuestionEngine {
       expenseType,
     };
   }
+  getSnapshot() {
+    return {
+      currentQuestion: this.currentQuestion,
+      answers: [...this.answers],
+    };
+  }
+
+  restoreSnapshot(snapshot) {
+    this.currentQuestion = snapshot.currentQuestion;
+    this.answers = [...snapshot.answers];
+
+    return this.currentQuestion;
+  }
+
+  reset() {
+    this.currentQuestion = null;
+    this.answers = [];
+
+    return this.getFirstQuestion();
+  }
 }
