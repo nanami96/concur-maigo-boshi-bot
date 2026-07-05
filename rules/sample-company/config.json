@@ -52,18 +52,134 @@
       "options": [
         {
           "label": "電車・バス",
-          "value": "train"
+          "value": "train",
+          "nextQuestionId": "q-transport-purpose"
         },
         {
           "label": "タクシー",
-          "value": "taxi"
+          "value": "taxi",
+          "nextQuestionId": "q-taxi-reason"
         },
         {
           "label": "ホテル",
           "value": "hotel"
         }
       ]
+    },
+    {
+      "id": "q-transport-purpose",
+      "text": "どんな移動でしたか？",
+      "type": "single-select",
+      "displayOrder": 2,
+      "options": [
+        {
+          "label": "近隣・日常的な業務移動",
+          "value": "daily"
+        },
+        {
+          "label": "出張に伴う移動",
+          "value": "business-trip"
+        },
+        {
+          "label": "通勤・定期区間に関する移動",
+          "value": "commute"
+        },
+        {
+          "label": "判断できない",
+          "value": "unknown"
+        }
+      ]
+    },
+    {
+      "id": "q-taxi-reason",
+      "text": "タクシーを利用した理由は何ですか？",
+      "type": "single-select",
+      "displayOrder": 3,
+      "options": [
+        {
+          "label": "深夜・早朝の移動",
+          "value": "late-night"
+        },
+        {
+          "label": "荷物が多い",
+          "value": "heavy-luggage"
+        },
+        {
+          "label": "公共交通機関が使えない",
+          "value": "no-public-transport"
+        },
+        {
+          "label": "判断できない",
+          "value": "unknown"
+        }
+      ]
     }
   ],
-  "rules": []
+  "rules": [
+    {
+      "id": "r001",
+      "priority": 1,
+      "conditions": {
+        "q-category": "train",
+        "q-transport-purpose": "daily"
+      },
+      "resultExpenseTypeId": "train",
+      "message": "電車・バスは「電車・近隣交通費」を選択してください。",
+      "active": true
+    },
+    {
+      "id": "r002",
+      "priority": 2,
+      "conditions": {
+        "q-category": "train",
+        "q-transport-purpose": "business-trip"
+      },
+      "resultExpenseTypeId": "train",
+      "message": "出張に伴う電車・バス移動も「電車・近隣交通費」を選択してください。",
+      "active": true
+    },
+    {
+      "id": "r003",
+      "priority": 3,
+      "conditions": {
+        "q-category": "taxi",
+        "q-taxi-reason": "late-night"
+      },
+      "resultExpenseTypeId": "taxi",
+      "message": "深夜・早朝のタクシー利用は「タクシー」を選択し、利用理由をコメントに記載してください。",
+      "active": true
+    },
+    {
+      "id": "r004",
+      "priority": 4,
+      "conditions": {
+        "q-category": "hotel"
+      },
+      "resultExpenseTypeId": "hotel",
+      "message": "ホテル宿泊は「宿泊費」を選択してください。",
+      "active": true
+    },
+    {
+      "id": "r005",
+      "priority": 5,
+      "conditions": {
+        "q-category": "taxi",
+        "q-taxi-reason": "heavy-luggage"
+      },
+      "resultExpenseTypeId": "taxi",
+      "message": "荷物が多い場合のタクシー利用は「タクシー」を選択し、具体的な理由をコメントに記載してください。",
+      "active": true
+    },
+    {
+      "id": "r006",
+      "priority": 6,
+      "conditions": {
+        "q-category": "taxi",
+        "q-taxi-reason": "no-public-transport"
+      },
+      "resultExpenseTypeId": "taxi",
+      "message": "公共交通機関が使えない場合は「タクシー」を選択し、利用理由をコメントに記載してください。",
+      "active": true
+    }
+  ]
 }
