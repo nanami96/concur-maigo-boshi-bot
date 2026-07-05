@@ -1,47 +1,11 @@
 const XLSX = require("xlsx");
 const fs = require("fs");
+const { toValue, isFilled } = require("./generators/utils");
 
 const workbook = XLSX.readFile("excel/sample-company.xlsx");
 
 function readSheet(name) {
   return XLSX.utils.sheet_to_json(workbook.Sheets[name] || {});
-}
-
-function toValue(text, fallback) {
-  const value = String(text || "").trim();
-
-  if (!value) {
-    return fallback;
-  }
-
-  const fixedMap = {
-    はい: "yes",
-    いいえ: "no",
-    有: "yes",
-    無: "no",
-    必要: "yes",
-    不要: "no",
-  };
-
-  if (fixedMap[value]) {
-    return fixedMap[value];
-  }
-
-  return (
-    value
-      .normalize("NFKC")
-      .toLowerCase()
-      .replace(/[・、，,／/]/g, "_")
-      .replace(/[（）()「」『』【】\[\]]/g, "")
-      .replace(/\s+/g, "_")
-      .replace(/[^a-z0-9_\-]/g, "")
-      .replace(/_+/g, "_")
-      .replace(/^_+|_+$/g, "") || fallback
-  );
-}
-
-function isFilled(value) {
-  return String(value || "").trim() !== "";
 }
 
 const companySheet = readSheet("99_company_settings");
