@@ -51,10 +51,6 @@ function createQuestions(categoryRows, conditionColumns) {
       return rowValue === optionValue;
     });
 
-    console.log("currentColumnName:", currentColumnName);
-    console.log("optionValue:", optionValue);
-    console.log("matchedRows:", matchedRows);
-
     const nextColumn = laterColumns.find((columnName) =>
       matchedRows.some((row) => isFilled(row[columnName])),
     );

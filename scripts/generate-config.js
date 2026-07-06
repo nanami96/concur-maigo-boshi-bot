@@ -4,6 +4,10 @@ const { createRules } = require("./generators/rules");
 const { createQuestions } = require("./generators/questions");
 const XLSX = require("xlsx");
 const fs = require("fs");
+const {
+  validateExpenseTypes,
+  validateRequiredFields,
+} = require("./generators/validators");
 
 const companyId = process.argv[2] || "sample-company";
 const workbook = XLSX.readFile(`excel/${companyId}.xlsx`);
@@ -29,7 +33,21 @@ const conditionColumns = Object.keys(categoryRows[0] || {}).filter(
 const questions = createQuestions(categoryRows, conditionColumns);
 
 const expenseTypes = createExpenseTypes(expenseTypeSheet);
+console.log(expenseTypes);
 
+const validationErrors = [
+  ...validateRequiredFields(categoryRows),
+  ...validateExpenseTypes(categoryRows, expenseTypes),
+];
+
+if (validationErrors.length > 0) {
+  console.error("config.json の生成に失敗しました。");
+  console.error("");
+
+  validationErrors.forEach((error) => console.error(`❌ ${error}`));
+
+  process.exit(1);
+}
 const rules = createRules(
   categoryRows,
   conditionColumns,
