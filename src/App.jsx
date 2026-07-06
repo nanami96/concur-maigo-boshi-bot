@@ -1,9 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 const configs = import.meta.glob("../rules/*/config.json", { eager: true });
 import QuestionEngine from "./engine/QuestionEngine";
 
-const companyId = "sample-company";
-const config = configs[`../rules/${companyId}/config.json`].default;
 function ChatMessage({ speaker = "bot", children }) {
   return (
     <div className={`messageRow ${speaker}`}>
@@ -33,8 +31,10 @@ function ChoiceButtons({ options, selected, onSelect }) {
 }
 
 export default function App() {
-  const engine = useMemo(() => new QuestionEngine(config), []);
+  const [companyId, setCompanyId] = useState("sample-company");
+  const config = configs[`../rules/${companyId}/config.json`].default;
 
+  const engine = useMemo(() => new QuestionEngine(config), [config]);
   const [currentQuestion, setCurrentQuestion] = useState(() =>
     engine.getFirstQuestion(),
   );
@@ -117,6 +117,19 @@ export default function App() {
     setCurrentQuestion(firstQuestion);
     setHistory([]);
   }
+
+  function handleCompanyChange(event) {
+    const nextCompanyId = event.target.value;
+
+    setCompanyId(nextCompanyId);
+    setSelectedAnswer("");
+    setResult(null);
+    setMessages([]);
+    setHistory([]);
+  }
+  useEffect(() => {
+    setCurrentQuestion(engine.getFirstQuestion());
+  }, [engine]);
   return (
     <main className="appShell">
       <header className="appHeader">
@@ -127,6 +140,10 @@ export default function App() {
             質問に答えるだけで、申請に使う経費タイプと入力のコツを確認できます。
           </p>
         </div>
+        <select value={companyId} onChange={handleCompanyChange}>
+          <option value="sample-company">サンプル会社</option>
+          <option value="company-a">A株式会社</option>
+        </select>
         <button
           className="resetButton"
           type="button"
