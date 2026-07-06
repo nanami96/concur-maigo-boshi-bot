@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import config from "../rules/sample-company/config.json";
+const configs = import.meta.glob("../rules/*/config.json", { eager: true });
 import QuestionEngine from "./engine/QuestionEngine";
 
+const companyId = "sample-company";
+const config = configs[`../rules/${companyId}/config.json`].default;
 function ChatMessage({ speaker = "bot", children }) {
   return (
     <div className={`messageRow ${speaker}`}>
