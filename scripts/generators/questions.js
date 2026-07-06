@@ -46,10 +46,14 @@ function createQuestions(categoryRows, conditionColumns) {
     const currentIndex = conditionColumns.indexOf(currentColumnName);
     const laterColumns = conditionColumns.slice(currentIndex + 1);
 
-    const matchedRows = categoryRows.filter(
-      (row) =>
-        toValue(row[currentColumnName], row[currentColumnName]) === optionValue,
-    );
+    const matchedRows = categoryRows.filter((row) => {
+      const rowValue = toValue(row[currentColumnName], row[currentColumnName]);
+      return rowValue === optionValue;
+    });
+
+    console.log("currentColumnName:", currentColumnName);
+    console.log("optionValue:", optionValue);
+    console.log("matchedRows:", matchedRows);
 
     const nextColumn = laterColumns.find((columnName) =>
       matchedRows.some((row) => isFilled(row[columnName])),

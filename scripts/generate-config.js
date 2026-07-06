@@ -5,7 +5,8 @@ const { createQuestions } = require("./generators/questions");
 const XLSX = require("xlsx");
 const fs = require("fs");
 
-const workbook = XLSX.readFile("excel/sample-company.xlsx");
+const companyId = process.argv[2] || "sample-company";
+const workbook = XLSX.readFile(`excel/${companyId}.xlsx`);
 
 function readSheet(name) {
   return XLSX.utils.sheet_to_json(workbook.Sheets[name] || {});
@@ -43,8 +44,14 @@ const config = {
   rules,
 };
 
+const outputDir = `rules/${companyId}`;
+
+if (!fs.existsSync(outputDir)) {
+  fs.mkdirSync(outputDir, { recursive: true });
+}
+
 fs.writeFileSync(
-  "rules/sample-company/config.json",
+  `${outputDir}/config.json`,
   JSON.stringify(config, null, 2),
   "utf8",
 );
