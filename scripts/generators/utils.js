@@ -38,4 +38,18 @@ function isFilled(value) {
 module.exports = {
   toValue,
   isFilled,
+  toQuestionId,
 };
+
+function toQuestionId(columnName) {
+  if (columnName === "申請内容") {
+    return "q-category";
+  }
+
+  const questionIdMap = {
+    出張に関係: "q-business-trip",
+    領収書あり: "q-receipt",
+  };
+
+  return questionIdMap[columnName] || `q-${toValue(columnName, columnName)}`;
+}

@@ -1,9 +1,9 @@
+const { isFilled, toQuestionId } = require("./generators/utils");
 const { createExpenseTypes } = require("./generators/expenseTypes");
 const { createRules } = require("./generators/rules");
 const { createQuestions } = require("./generators/questions");
 const XLSX = require("xlsx");
 const fs = require("fs");
-const { toValue, isFilled } = require("./generators/utils");
 
 const workbook = XLSX.readFile("excel/sample-company.xlsx");
 
@@ -26,19 +26,6 @@ const conditionColumns = Object.keys(categoryRows[0] || {}).filter(
 );
 
 const questions = createQuestions(categoryRows, conditionColumns);
-
-function toQuestionId(columnName) {
-  if (columnName === "申請内容") {
-    return "q-category";
-  }
-
-  const questionIdMap = {
-    出張に関係: "q-business-trip",
-    領収書あり: "q-receipt",
-  };
-
-  return questionIdMap[columnName] || `q-${toValue(columnName, columnName)}`;
-}
 
 const expenseTypes = createExpenseTypes(expenseTypeSheet);
 

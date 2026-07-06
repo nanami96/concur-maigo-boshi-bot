@@ -1,19 +1,6 @@
-const { toValue, isFilled } = require("./utils");
+const { toValue, isFilled, toQuestionId } = require("./utils");
 
 function createQuestions(categoryRows, conditionColumns) {
-  function toQuestionId(columnName) {
-    if (columnName === "申請内容") {
-      return "q-category";
-    }
-
-    const questionIdMap = {
-      出張に関係: "q-business-trip",
-      領収書あり: "q-receipt",
-    };
-
-    return questionIdMap[columnName] || `q-${toValue(columnName, columnName)}`;
-  }
-
   function toQuestionText(columnName) {
     if (columnName === "申請内容") {
       return "今日は何を申請しますか？";
