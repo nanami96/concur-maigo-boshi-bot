@@ -1,3 +1,5 @@
+const { createExpenseTypes } = require("./generators/expenseTypes");
+const { createRules } = require("./generators/rules");
 const { createQuestions } = require("./generators/questions");
 const XLSX = require("xlsx");
 const fs = require("fs");
@@ -38,45 +40,14 @@ function toQuestionId(columnName) {
   return questionIdMap[columnName] || `q-${toValue(columnName, columnName)}`;
 }
 
-const expenseTypes = expenseTypeSheet.map((item) => ({
-  id: item.expense_type_id,
-  policyId: item.policy_id,
-  name: item.expense_type_name,
-  receiptRequired: item.receipt_required === "Y",
-  active: item.active === "Y",
-  note: item.note || "",
-}));
+const expenseTypes = createExpenseTypes(expenseTypeSheet);
 
-function findExpenseTypeId(expenseTypeName) {
-  const expenseType = expenseTypes.find(
-    (item) => item.name === expenseTypeName,
-  );
-  return expenseType ? expenseType.id : "";
-}
-
-const rules = categoryRows.map((row, index) => {
-  const conditions = {};
-
-  conditionColumns.forEach((columnName) => {
-    if (isFilled(row[columnName])) {
-      conditions[toQuestionId(columnName)] = toValue(
-        row[columnName],
-        row[columnName],
-      );
-    }
-  });
-
-  return {
-    id: `r${String(index + 1).padStart(3, "0")}`,
-    priority: index + 1,
-    conditions,
-    resultExpenseTypeId: findExpenseTypeId(row["経費タイプ"]),
-    message: row["案内メッセージ"] || "",
-    warningMessage: row["注意事項"] || "",
-    active: true,
-  };
-});
-
+const rules = createRules(
+  categoryRows,
+  conditionColumns,
+  expenseTypes,
+  toQuestionId,
+);
 const config = {
   company: companySheet[0],
   policies: policySheet,
