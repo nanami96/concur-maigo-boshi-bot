@@ -279,10 +279,72 @@ button {
   color: #3f6212;
 }
 
+.checkSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.checkMetric {
+  border: 1px solid #d7deea;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.checkMetric span {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.checkMetric strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 22px;
+}
+
+.checkMetric.error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.checkMetric.warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.checkMetric.info {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.checkGroup {
+  margin-top: 14px;
+  border-radius: 8px;
+}
+
+.checkGroup h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.checkGroup.error h3 {
+  color: #991b1b;
+}
+
+.checkGroup.warning h3 {
+  color: #92400e;
+}
+
 .checkList {
   display: grid;
   gap: 10px;
-  margin: 14px 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -309,6 +371,19 @@ button {
 .checkList p {
   margin: 8px 0 0;
   color: #7f1d1d;
+}
+
+.checkGroup.warning .checkList li {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.checkGroup.warning .checkList span {
+  color: #92400e;
+}
+
+.checkGroup.warning .checkList p {
+  color: #78350f;
 }
 
 .messageRow {
@@ -467,6 +542,10 @@ button {
   }
 
   .optionList li {
+    grid-template-columns: 1fr;
+  }
+
+  .checkSummaryGrid {
     grid-template-columns: 1fr;
   }
 

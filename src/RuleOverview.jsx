@@ -92,29 +92,63 @@ function RuleCard({ config, rule }) {
   );
 }
 
-function ConfigCheckSection({ issues }) {
+function CheckIssueList({ title, items, level }) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={`checkGroup ${level}`}>
+      <h3>{title}</h3>
+      <ul className="checkList">
+        {items.map((issue) => (
+          <li key={issue.id}>
+            <span>{issue.target}</span>
+            <p>{issue.message}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ConfigCheckSection({ result }) {
+  const { errors, warnings, info } = result;
+  const hasIssues = errors.length > 0 || warnings.length > 0;
+
   return (
     <details className="overviewSection" open>
       <summary>
         設定チェック
-        <span>{issues.length === 0 ? "OK" : `${issues.length}件`}</span>
+        <span>
+          Error {errors.length} / Warning {warnings.length}
+        </span>
       </summary>
 
-      {issues.length === 0 ? (
+      {!hasIssues && (
         <div className="checkStatus ok">
           <strong>設定チェックOK</strong>
-          <p>質問、判定ルール、経費タイプの参照に問題はありません。</p>
+          <p>{info[0]?.message}</p>
         </div>
-      ) : (
-        <ul className="checkList">
-          {issues.map((issue) => (
-            <li key={issue.id}>
-              <span>{issue.target}</span>
-              <p>{issue.message}</p>
-            </li>
-          ))}
-        </ul>
       )}
+
+      <div className="checkSummaryGrid">
+        <div className="checkMetric error">
+          <span>Error</span>
+          <strong>{errors.length}</strong>
+        </div>
+        <div className="checkMetric warning">
+          <span>Warning</span>
+          <strong>{warnings.length}</strong>
+        </div>
+        <div className="checkMetric info">
+          <span>Info</span>
+          <strong>{info.length}</strong>
+        </div>
+      </div>
+
+      <CheckIssueList title="Error" items={errors} level="error" />
+      <CheckIssueList title="Warning" items={warnings} level="warning" />
     </details>
   );
 }
@@ -126,7 +160,7 @@ export default function RuleOverview({ companyId, config }) {
   const sortedRules = [...config.rules].sort(
     (left, right) => left.priority - right.priority,
   );
-  const configIssues = checkConfig(config);
+  const configCheckResult = checkConfig(config);
 
   return (
     <section className="overviewPanel" aria-label="ルール確認">
@@ -165,7 +199,7 @@ export default function RuleOverview({ companyId, config }) {
         </div>
       </details>
 
-      <ConfigCheckSection issues={configIssues} />
+      <ConfigCheckSection result={configCheckResult} />
     </section>
   );
 }
