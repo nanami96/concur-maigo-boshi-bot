@@ -27,43 +27,10 @@ function validateExpenseTypes(categoryRows, expenseTypes) {
 
 module.exports = {
   validateExpenseTypes,
-  validateRequiredFields,
   validateDuplicateExpenseTypeIds,
   validatePolicyReferences,
-  validateCompanySettings,
+  validateRequiredColumns,
 };
-
-function validateRequiredFields(categoryRows, metadata) {
-  const errors = [];
-
-  categoryRows.forEach((row, index) => {
-    const rowNumber = index + 2;
-
-    if (metadata["申請内容"] === "必須" && !row["申請内容"]) {
-      errors.push(
-        [
-          `【${RULE_SHEET_NAME}】`,
-          `${rowNumber}行目`,
-          "項目: 申請内容",
-          "内容: 必須項目です。",
-        ].join(" "),
-      );
-    }
-
-    if (metadata["経費タイプ"] === "必須" && !row["経費タイプ"]) {
-      errors.push(
-        [
-          `【${RULE_SHEET_NAME}】`,
-          `${rowNumber}行目`,
-          "項目: 経費タイプ",
-          "内容: 必須項目です。",
-        ].join(" "),
-      );
-    }
-  });
-
-  return errors;
-}
 
 function validateDuplicateExpenseTypeIds(expenseTypeSheet) {
   const errors = [];
@@ -122,42 +89,29 @@ function validatePolicyReferences(expenseTypeSheet, policySheet) {
   return errors;
 }
 
-function validateCompanySettings(companySheet, metadata) {
+function validateRequiredColumns(rows, metadata, sheetName) {
   const errors = [];
-  const company = companySheet[0] || {};
 
-  if (metadata["company_id"] === "必須" && !company.company_id) {
-    errors.push(
-      [
-        "【99_company_settings】",
-        "2行目",
-        "項目: company_id",
-        "内容: 必須項目です。",
-      ].join(" "),
-    );
-  }
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2;
 
-  if (metadata["company_name"] === "必須" && !company.company_name) {
-    errors.push(
-      [
-        "【99_company_settings】",
-        "2行目",
-        "項目: company_name",
-        "内容: 必須項目です。",
-      ].join(" "),
-    );
-  }
+    Object.keys(metadata).forEach((columnName) => {
+      if (metadata[columnName] !== "必須") {
+        return;
+      }
 
-  if (metadata["default_policy_id"] === "必須" && !company.default_policy_id) {
-    errors.push(
-      [
-        "【99_company_settings】",
-        "2行目",
-        "項目: default_policy_id",
-        "内容: 必須項目です。",
-      ].join(" "),
-    );
-  }
+      if (!row[columnName]) {
+        errors.push(
+          [
+            `【${sheetName}】`,
+            `${rowNumber}行目`,
+            `項目: ${columnName}`,
+            "内容: 必須項目です。",
+          ].join(" "),
+        );
+      }
+    });
+  });
 
   return errors;
 }

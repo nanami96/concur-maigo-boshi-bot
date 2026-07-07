@@ -19,6 +19,7 @@ const {
   validateDuplicateExpenseTypeIds,
   validatePolicyReferences,
   validateCompanySettings,
+  validateRequiredColumns,
 } = require("./generators/validators");
 
 // 複数企業対応
@@ -111,8 +112,8 @@ const expenseTypes = createExpenseTypes(expenseTypeSheet);
 
 // Excelのエラーチェック
 const validationErrors = [
-  ...validateCompanySettings(companySheet, companyMeta),
-  ...validateRequiredFields(categoryRows, simpleRuleMeta),
+  ...validateRequiredColumns(companySheet, companyMeta, "99_company_settings"),
+  ...validateRequiredColumns(categoryRows, simpleRuleMeta, "03_判定ルール"),
   ...validateExpenseTypes(categoryRows, expenseTypes),
   ...validateDuplicateExpenseTypeIds(expenseTypeSheet),
   ...validatePolicyReferences(expenseTypeSheet, policySheet),

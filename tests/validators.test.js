@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   validateDuplicateExpenseTypeIds,
   validatePolicyReferences,
-  validateCompanySettings,
+  validateRequiredColumns,
 } from "../scripts/generators/validators";
 
 describe("validators", () => {
@@ -86,8 +86,8 @@ it("存在する policy_id の場合はエラーを返さない", () => {
 
   expect(errors.length).toBe(0);
 });
-it("company_name が空欄の場合はエラーを返す", () => {
-  const companySheet = [
+it("必須メタ情報の項目が空欄の場合はエラーを返す", () => {
+  const rows = [
     {
       company_id: "sample-company",
       company_name: "",
@@ -101,7 +101,7 @@ it("company_name が空欄の場合はエラーを返す", () => {
     default_policy_id: "必須",
   };
 
-  const errors = validateCompanySettings(companySheet, metadata);
+  const errors = validateRequiredColumns(rows, metadata, "99_company_settings");
 
   expect(errors.length).toBe(1);
   expect(errors[0]).toContain("company_name");
