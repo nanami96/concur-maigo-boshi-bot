@@ -5,12 +5,19 @@ function validateExpenseTypes(categoryRows, expenseTypes) {
   categoryRows.forEach((row, index) => {
     const rowNumber = index + 2;
     const expenseTypeName = row["経費タイプ"];
-
+    if (!expenseTypeName) {
+      return;
+    }
     const exists = expenseTypes.some((item) => item.name === expenseTypeName);
 
     if (!exists) {
       errors.push(
-        `${RULE_SHEET_NAME} ${rowNumber}行目: 経費タイプ「${expenseTypeName}」が 99_expense_types に存在しません。`,
+        [
+          `【${RULE_SHEET_NAME}】`,
+          `${rowNumber}行目`,
+          "項目: 経費タイプ",
+          `内容: 「${expenseTypeName}」が 99_expense_types に存在しません。`,
+        ].join(" "),
       );
     }
   });
@@ -34,13 +41,23 @@ function validateRequiredFields(categoryRows) {
 
     if (!row["申請内容"]) {
       errors.push(
-        `${RULE_SHEET_NAME} ${rowNumber}行目: 「申請内容」は必須です。`,
+        [
+          `【${RULE_SHEET_NAME}】`,
+          `${rowNumber}行目`,
+          "項目: 申請内容",
+          "内容: 必須項目です。",
+        ].join(" "),
       );
     }
 
     if (!row["経費タイプ"]) {
       errors.push(
-        `${RULE_SHEET_NAME} ${rowNumber}行目: 「経費タイプ」は必須です。`,
+        [
+          `【${RULE_SHEET_NAME}】`,
+          `${rowNumber}行目`,
+          "項目: 経費タイプ",
+          "内容: 必須項目です。",
+        ].join(" "),
       );
     }
   });
@@ -62,7 +79,12 @@ function validateDuplicateExpenseTypeIds(expenseTypeSheet) {
 
     if (seenIds.has(expenseTypeId)) {
       errors.push(
-        `99_expense_types ${rowNumber}行目: expense_type_id「${expenseTypeId}」が重複しています。`,
+        [
+          "【99_expense_types】",
+          `${rowNumber}行目`,
+          "項目: expense_type_id",
+          `内容: 「${expenseTypeId}」が重複しています。`,
+        ].join(" "),
       );
       return;
     }
@@ -87,7 +109,12 @@ function validatePolicyReferences(expenseTypeSheet, policySheet) {
 
     if (!policyIds.has(policyId)) {
       errors.push(
-        `99_expense_types ${rowNumber}行目: policy_id「${policyId}」が 99_policies に存在しません。`,
+        [
+          "【99_expense_types】",
+          `${rowNumber}行目`,
+          "項目: policy_id",
+          `内容: 「${policyId}」が 99_policies に存在しません。`,
+        ].join(" "),
       );
     }
   });
@@ -100,15 +127,36 @@ function validateCompanySettings(companySheet) {
   const company = companySheet[0] || {};
 
   if (!company.company_id) {
-    errors.push("99_company_settings 2行目: 「company_id」は必須です。");
+    errors.push(
+      [
+        "【99_company_settings】",
+        "2行目",
+        "項目: company_id",
+        "内容: 必須項目です。",
+      ].join(" "),
+    );
   }
 
   if (!company.company_name) {
-    errors.push("99_company_settings 2行目: 「company_name」は必須です。");
+    errors.push(
+      [
+        "【99_company_settings】",
+        "2行目",
+        "項目: company_name",
+        "内容: 必須項目です。",
+      ].join(" "),
+    );
   }
 
   if (!company.default_policy_id) {
-    errors.push("99_company_settings 2行目: 「default_policy_id」は必須です。");
+    errors.push(
+      [
+        "【99_company_settings】",
+        "2行目",
+        "項目: default_policy_id",
+        "内容: 必須項目です。",
+      ].join(" "),
+    );
   }
 
   return errors;
