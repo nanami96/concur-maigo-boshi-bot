@@ -64,6 +64,12 @@ npm install
 
 Excelを編集した後、以下のコマンドを実行します。
 
+Excelの入力規則を更新する場合は、元の `excel/{companyId}.xlsx` は直接変更せず、更新後のファイルを `excel/output/{companyId}.xlsx` に生成します。
+
+```bash
+npm run update:excel sample-company
+```
+
 サンプル会社
 
 ```bash
