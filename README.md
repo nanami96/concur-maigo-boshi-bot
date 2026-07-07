@@ -1,42 +1,117 @@
 # Concur迷子防止Bot
 
-SAP Concur初心者向けの経費タイプ選択支援ツールです。
+SAP Concur Expense の経費タイプ選択を支援するチャット形式のガイドアプリです。
 
-## 機能
+Excelで設定を管理し、config.json を自動生成してReactアプリから利用します。
 
-- 経費タイプ判定
-- 入力時のポイント表示
-- コメント例表示
-- 領収書要否表示
+## スクリーンショット
 
-## 使用技術
+（後で追加予定）
 
-- React
-- Vite
-- GitHub
+## 概要
 
-# AI Development Rules
+Concur導入時に
 
-## Architecture
+- どの経費タイプを選べばよいか
+- どの条件ならどの経費タイプになるか
 
-Excel
-↓
-generate-config.js
-↓
-config.json
-↓
-QuestionEngine
-↓
-React UI
+をチャット形式で案内するアプリです。
 
-Business rules must be stored in Excel/config.json.
+設定はExcelで管理し、generate-config.js により config.json を生成します。
 
-Never hardcode company-specific logic in React.
+## 特徴
 
-## Coding Rules
+- 📄 Excelで設定を管理
+- ⚙️ config.json を自動生成
+- 💬 チャット形式で経費タイプを案内
+- 🏢 複数企業（マルチテナント）対応
+- ✅ Excel設定のバリデーション機能
+- 🔧 React + Vite で構築
 
-- Keep QuestionEngine generic.
-- React is only responsible for rendering.
-- generate-config.js converts Excel to config.json.
-- Do not break existing features.
-- Keep changes as small as possible.
+- ## ディレクトリ構成
+
+```text
+.
+├── excel/                 # Excelテンプレート
+├── rules/                 # 生成された config.json
+│   ├── sample-company/
+│   └── company-a/
+├── scripts/
+│   ├── generate-config.js
+│   └── generators/
+├── src/
+│   ├── engine/
+│   └── App.jsx
+└── README.md
+```
+
+## セットアップ
+
+### 1. リポジトリを取得
+
+```bash
+git clone <repository-url>
+cd concur-maigo-boshi-bot
+```
+
+### 2. パッケージをインストール
+
+```bash
+npm install
+```
+
+## config.json の生成
+
+Excelを編集した後、以下のコマンドを実行します。
+
+サンプル会社
+
+```bash
+npm run generate:config sample-company
+```
+
+会社A
+
+```bash
+npm run generate:config company-a
+```
+
+生成された config.json は以下に出力されます。
+
+```text
+rules/
+├── sample-company/
+│   └── config.json
+└── company-a/
+    └── config.json
+```
+
+## アプリの起動
+
+```bash
+npm run dev
+```
+
+ブラウザで表示されたURLを開くと、Concur迷子防止Botが起動します。
+
+## Excel構成
+
+設定はExcelで管理します。
+
+| シート名 | 内容 |
+|----------|------|
+| 99_company_settings | 会社設定 |
+| 99_policies | ポリシー一覧 |
+| 99_expense_types | 経費タイプ一覧 |
+| 03_判定ルール | 判定ルール |
+
+## Roadmap
+
+- [x] Excel → config.json 自動生成
+- [x] 質問自動生成
+- [x] ルール自動生成
+- [x] 複数企業対応
+- [x] Excelバリデーション
+- [ ] テストコード追加
+- [ ] UI改善
+- [ ] Excelテンプレート改善
