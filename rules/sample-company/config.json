@@ -79,6 +79,13 @@
           "value": "yes"
         }
       ]
+    },
+    {
+      "id": "q-receipt",
+      "text": "領収書ありですか？",
+      "type": "yes_no",
+      "displayOrder": 3,
+      "options": []
     }
   ],
   "rules": [

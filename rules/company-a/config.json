@@ -1,7 +1,7 @@
 {
   "company": {
-    "company_id": "company-a",
-    "company_name": "A株式会社",
+    "company_id": "sample-company",
+    "company_name": "サンプル会社",
     "default_policy_id": "normal_expense",
     "language": "ja"
   },
@@ -79,6 +79,13 @@
           "value": "yes"
         }
       ]
+    },
+    {
+      "id": "q-receipt",
+      "text": "領収書ありですか？",
+      "type": "yes_no",
+      "displayOrder": 3,
+      "options": []
     }
   ],
   "rules": [

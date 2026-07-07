@@ -27,7 +27,31 @@ const workbook = XLSX.readFile(`excel/${companyId}.xlsx`);
 
 // ExcelシートをJSON配列に変換する
 function readSheet(name) {
-  return XLSX.utils.sheet_to_json(workbook.Sheets[name] || {});
+  const sheet = workbook.Sheets[name];
+
+  if (!sheet) {
+    return [];
+  }
+
+  const rows = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: "",
+  });
+
+  const headers = rows[0] || [];
+  const dataRows = rows.slice(2);
+
+  return dataRows
+    .filter((row) => row.some((cell) => String(cell).trim() !== ""))
+    .map((row) => {
+      const item = {};
+
+      headers.forEach((header, index) => {
+        item[header] = row[index];
+      });
+
+      return item;
+    });
 }
 
 // 必要なシートを読む
