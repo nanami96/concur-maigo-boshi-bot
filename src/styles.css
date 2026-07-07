@@ -139,6 +139,46 @@ button {
   font-size: 12px;
 }
 
+.configSearch {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 14px;
+}
+
+.configSearch label {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.configSearch input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #172033;
+  padding: 11px 12px;
+  font: inherit;
+}
+
+.configSearch input:focus {
+  border-color: #2563eb;
+  outline: 3px solid #dbeafe;
+}
+
+.searchEmpty {
+  border: 1px solid #d7deea;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.searchEmpty strong {
+  display: block;
+  color: #475569;
+}
+
 .overviewGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

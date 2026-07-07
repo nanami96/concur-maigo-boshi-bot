@@ -1,5 +1,7 @@
+import { useMemo, useState } from "react";
 import { checkConfig } from "./configChecks";
 import { diffConfigs } from "./configDiff";
+import { searchConfig } from "./configSearch";
 import RuleFlowTree from "./RuleFlowTree";
 
 function getExpenseTypeName(config, expenseTypeId) {
@@ -233,15 +235,50 @@ function ConfigDiffSection({ diff }) {
   );
 }
 
+function ConfigSearchBox({ value, onChange }) {
+  return (
+    <div className="configSearch">
+      <label htmlFor="config-search">設定検索</label>
+      <input
+        id="config-search"
+        type="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="質問ID、Rule ID、経費タイプなどで検索"
+      />
+    </div>
+  );
+}
+
+function NoSearchResults() {
+  return (
+    <div className="searchEmpty">
+      <strong>該当する設定はありません</strong>
+    </div>
+  );
+}
+
 export default function RuleOverview({ companyId, config, compareConfig }) {
-  const sortedQuestions = [...config.questions].sort(
+  const [searchQuery, setSearchQuery] = useState("");
+  const configDiffResult = useMemo(
+    () => diffConfigs(compareConfig || config, config),
+    [compareConfig, config],
+  );
+  const searchResult = useMemo(
+    () => searchConfig(config, searchQuery, configDiffResult),
+    [config, searchQuery, configDiffResult],
+  );
+  const visibleQuestions = searchResult.filtered.questions;
+  const visibleRules = searchResult.filtered.rules;
+  const sortedQuestions = [...visibleQuestions].sort(
     (left, right) => left.displayOrder - right.displayOrder,
   );
-  const sortedRules = [...config.rules].sort(
+  const sortedRules = [...visibleRules].sort(
     (left, right) => left.priority - right.priority,
   );
   const configCheckResult = checkConfig(config);
-  const configDiffResult = diffConfigs(compareConfig || config, config);
+  const visibleDiff = searchResult.filtered.diff || configDiffResult;
+  const shouldShowSearchEmpty = searchResult.hasQuery && !searchResult.hasMatches;
 
   return (
     <section className="overviewPanel" aria-label="ルール確認">
@@ -256,7 +293,10 @@ export default function RuleOverview({ companyId, config, compareConfig }) {
         </p>
       </div>
 
-      <details className="overviewSection" open>
+      <ConfigSearchBox value={searchQuery} onChange={setSearchQuery} />
+      {shouldShowSearchEmpty && <NoSearchResults />}
+
+      <details className="overviewSection" open hidden={shouldShowSearchEmpty}>
         <summary>
           質問フロー
           <span>{sortedQuestions.length}件</span>
@@ -268,15 +308,15 @@ export default function RuleOverview({ companyId, config, compareConfig }) {
         </div>
       </details>
 
-      <details className="overviewSection" open>
+      <details className="overviewSection" open hidden={shouldShowSearchEmpty}>
         <summary>
           判定フロー
           <span>ツリー</span>
         </summary>
-        <RuleFlowTree config={config} />
+        <RuleFlowTree config={config} searchResult={searchResult} />
       </details>
 
-      <details className="overviewSection" open>
+      <details className="overviewSection" open hidden={shouldShowSearchEmpty}>
         <summary>
           判定ルール
           <span>{sortedRules.length}件</span>
@@ -289,7 +329,7 @@ export default function RuleOverview({ companyId, config, compareConfig }) {
       </details>
 
       <ConfigCheckSection result={configCheckResult} />
-      <ConfigDiffSection diff={configDiffResult} />
+      {!shouldShowSearchEmpty && <ConfigDiffSection diff={visibleDiff} />}
     </section>
   );
 }
