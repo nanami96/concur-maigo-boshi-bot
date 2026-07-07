@@ -260,6 +260,119 @@ button {
   margin-top: 2px;
 }
 
+.flowTree {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.treeQuestion {
+  display: grid;
+  gap: 10px;
+  min-width: min(100%, 320px);
+}
+
+.treeNode {
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.treeNode span,
+.treeOption small,
+.resultNode small {
+  display: block;
+  color: #64748b;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.treeNode strong,
+.treeOption span {
+  display: block;
+  color: #172033;
+  overflow-wrap: anywhere;
+}
+
+.startNode {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.questionNode {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.resultNode {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.resultNode strong {
+  color: #166534;
+}
+
+.missingNode {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.missingNode strong {
+  color: #991b1b;
+}
+
+.treeOptions {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0 0 0 24px;
+  list-style: none;
+}
+
+.treeOptions li {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(240px, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.treeOptions li::before {
+  position: absolute;
+  top: 18px;
+  left: -18px;
+  width: 18px;
+  border-top: 1px solid #cbd5e1;
+  content: "";
+}
+
+.treeOptions li::after {
+  position: absolute;
+  top: -12px;
+  bottom: 50%;
+  left: -18px;
+  border-left: 1px solid #cbd5e1;
+  content: "";
+}
+
+.treeOptions li:first-child::after {
+  top: 18px;
+}
+
+.treeOption {
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 9px 11px;
+}
+
 .checkStatus {
   margin-top: 14px;
   border: 1px solid #bbf7d0;
@@ -547,6 +660,23 @@ button {
 
   .checkSummaryGrid {
     grid-template-columns: 1fr;
+  }
+
+  .treeOptions {
+    padding-left: 16px;
+  }
+
+  .treeOptions li {
+    grid-template-columns: 1fr;
+  }
+
+  .treeOptions li::before,
+  .treeOptions li::after {
+    left: -12px;
+  }
+
+  .treeOptions li::before {
+    width: 12px;
   }
 
   .messageRow,

@@ -1,4 +1,5 @@
 import { checkConfig } from "./configChecks";
+import RuleFlowTree from "./RuleFlowTree";
 
 function getExpenseTypeName(config, expenseTypeId) {
   return (
@@ -185,6 +186,14 @@ export default function RuleOverview({ companyId, config }) {
             <QuestionCard key={question.id} question={question} />
           ))}
         </div>
+      </details>
+
+      <details className="overviewSection" open>
+        <summary>
+          判定フロー
+          <span>ツリー</span>
+        </summary>
+        <RuleFlowTree config={config} />
       </details>
 
       <details className="overviewSection" open>
