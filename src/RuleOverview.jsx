@@ -1,4 +1,5 @@
 import { checkConfig } from "./configChecks";
+import { diffConfigs } from "./configDiff";
 import RuleFlowTree from "./RuleFlowTree";
 
 function getExpenseTypeName(config, expenseTypeId) {
@@ -154,7 +155,85 @@ function ConfigCheckSection({ result }) {
   );
 }
 
-export default function RuleOverview({ companyId, config }) {
+function DiffMetric({ label, value, type }) {
+  return (
+    <div className={`diffMetric ${type}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function DiffItemGroup({ title, items, type }) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={`diffGroup ${type}`}>
+      <h4>{title}</h4>
+      <ul className="diffList">
+        {items.map((item) => (
+          <li key={`${type}-${item.id}`}>
+            <span>{item.id}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ConfigDiffSection({ diff }) {
+  return (
+    <details className="overviewSection" open>
+      <summary>
+        設定差分
+        <span>
+          Added {diff.summary.added} / Removed {diff.summary.removed} / Changed{" "}
+          {diff.summary.changed}
+        </span>
+      </summary>
+
+      <div className="diffSummaryGrid">
+        <DiffMetric label="Added" value={diff.summary.added} type="added" />
+        <DiffMetric label="Removed" value={diff.summary.removed} type="removed" />
+        <DiffMetric label="Changed" value={diff.summary.changed} type="changed" />
+      </div>
+
+      {!diff.hasDiff ? (
+        <div className="diffEmpty">
+          <strong>差分はありません</strong>
+          <p>現在の設定と比較元の設定は同じ内容です。</p>
+        </div>
+      ) : (
+        <div className="diffTargetList">
+          {Object.entries(diff.targets).map(([targetKey, targetDiff]) => (
+            <section className="diffTarget" key={targetKey}>
+              <h3>{targetDiff.label}</h3>
+              <DiffItemGroup
+                title="Added"
+                items={targetDiff.added}
+                type="added"
+              />
+              <DiffItemGroup
+                title="Removed"
+                items={targetDiff.removed}
+                type="removed"
+              />
+              <DiffItemGroup
+                title="Changed"
+                items={targetDiff.changed}
+                type="changed"
+              />
+            </section>
+          ))}
+        </div>
+      )}
+    </details>
+  );
+}
+
+export default function RuleOverview({ companyId, config, compareConfig }) {
   const sortedQuestions = [...config.questions].sort(
     (left, right) => left.displayOrder - right.displayOrder,
   );
@@ -162,6 +241,7 @@ export default function RuleOverview({ companyId, config }) {
     (left, right) => left.priority - right.priority,
   );
   const configCheckResult = checkConfig(config);
+  const configDiffResult = diffConfigs(compareConfig || config, config);
 
   return (
     <section className="overviewPanel" aria-label="ルール確認">
@@ -209,6 +289,7 @@ export default function RuleOverview({ companyId, config }) {
       </details>
 
       <ConfigCheckSection result={configCheckResult} />
+      <ConfigDiffSection diff={configDiffResult} />
     </section>
   );
 }
