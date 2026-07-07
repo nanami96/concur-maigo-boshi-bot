@@ -54,11 +54,44 @@ function readSheet(name) {
     });
 }
 
+function readSheetMeta(name) {
+  const sheet = workbook.Sheets[name];
+
+  if (!sheet) {
+    return {};
+  }
+
+  const rows = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: "",
+  });
+
+  const headers = rows[0] || [];
+  const metaRow = rows[1] || [];
+  const meta = {};
+
+  headers.forEach((header, index) => {
+    meta[header] = metaRow[index];
+  });
+
+  return meta;
+}
+
 // 必要なシートを読む
 const companySheet = readSheet("99_company_settings");
 const policySheet = readSheet("99_policies");
 const expenseTypeSheet = readSheet("99_expense_types");
 const simpleRuleSheet = readSheet("03_判定ルール");
+
+const companyMeta = readSheetMeta("99_company_settings");
+const policyMeta = readSheetMeta("99_policies");
+const expenseTypeMeta = readSheetMeta("99_expense_types");
+const simpleRuleMeta = readSheetMeta("03_判定ルール");
+
+console.log(companyMeta);
+console.log(policyMeta);
+console.log(expenseTypeMeta);
+console.log(simpleRuleMeta);
 
 // 申請内容がある行だけ使う
 const categoryRows = simpleRuleSheet.filter((row) => isFilled(row["申請内容"]));
@@ -78,8 +111,8 @@ const expenseTypes = createExpenseTypes(expenseTypeSheet);
 
 // Excelのエラーチェック
 const validationErrors = [
-  ...validateCompanySettings(companySheet),
-  ...validateRequiredFields(categoryRows),
+  ...validateCompanySettings(companySheet, companyMeta),
+  ...validateRequiredFields(categoryRows, simpleRuleMeta),
   ...validateExpenseTypes(categoryRows, expenseTypes),
   ...validateDuplicateExpenseTypeIds(expenseTypeSheet),
   ...validatePolicyReferences(expenseTypeSheet, policySheet),

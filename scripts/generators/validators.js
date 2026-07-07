@@ -33,13 +33,13 @@ module.exports = {
   validateCompanySettings,
 };
 
-function validateRequiredFields(categoryRows) {
+function validateRequiredFields(categoryRows, metadata) {
   const errors = [];
 
   categoryRows.forEach((row, index) => {
     const rowNumber = index + 2;
 
-    if (!row["申請内容"]) {
+    if (metadata["申請内容"] === "必須" && !row["申請内容"]) {
       errors.push(
         [
           `【${RULE_SHEET_NAME}】`,
@@ -50,7 +50,7 @@ function validateRequiredFields(categoryRows) {
       );
     }
 
-    if (!row["経費タイプ"]) {
+    if (metadata["経費タイプ"] === "必須" && !row["経費タイプ"]) {
       errors.push(
         [
           `【${RULE_SHEET_NAME}】`,
@@ -122,11 +122,11 @@ function validatePolicyReferences(expenseTypeSheet, policySheet) {
   return errors;
 }
 
-function validateCompanySettings(companySheet) {
+function validateCompanySettings(companySheet, metadata) {
   const errors = [];
   const company = companySheet[0] || {};
 
-  if (!company.company_id) {
+  if (metadata["company_id"] === "必須" && !company.company_id) {
     errors.push(
       [
         "【99_company_settings】",
@@ -137,7 +137,7 @@ function validateCompanySettings(companySheet) {
     );
   }
 
-  if (!company.company_name) {
+  if (metadata["company_name"] === "必須" && !company.company_name) {
     errors.push(
       [
         "【99_company_settings】",
@@ -148,7 +148,7 @@ function validateCompanySettings(companySheet) {
     );
   }
 
-  if (!company.default_policy_id) {
+  if (metadata["default_policy_id"] === "必須" && !company.default_policy_id) {
     errors.push(
       [
         "【99_company_settings】",

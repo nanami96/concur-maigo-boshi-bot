@@ -95,7 +95,13 @@ it("company_name が空欄の場合はエラーを返す", () => {
     },
   ];
 
-  const errors = validateCompanySettings(companySheet);
+  const metadata = {
+    company_id: "必須",
+    company_name: "必須",
+    default_policy_id: "必須",
+  };
+
+  const errors = validateCompanySettings(companySheet, metadata);
 
   expect(errors.length).toBe(1);
   expect(errors[0]).toContain("company_name");
