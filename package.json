@@ -3,7 +3,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "generate:config": "node scripts/generate-config.js"
+    "generate:config": "node scripts/generate-config.js",
+    "test": "vitest"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
@@ -11,5 +12,8 @@
     "react-dom": "latest",
     "vite": "latest",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
   }
 }
