@@ -75,6 +75,242 @@ button {
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
 }
 
+.overviewPanel {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+  border: 1px solid #d7deea;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 22px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sectionHeader h2 {
+  margin: 4px 0 0;
+  font-size: 22px;
+}
+
+.sectionHeader p {
+  margin: 0;
+  color: #5b6575;
+}
+
+.sectionHeader p span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.overviewSection {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 14px;
+}
+
+.overviewSection summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.overviewSection summary::marker {
+  color: #2563eb;
+}
+
+.overviewSection summary span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #5b6575;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.overviewGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.overviewCard {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.cardHeading {
+  display: grid;
+  gap: 8px;
+}
+
+.cardHeading h3 {
+  margin: 0;
+  color: #172033;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.idBadge {
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #475569;
+  padding: 3px 9px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.optionList,
+.conditionList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.optionList li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+}
+
+.optionList strong,
+.optionList span,
+.conditionList span,
+.conditionList strong,
+.conditionList small {
+  overflow-wrap: anywhere;
+}
+
+.optionList strong {
+  display: block;
+}
+
+.optionList span,
+.conditionList small {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.optionList p {
+  margin: 0;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.emptyState {
+  margin: 0;
+  color: #64748b;
+}
+
+.ruleDetails {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.ruleDetails div {
+  display: grid;
+  gap: 6px;
+}
+
+.ruleDetails dt {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ruleDetails dd {
+  margin: 0;
+}
+
+.conditionList li {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+}
+
+.conditionList strong {
+  display: block;
+  margin-top: 2px;
+}
+
+.checkStatus {
+  margin-top: 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+  padding: 14px;
+}
+
+.checkStatus strong {
+  display: block;
+  color: #166534;
+  font-size: 16px;
+}
+
+.checkStatus p {
+  margin: 6px 0 0;
+  color: #3f6212;
+}
+
+.checkList {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checkList li {
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  padding: 12px;
+}
+
+.checkList span {
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #991b1b;
+  padding: 2px 8px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.checkList p {
+  margin: 8px 0 0;
+  color: #7f1d1d;
+}
+
 .messageRow {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr);
@@ -220,6 +456,18 @@ button {
 
   .chatPanel {
     padding: 14px;
+  }
+
+  .overviewPanel {
+    padding: 14px;
+  }
+
+  .sectionHeader {
+    display: grid;
+  }
+
+  .optionList li {
+    grid-template-columns: 1fr;
   }
 
   .messageRow,

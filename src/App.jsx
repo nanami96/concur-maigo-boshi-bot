@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 const configs = import.meta.glob("../rules/*/config.json", { eager: true });
 import QuestionEngine from "./engine/QuestionEngine";
+import RuleOverview from "./RuleOverview";
 
 function ChatMessage({ speaker = "bot", children }) {
   return (
@@ -198,6 +199,8 @@ export default function App() {
           </ChatMessage>
         )}
       </section>
+
+      <RuleOverview companyId={companyId} config={config} />
     </main>
   );
 }
