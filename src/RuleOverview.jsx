@@ -3,6 +3,7 @@ import { parseCompareConfigText } from "./compareConfigFile";
 import { checkConfig } from "./configChecks";
 import { compareConfigs } from "./configDiff";
 import { searchConfig } from "./configSearch";
+import { generateReviewComments } from "./reviewAdvisor";
 import RuleFlowTree from "./RuleFlowTree";
 
 function getExpenseTypeName(config, expenseTypeId) {
@@ -154,6 +155,42 @@ function ConfigCheckSection({ result }) {
 
       <CheckIssueList title="Error" items={errors} level="error" />
       <CheckIssueList title="Warning" items={warnings} level="warning" />
+    </details>
+  );
+}
+
+function ReviewCommentList({ title, items, type }) {
+  return (
+    <div className={`advisorGroup ${type}`}>
+      <h3>{title}</h3>
+      <ul>
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ReviewAdvisorCard({ result }) {
+  return (
+    <details className="overviewSection" open>
+      <summary>
+        AIレビューコメント
+        <span>Rule-based</span>
+      </summary>
+      <div className="advisorCard">
+        <ReviewCommentList
+          title="良い点"
+          items={result.goodPoints}
+          type="good"
+        />
+        <ReviewCommentList
+          title="改善候補"
+          items={result.improvementCandidates}
+          type="improvement"
+        />
+      </div>
     </details>
   );
 }
@@ -364,6 +401,9 @@ export default function RuleOverview({ companyId, config, compareConfig }) {
     (left, right) => left.priority - right.priority,
   );
   const configCheckResult = checkConfig(config);
+  const reviewAdvisorResult = useMemo(() => generateReviewComments(config), [
+    config,
+  ]);
   const visibleDiff = searchResult.filtered.diff || configDiffResult;
   const shouldShowSearchEmpty = searchResult.hasQuery && !searchResult.hasMatches;
 
@@ -457,6 +497,7 @@ export default function RuleOverview({ companyId, config, compareConfig }) {
       </details>
 
       <ConfigCheckSection result={configCheckResult} />
+      <ReviewAdvisorCard result={reviewAdvisorResult} />
       {!shouldShowSearchEmpty && (
         <ConfigDiffSection
           diff={visibleDiff}
