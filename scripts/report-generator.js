@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { compareConfigs } = require("../src/configDiffCore.cjs");
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -8,6 +9,22 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function formatDiffValue(value) {
+  if (value === undefined) {
+    return "(未設定)";
+  }
+
+  if (value === null) {
+    return "null";
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value, null, 2);
+  }
+
+  return String(value);
 }
 
 function formatDateTime(date) {
@@ -350,6 +367,137 @@ function renderCheckResult(checkResult) {
   `;
 }
 
+function renderDiffObject(value) {
+  return `<pre>${escapeHtml(formatDiffValue(value))}</pre>`;
+}
+
+function renderDiffItems(title, items, type) {
+  if (items.length === 0) {
+    return "";
+  }
+
+  return `
+    <div class="diff-group ${escapeHtml(type)}">
+      <h3>${escapeHtml(title)}</h3>
+      <ul class="diff-list">
+        ${items
+          .map(
+            (item) => `
+              <li>
+                <span class="code">${escapeHtml(item.id)}</span>
+                ${renderDiffObject(type === "added" ? item.current : item.previous)}
+              </li>
+            `,
+          )
+          .join("")}
+      </ul>
+    </div>
+  `;
+}
+
+function renderChangedItems(items) {
+  if (items.length === 0) {
+    return "";
+  }
+
+  return `
+    <div class="diff-group changed">
+      <h3>Changed</h3>
+      <ul class="diff-list">
+        ${items
+          .map(
+            (item) => `
+              <li>
+                <span class="code">${escapeHtml(item.id)}</span>
+                <table class="data-table diff-change-table">
+                  <thead>
+                    <tr><th>変更項目</th><th>Before</th><th>After</th></tr>
+                  </thead>
+                  <tbody>
+                    ${item.changes
+                      .map(
+                        (change) => `
+                          <tr>
+                            <td>${escapeHtml(change.field)}</td>
+                            <td>${renderDiffObject(change.before)}</td>
+                            <td>${renderDiffObject(change.after)}</td>
+                          </tr>
+                        `,
+                      )
+                      .join("")}
+                  </tbody>
+                </table>
+              </li>
+            `,
+          )
+          .join("")}
+      </ul>
+    </div>
+  `;
+}
+
+function renderConfigDiff(diff) {
+  if (!diff.hasDiff) {
+    return `<p class="empty">差分はありません</p>`;
+  }
+
+  return `
+    <div class="metrics">
+      <div class="metric added"><span>Added</span><strong>${diff.summary.added}</strong></div>
+      <div class="metric removed"><span>Removed</span><strong>${diff.summary.removed}</strong></div>
+      <div class="metric changed"><span>Changed</span><strong>${diff.summary.changed}</strong></div>
+    </div>
+    <div class="diff-targets">
+      ${Object.entries(diff.targets)
+        .map(
+          ([targetKey, targetDiff]) => `
+            <section class="diff-target">
+              <div class="section-heading compact">
+                <h3>${escapeHtml(targetDiff.label)}</h3>
+                <span>${escapeHtml(targetKey)}</span>
+              </div>
+              ${renderDiffItems("Added", targetDiff.added, "added")}
+              ${renderDiffItems("Removed", targetDiff.removed, "removed")}
+              ${renderChangedItems(targetDiff.changed)}
+            </section>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderReviewCommentSection() {
+  return `
+    <div class="review-fields">
+      <div class="review-field">
+        <span>レビュー担当</span>
+        <div class="write-line"></div>
+      </div>
+      <div class="review-field">
+        <span>レビュー日</span>
+        <div class="write-line"></div>
+      </div>
+      <div class="review-field wide">
+        <span>備考</span>
+        <div class="write-line"></div>
+      </div>
+    </div>
+
+    <div class="review-result">
+      <h3>確認結果</h3>
+      <label><span class="checkbox"></span>問題なし</label>
+      <label><span class="checkbox"></span>修正あり</label>
+      <label><span class="checkbox"></span>再レビュー必要</label>
+    </div>
+
+    <div class="review-comment">
+      <h3>レビューコメント</h3>
+      <div class="comment-box"></div>
+    </div>
+  `;
+}
+
 function renderFlowSummary(config) {
   const lines = buildFlowSummary(config);
 
@@ -506,9 +654,119 @@ function renderReportStyles() {
     .metric.error, .check-list .error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
     .metric.warning, .check-list .warning { border-color: #fde68a; background: #fffbeb; color: #92400e; }
     .metric.info, .check-list .info { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+    .metric.added { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+    .metric.removed { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+    .metric.changed { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
     .check-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
     .check-list li { border: 1px solid; border-radius: 8px; padding: 12px; }
     .check-list p { margin: 6px 0 0; color: inherit; }
+    .diff-targets { display: grid; gap: 14px; margin-top: 14px; }
+    .diff-target {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #f8fafc;
+      padding: 14px;
+      box-shadow: none;
+    }
+    .section-heading.compact { margin-bottom: 10px; padding-bottom: 8px; }
+    .section-heading.compact h3 { margin: 0; font-size: 16px; }
+    .diff-group + .diff-group { margin-top: 12px; }
+    .diff-group h3 { margin: 0 0 8px; font-size: 14px; }
+    .diff-group.added h3 { color: #166534; }
+    .diff-group.removed h3 { color: #991b1b; }
+    .diff-group.changed h3 { color: #1d4ed8; }
+    .diff-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .diff-list > li {
+      display: grid;
+      gap: 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 12px;
+    }
+    .diff-list pre,
+    .diff-change-table pre {
+      max-height: 220px;
+      margin: 0;
+      overflow: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #f8fafc;
+      color: #172033;
+      padding: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font: 12px/1.5 Consolas, "Liberation Mono", monospace;
+    }
+    .diff-change-table { margin-top: 2px; }
+    .review-fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .review-field {
+      display: grid;
+      gap: 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #f8fafc;
+      padding: 12px;
+    }
+    .review-field.wide { grid-column: 1 / -1; }
+    .review-field span,
+    .review-result h3,
+    .review-comment h3 {
+      margin: 0;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .write-line {
+      min-height: 34px;
+      border-bottom: 1.5px solid #94a3b8;
+      background: #ffffff;
+    }
+    .review-result {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px 18px;
+      margin-bottom: 18px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 12px;
+    }
+    .review-result label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+    }
+    .checkbox {
+      width: 18px;
+      height: 18px;
+      border: 1.8px solid #475569;
+      border-radius: 3px;
+      background: #ffffff;
+      display: inline-block;
+    }
+    .review-comment {
+      display: grid;
+      gap: 10px;
+    }
+    .comment-box {
+      min-height: 180px;
+      border: 1.5px solid #94a3b8;
+      border-radius: 8px;
+      background:
+        repeating-linear-gradient(
+          #ffffff,
+          #ffffff 31px,
+          #e2e8f0 32px
+        );
+    }
     .flow-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
     .flow-list li {
       margin-left: calc(var(--depth) * 20px);
@@ -534,6 +792,8 @@ function renderReportStyles() {
       .cover p, .cover-meta span { color: #374151; }
       .cover-meta div { border-color: #9ca3af; background: #ffffff; }
       section { box-shadow: none; border-color: #cbd5e1; break-inside: avoid; }
+      .review-field, .review-result { background: #ffffff; }
+      .comment-box { min-height: 220px; }
       .data-table { font-size: 12px; }
       a { color: inherit; text-decoration: none; }
     }
@@ -543,13 +803,15 @@ function renderReportStyles() {
       .cover { padding: 22px; }
       .cover h1 { font-size: 26px; }
       .data-table { display: block; overflow-x: auto; }
+      .review-fields { grid-template-columns: 1fr; }
       .flow-list li { margin-left: 0; }
     }
   `;
 }
 
-function generateReportHtml(config, companyId) {
+function generateReportHtml(config, companyId, options = {}) {
   const checkResult = checkConfigForReport(config);
+  const configDiff = compareConfigs(options.compareConfig || config, config);
   const generatedAt = new Date();
   const company = config.company || {};
   const companyName = company.company_name || company.company_id || companyId;
@@ -582,6 +844,11 @@ function generateReportHtml(config, companyId) {
     </section>
 
     <section>
+      <div class="section-heading"><h2>レビューコメント</h2><span>Review Notes</span></div>
+      ${renderReviewCommentSection()}
+    </section>
+
+    <section>
       <div class="section-heading"><h2>会社情報</h2><span>Company</span></div>
       ${renderKeyValueTable(company)}
     </section>
@@ -607,6 +874,11 @@ function generateReportHtml(config, companyId) {
     </section>
 
     <section>
+      <div class="section-heading"><h2>設定差分</h2><span>Config Diff</span></div>
+      ${renderConfigDiff(configDiff)}
+    </section>
+
+    <section>
       <div class="section-heading"><h2>判定フロー概要</h2><span>Flow</span></div>
       ${renderFlowSummary(config)}
     </section>
@@ -621,7 +893,10 @@ function exportReport(companyId, options = {}) {
   const outputDir = path.join(rootDir, "reports");
   const outputPath = path.join(outputDir, `${companyId}-review.html`);
   const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-  const html = generateReportHtml(config, companyId);
+  const compareConfig = options.compareConfigPath
+    ? JSON.parse(fs.readFileSync(path.resolve(rootDir, options.compareConfigPath), "utf8"))
+    : options.compareConfig;
+  const html = generateReportHtml(config, companyId, { compareConfig });
 
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(outputPath, html, "utf8");
