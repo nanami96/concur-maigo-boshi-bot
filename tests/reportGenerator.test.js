@@ -40,16 +40,19 @@ const config = {
 };
 
 describe("generateReportHtml", () => {
-  it("renders a review report with the required sections", () => {
+  it("renders a designed review report with the required sections", () => {
     const html = generateReportHtml(config, "sample-company");
 
     expect(html).toContain("<!doctype html>");
+    expect(html).toContain("設定レビューレポート");
+    expect(html).toContain("サマリー");
     expect(html).toContain("会社情報");
     expect(html).toContain("質問一覧");
     expect(html).toContain("判定ルール一覧");
     expect(html).toContain("経費タイプ一覧");
     expect(html).toContain("設定チェック結果");
     expect(html).toContain("判定フロー概要");
+    expect(html).toContain("@media print");
     expect(html).toContain("Sample Company");
     expect(html).toContain("r-train");
   });

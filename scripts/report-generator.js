@@ -10,6 +10,14 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function formatDateTime(date) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Tokyo",
+  }).format(date);
+}
+
 function getExpenseTypeName(config, expenseTypeId) {
   return (
     (config.expenseTypes || []).find(
@@ -142,6 +150,7 @@ function buildFlowSummary(config) {
     visited.add(question.id);
     lines.push({
       depth,
+      kind: "question",
       text: `${question.id}: ${question.text}`,
     });
 
@@ -149,6 +158,7 @@ function buildFlowSummary(config) {
       if (option.nextQuestionId) {
         lines.push({
           depth: depth + 1,
+          kind: "option",
           text: `${option.label} (${option.value}) -> ${option.nextQuestionId}`,
         });
         visit(questionsById.get(option.nextQuestionId), depth + 2);
@@ -173,6 +183,7 @@ function buildFlowSummary(config) {
 
       lines.push({
         depth: depth + 1,
+        kind: "result",
         text: `${option.label} (${option.value}) -> ${resultText}`,
       });
     });
@@ -187,7 +198,7 @@ function buildFlowSummary(config) {
 
 function renderKeyValueTable(values) {
   return `
-    <table>
+    <table class="data-table key-value-table">
       <tbody>
         ${Object.entries(values || {})
           .map(
@@ -206,30 +217,30 @@ function renderKeyValueTable(values) {
 
 function renderQuestions(config) {
   return `
-    <table>
+    <table class="data-table">
       <thead>
-        <tr><th>ID</th><th>質問文</th><th>選択肢</th></tr>
+        <tr><th>ID</th><th>質問文</th><th>選択肢と遷移</th></tr>
       </thead>
       <tbody>
         ${(config.questions || [])
           .map(
             (question) => `
               <tr>
-                <td>${escapeHtml(question.id)}</td>
+                <td><span class="code">${escapeHtml(question.id)}</span></td>
                 <td>${escapeHtml(question.text)}</td>
                 <td>
-                  <ul>
+                  <ul class="compact-list">
                     ${(question.options || [])
                       .map(
                         (option) => `
                           <li>
-                            ${escapeHtml(option.label)} (${escapeHtml(
-                              option.value,
-                            )})
+                            <strong>${escapeHtml(option.label)}</strong>
+                            <span class="muted">(${escapeHtml(option.value)})</span>
+                            <span class="arrow">-></span>
                             ${
                               option.nextQuestionId
-                                ? ` -> ${escapeHtml(option.nextQuestionId)}`
-                                : " -> 結果"
+                                ? `<span class="code">${escapeHtml(option.nextQuestionId)}</span>`
+                                : `<span class="result-label">結果</span>`
                             }
                           </li>
                         `,
@@ -248,7 +259,7 @@ function renderQuestions(config) {
 
 function renderRules(config) {
   return `
-    <table>
+    <table class="data-table">
       <thead>
         <tr><th>ID</th><th>条件</th><th>経費タイプ</th><th>案内メッセージ</th></tr>
       </thead>
@@ -257,13 +268,16 @@ function renderRules(config) {
           .map(
             (rule) => `
               <tr>
-                <td>${escapeHtml(rule.id)}</td>
+                <td><span class="code">${escapeHtml(rule.id)}</span></td>
                 <td>
-                  <ul>
+                  <ul class="compact-list">
                     ${Object.entries(rule.conditions || {})
                       .map(
                         ([questionId, value]) => `
-                          <li>${escapeHtml(getQuestionText(config, questionId))}: ${escapeHtml(value)}</li>
+                          <li>
+                            ${escapeHtml(getQuestionText(config, questionId))}
+                            <span class="muted">(${escapeHtml(questionId)}: ${escapeHtml(value)})</span>
+                          </li>
                         `,
                       )
                       .join("")}
@@ -282,19 +296,23 @@ function renderRules(config) {
 
 function renderExpenseTypes(config) {
   return `
-    <table>
+    <table class="data-table">
       <thead>
-        <tr><th>ID</th><th>名称</th><th>領収書</th><th>有効</th></tr>
+        <tr><th>ID</th><th>名称</th><th>領収書</th><th>状態</th></tr>
       </thead>
       <tbody>
         ${(config.expenseTypes || [])
           .map(
             (expenseType) => `
               <tr>
-                <td>${escapeHtml(expenseType.id)}</td>
+                <td><span class="code">${escapeHtml(expenseType.id)}</span></td>
                 <td>${escapeHtml(expenseType.name)}</td>
                 <td>${escapeHtml(expenseType.receiptRequired ? "必要" : "不要")}</td>
-                <td>${escapeHtml(expenseType.active ? "有効" : "無効")}</td>
+                <td>
+                  <span class="status ${expenseType.active ? "active" : "inactive"}">
+                    ${escapeHtml(expenseType.active ? "有効" : "無効")}
+                  </span>
+                </td>
               </tr>
             `,
           )
@@ -344,7 +362,9 @@ function renderFlowSummary(config) {
       ${lines
         .map(
           (line) => `
-            <li style="margin-left: ${line.depth * 18}px">${escapeHtml(line.text)}</li>
+            <li class="${escapeHtml(line.kind)}" style="--depth: ${line.depth}">
+              ${escapeHtml(line.text)}
+            </li>
           `,
         )
         .join("")}
@@ -352,70 +372,242 @@ function renderFlowSummary(config) {
   `;
 }
 
+function renderSummaryCards(config, checkResult) {
+  return `
+    <div class="summary-grid">
+      <div class="summary-card"><span>質問</span><strong>${(config.questions || []).length}</strong></div>
+      <div class="summary-card"><span>判定ルール</span><strong>${(config.rules || []).length}</strong></div>
+      <div class="summary-card"><span>経費タイプ</span><strong>${(config.expenseTypes || []).length}</strong></div>
+      <div class="summary-card risk"><span>要確認</span><strong>${checkResult.errors.length + checkResult.warnings.length}</strong></div>
+    </div>
+  `;
+}
+
+function renderReportStyles() {
+  return `
+    :root {
+      color: #172033;
+      background: #eef2f7;
+      font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+      line-height: 1.55;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; }
+    main { max-width: 1120px; margin: 0 auto; padding: 32px; display: grid; gap: 18px; }
+    .cover {
+      min-height: 260px;
+      display: grid;
+      align-content: space-between;
+      gap: 28px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #174ea6 0%, #2563eb 45%, #0f766e 100%);
+      color: #ffffff;
+      padding: 32px;
+      page-break-after: avoid;
+    }
+    .cover h1 { margin: 0; font-size: 34px; letter-spacing: 0; }
+    .cover p { margin: 10px 0 0; color: #dbeafe; }
+    .cover-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .cover-meta div {
+      border: 1px solid rgba(255,255,255,.35);
+      border-radius: 8px;
+      background: rgba(255,255,255,.12);
+      padding: 12px;
+    }
+    .cover-meta span { display: block; color: #bfdbfe; font-size: 12px; font-weight: 700; }
+    .cover-meta strong { display: block; margin-top: 4px; overflow-wrap: anywhere; }
+    section {
+      border: 1px solid #d7deea;
+      border-radius: 10px;
+      background: #ffffff;
+      padding: 22px;
+      box-shadow: 0 10px 24px rgba(15,23,42,.05);
+      break-inside: avoid;
+    }
+    .section-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 10px;
+    }
+    h1, h2 { margin: 0; }
+    h2 { font-size: 20px; }
+    .section-heading span { color: #64748b; font-size: 12px; font-weight: 700; }
+    .summary-grid, .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 14px; }
+    .summary-card, .metric {
+      border: 1px solid #d7deea;
+      border-radius: 8px;
+      background: #f8fafc;
+      padding: 14px;
+    }
+    .summary-card span, .metric span {
+      display: block;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .summary-card strong, .metric strong { display: block; margin-top: 5px; font-size: 26px; }
+    .summary-card.risk strong { color: #92400e; }
+    .data-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .data-table th, .data-table td {
+      border-top: 1px solid #e2e8f0;
+      padding: 11px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .data-table thead th {
+      border-top: 0;
+      background: #eef2f7;
+      color: #334155;
+      font-size: 12px;
+      letter-spacing: .02em;
+    }
+    .key-value-table th { width: 220px; background: #f8fafc; color: #475569; }
+    .compact-list { display: grid; gap: 5px; margin: 0; padding-left: 18px; }
+    .code {
+      display: inline-block;
+      max-width: 100%;
+      border-radius: 999px;
+      background: #eef2f7;
+      color: #334155;
+      padding: 2px 8px;
+      overflow-wrap: anywhere;
+      font-family: Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .muted { color: #64748b; }
+    .arrow { color: #2563eb; font-weight: 700; }
+    .result-label, .status {
+      border-radius: 999px;
+      background: #f0fdf4;
+      color: #166534;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .status.inactive { background: #fef2f2; color: #991b1b; }
+    .metric.error, .check-list .error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+    .metric.warning, .check-list .warning { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+    .metric.info, .check-list .info { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+    .check-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .check-list li { border: 1px solid; border-radius: 8px; padding: 12px; }
+    .check-list p { margin: 6px 0 0; color: inherit; }
+    .flow-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .flow-list li {
+      margin-left: calc(var(--depth) * 20px);
+      border-left: 4px solid #cbd5e1;
+      border-radius: 6px;
+      background: #f8fafc;
+      padding: 9px 12px;
+    }
+    .flow-list .question { border-left-color: #2563eb; font-weight: 700; }
+    .flow-list .option { border-left-color: #94a3b8; color: #475569; }
+    .flow-list .result { border-left-color: #16a34a; color: #166534; }
+    .empty { color: #64748b; }
+    @media print {
+      :root { background: #ffffff; color: #111827; }
+      body { background: #ffffff; }
+      main { max-width: none; padding: 0; gap: 14px; }
+      .cover {
+        color: #111827;
+        background: #ffffff;
+        border: 2px solid #111827;
+        min-height: 220px;
+      }
+      .cover p, .cover-meta span { color: #374151; }
+      .cover-meta div { border-color: #9ca3af; background: #ffffff; }
+      section { box-shadow: none; border-color: #cbd5e1; break-inside: avoid; }
+      .data-table { font-size: 12px; }
+      a { color: inherit; text-decoration: none; }
+    }
+    @media (max-width: 760px) {
+      main { padding: 16px; }
+      .cover-meta, .summary-grid, .metrics { grid-template-columns: 1fr; }
+      .cover { padding: 22px; }
+      .cover h1 { font-size: 26px; }
+      .data-table { display: block; overflow-x: auto; }
+      .flow-list li { margin-left: 0; }
+    }
+  `;
+}
+
 function generateReportHtml(config, companyId) {
   const checkResult = checkConfigForReport(config);
-  const generatedAt = new Date().toISOString();
+  const generatedAt = new Date();
+  const company = config.company || {};
+  const companyName = company.company_name || company.company_id || companyId;
 
   return `<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <title>${escapeHtml(companyId)} 設定レビューレポート</title>
-  <style>
-    :root { color: #172033; background: #eef2f7; font-family: "Segoe UI", sans-serif; }
-    body { margin: 0; padding: 32px; }
-    main { max-width: 1100px; margin: 0 auto; display: grid; gap: 20px; }
-    header, section { background: #fff; border: 1px solid #d7deea; border-radius: 8px; padding: 20px; }
-    h1, h2 { margin: 0; }
-    h1 { font-size: 28px; }
-    h2 { margin-bottom: 14px; font-size: 20px; }
-    .meta { color: #64748b; margin: 8px 0 0; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border-top: 1px solid #e2e8f0; padding: 10px; text-align: left; vertical-align: top; }
-    th { width: 180px; color: #475569; background: #f8fafc; }
-    ul, ol { margin: 0; padding-left: 20px; }
-    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
-    .metric { border: 1px solid #d7deea; border-radius: 8px; padding: 12px; }
-    .metric span { display: block; font-size: 12px; font-weight: 700; }
-    .metric strong { display: block; font-size: 24px; }
-    .error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
-    .warning { border-color: #fde68a; background: #fffbeb; color: #92400e; }
-    .info { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
-    .check-list { display: grid; gap: 10px; padding-left: 0; list-style: none; }
-    .check-list li { border-radius: 8px; padding: 12px; }
-    .check-list p { margin: 6px 0 0; }
-    .flow-list { display: grid; gap: 8px; }
-    .empty { color: #64748b; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(companyName)} 設定レビューレポート</title>
+  <style>${renderReportStyles()}</style>
 </head>
 <body>
   <main>
-    <header>
-      <h1>設定レビューレポート</h1>
-      <p class="meta">Company: ${escapeHtml(companyId)} / Generated: ${escapeHtml(generatedAt)}</p>
+    <header class="cover">
+      <div>
+        <h1>設定レビューレポート</h1>
+        <p>Excelから生成された設定内容を、レビュー・共有用に整理したHTMLレポートです。</p>
+      </div>
+      <div class="cover-meta">
+        <div><span>会社名</span><strong>${escapeHtml(companyName)}</strong></div>
+        <div><span>会社ID</span><strong>${escapeHtml(companyId)}</strong></div>
+        <div><span>生成日時</span><strong>${escapeHtml(formatDateTime(generatedAt))}</strong></div>
+      </div>
     </header>
+
     <section>
-      <h2>会社情報</h2>
-      ${renderKeyValueTable(config.company)}
+      <div class="section-heading"><h2>サマリー</h2><span>Review Overview</span></div>
+      ${renderSummaryCards(config, checkResult)}
     </section>
+
     <section>
-      <h2>質問一覧</h2>
+      <div class="section-heading"><h2>会社情報</h2><span>Company</span></div>
+      ${renderKeyValueTable(company)}
+    </section>
+
+    <section>
+      <div class="section-heading"><h2>質問一覧</h2><span>Questions</span></div>
       ${renderQuestions(config)}
     </section>
+
     <section>
-      <h2>判定ルール一覧</h2>
+      <div class="section-heading"><h2>判定ルール一覧</h2><span>Rules</span></div>
       ${renderRules(config)}
     </section>
+
     <section>
-      <h2>経費タイプ一覧</h2>
+      <div class="section-heading"><h2>経費タイプ一覧</h2><span>Expense Types</span></div>
       ${renderExpenseTypes(config)}
     </section>
+
     <section>
-      <h2>設定チェック結果</h2>
+      <div class="section-heading"><h2>設定チェック結果</h2><span>Validation</span></div>
       ${renderCheckResult(checkResult)}
     </section>
+
     <section>
-      <h2>判定フロー概要</h2>
+      <div class="section-heading"><h2>判定フロー概要</h2><span>Flow</span></div>
       ${renderFlowSummary(config)}
     </section>
   </main>
@@ -445,4 +637,5 @@ module.exports = {
   checkConfigForReport,
   exportReport,
   generateReportHtml,
+  renderReportStyles,
 };
