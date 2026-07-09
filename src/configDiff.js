@@ -37,6 +37,37 @@ function isEqualConfigItem(left, right) {
   );
 }
 
+function formatPath(parts) {
+  return parts.length > 0 ? parts.join(".") : "(root)";
+}
+
+function getChangedFields(previous, current, path = []) {
+  if (isEqualConfigItem(previous, current)) {
+    return [];
+  }
+
+  const previousIsObject =
+    previous && typeof previous === "object" && !Array.isArray(previous);
+  const currentIsObject =
+    current && typeof current === "object" && !Array.isArray(current);
+
+  if (!previousIsObject || !currentIsObject) {
+    return [
+      {
+        field: formatPath(path),
+        before: previous,
+        after: current,
+      },
+    ];
+  }
+
+  return [...new Set([...Object.keys(previous), ...Object.keys(current)])]
+    .sort()
+    .flatMap((key) =>
+      getChangedFields(previous[key], current[key], [...path, key]),
+    );
+}
+
 function indexById(items = []) {
   return new Map(items.map((item) => [item.id, item]));
 }
@@ -71,6 +102,7 @@ function diffItems(previousItems = [], currentItems = []) {
       id: item.id,
       previous: previousById.get(item.id),
       current: item,
+      changes: getChangedFields(previousById.get(item.id), item),
     }));
 
   return {
@@ -117,3 +149,5 @@ export function diffConfigs(previousConfig, currentConfig) {
     hasDiff: Object.values(targets).some((targetDiff) => countDiffs(targetDiff)),
   };
 }
+
+export const compareConfigs = diffConfigs;

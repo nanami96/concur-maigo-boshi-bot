@@ -79,6 +79,13 @@ describe("diffConfigs", () => {
 
     expect(diff.targets.questions.changed).toHaveLength(1);
     expect(diff.targets.questions.changed[0].id).toBe("q-category");
+    expect(diff.targets.questions.changed[0].changes).toEqual([
+      {
+        field: "text",
+        before: "What are you claiming?",
+        after: "Changed question",
+      },
+    ]);
     expect(diff.summary.changed).toBe(1);
   });
 
@@ -123,6 +130,13 @@ describe("diffConfigs", () => {
     expect(diff.targets.rules.changed.map((item) => item.id)).toEqual([
       "r-train",
     ]);
+    expect(diff.targets.rules.changed[0].changes).toEqual([
+      {
+        field: "message",
+        before: "Use train expense.",
+        after: "Changed message.",
+      },
+    ]);
   });
 
   it("detects added, removed, and changed expense types", () => {
@@ -157,6 +171,13 @@ describe("diffConfigs", () => {
     ]);
     expect(diff.targets.expenseTypes.changed.map((item) => item.id)).toEqual([
       "train_local",
+    ]);
+    expect(diff.targets.expenseTypes.changed[0].changes).toEqual([
+      {
+        field: "receiptRequired",
+        before: false,
+        after: true,
+      },
     ]);
   });
 

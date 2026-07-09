@@ -546,6 +546,71 @@ button {
   margin-top: 14px;
 }
 
+.compareConfigLoader {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.compareConfigLoader div {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.compareConfigLoader label {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.compareConfigLoader input {
+  width: 100%;
+  color: #172033;
+  font: inherit;
+}
+
+.clearCompareButton {
+  flex: 0 0 auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #243047;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+
+.clearCompareButton:hover {
+  background: #eef2f7;
+}
+
+.compareConfigFileName,
+.compareConfigError {
+  margin: 10px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.compareConfigFileName {
+  color: #475569;
+}
+
+.compareConfigError {
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+  padding: 10px 12px;
+}
+
 .diffMetric {
   border: 1px solid #d7deea;
   border-radius: 8px;
@@ -598,8 +663,7 @@ button {
 }
 
 .diffEmpty p {
-  margin: 6px 0 0;
-  color: #64748b;
+  display: none;
 }
 
 .diffTargetList {
@@ -677,6 +741,96 @@ button {
 .diffGroup.changed .diffList span {
   border-color: #bfdbfe;
   color: #1d4ed8;
+}
+
+.diffDetailList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.diffDetailItem {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.diffDetailId {
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  padding: 3px 9px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.diffGroup.added .diffDetailId {
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.diffGroup.removed .diffDetailId {
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.diffGroup.changed .diffDetailId {
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.diffDetailItem pre,
+.diffChangeRow pre {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #172033;
+  padding: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
+    monospace;
+}
+
+.diffChangeList {
+  display: grid;
+  gap: 10px;
+}
+
+.diffChangeRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.diffChangeRow > span,
+.diffChangeRow strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.diffChangeRow > span {
+  color: #1d4ed8;
+}
+
+.diffChangeRow strong {
+  margin-bottom: 4px;
+  color: #64748b;
 }
 
 .messageRow {
@@ -843,6 +997,19 @@ button {
   }
 
   .diffSummaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .compareConfigLoader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .clearCompareButton {
+    width: 100%;
+  }
+
+  .diffChangeRow {
     grid-template-columns: 1fr;
   }
 
