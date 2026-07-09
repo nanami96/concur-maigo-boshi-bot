@@ -3,6 +3,12 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 const { compareConfigs } = require("../src/configDiffCore.cjs");
 
+const AI_REVIEW_LABELS = {
+  title: "\u0041\u0049\u30ec\u30d3\u30e5\u30fc\u30b3\u30e1\u30f3\u30c8",
+  goodPoints: "\u826f\u3044\u70b9",
+  improvementCandidates: "\u6539\u5584\u5019\u88dc",
+};
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -503,7 +509,7 @@ function renderAiReviewComments(reviewComments) {
   return `
     <div class="ai-review-grid">
       <div class="ai-review-card good">
-        <h3>良い点</h3>
+        <h3>${escapeHtml(AI_REVIEW_LABELS.goodPoints)}</h3>
         <ul>
           ${(reviewComments.goodPoints || [])
             .map((comment) => `<li>${escapeHtml(comment)}</li>`)
@@ -511,10 +517,19 @@ function renderAiReviewComments(reviewComments) {
         </ul>
       </div>
       <div class="ai-review-card improvement">
-        <h3>改善候補</h3>
+        <h3>${escapeHtml(AI_REVIEW_LABELS.improvementCandidates)}</h3>
         <ul>
           ${(reviewComments.improvementCandidates || [])
-            .map((comment) => `<li>${escapeHtml(comment)}</li>`)
+            .map(
+              (comment) => `
+                <li>
+                  <span class="severity-badge ${escapeHtml(comment.severity)}">
+                    ${escapeHtml(comment.severity)}
+                  </span>
+                  <span>${escapeHtml(comment.message)}</span>
+                </li>
+              `,
+            )
             .join("")}
         </ul>
       </div>
@@ -814,6 +829,9 @@ function renderReportStyles() {
       padding-left: 20px;
     }
     .ai-review-card li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
       break-inside: avoid;
     }
     .ai-review-card.good {
@@ -825,6 +843,34 @@ function renderReportStyles() {
       border-color: #fde68a;
       background: #fffbeb;
       color: #92400e;
+    }
+    .severity-badge {
+      flex: 0 0 auto;
+      min-width: 62px;
+      border: 1px solid #cbd5e1;
+      border-radius: 999px;
+      background: #f8fafc;
+      color: #475569;
+      padding: 2px 8px;
+      text-align: center;
+      text-transform: uppercase;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .severity-badge.high {
+      border-color: #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+    }
+    .severity-badge.medium {
+      border-color: #fde68a;
+      background: #fffbeb;
+      color: #92400e;
+    }
+    .severity-badge.low {
+      border-color: #bfdbfe;
+      background: #eff6ff;
+      color: #1d4ed8;
     }
     .flow-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
     .flow-list li {
@@ -909,17 +955,17 @@ async function generateReportHtml(config, companyId, options = {}) {
     </header>
 
     <section>
-      <div class="section-heading"><h2>サマリー</h2><span>Review Overview</span></div>
+      <div class="section-heading"><h2>${escapeHtml("\u30b5\u30de\u30ea\u30fc")}</h2><span>Review Overview</span></div>
       ${renderSummaryCards(config, checkResult)}
     </section>
 
     <section>
-      <div class="section-heading"><h2>レビューコメント</h2><span>Review Notes</span></div>
+      <div class="section-heading"><h2>${escapeHtml("\u30ec\u30d3\u30e5\u30fc\u30b3\u30e1\u30f3\u30c8")}</h2><span>Review Notes</span></div>
       ${renderReviewCommentSection()}
     </section>
 
     <section>
-      <div class="section-heading"><h2>AIレビューコメント</h2><span>Rule-based Advisor</span></div>
+      <div class="section-heading"><h2>${escapeHtml(AI_REVIEW_LABELS.title)}</h2><span>Rule-based Advisor</span></div>
       ${renderAiReviewComments(reviewComments)}
     </section>
 

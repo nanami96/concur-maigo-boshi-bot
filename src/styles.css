@@ -584,7 +584,42 @@ button {
 }
 
 .advisorGroup li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   overflow-wrap: anywhere;
+}
+
+.severityBadge {
+  flex: 0 0 auto;
+  min-width: 62px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  padding: 2px 8px;
+  text-align: center;
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.severityBadge.high {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.severityBadge.medium {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.severityBadge.low {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .diffSummaryGrid {

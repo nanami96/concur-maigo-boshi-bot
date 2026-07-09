@@ -60,6 +60,7 @@ describe("generateReportHtml", () => {
     expect(html).toContain("良い点");
     expect(html).toContain("改善候補");
     expect(html).toContain("ai-review-grid");
+    expect(html).toContain("severity-badge");
     expect(html).toContain("review-fields");
     expect(html).toContain("review-result");
     expect(html).toContain("review-comment");

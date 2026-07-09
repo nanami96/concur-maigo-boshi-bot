@@ -130,14 +130,6 @@ function ConfigCheckSection({ result }) {
           Error {errors.length} / Warning {warnings.length}
         </span>
       </summary>
-
-      {!hasIssues && (
-        <div className="checkStatus ok">
-          <strong>設定チェックOK</strong>
-          <p>{info[0]?.message}</p>
-        </div>
-      )}
-
       <div className="checkSummaryGrid">
         <div className="checkMetric error">
           <span>Error</span>
@@ -153,6 +145,7 @@ function ConfigCheckSection({ result }) {
         </div>
       </div>
 
+      {!hasIssues && <p className="checkOk">設定チェックOK</p>}
       <CheckIssueList title="Error" items={errors} level="error" />
       <CheckIssueList title="Warning" items={warnings} level="warning" />
     </details>
@@ -164,9 +157,21 @@ function ReviewCommentList({ title, items, type }) {
     <div className={`advisorGroup ${type}`}>
       <h3>{title}</h3>
       <ul>
-        {items.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
+        {items.map((item) => {
+          const message = typeof item === "string" ? item : item.message;
+          const severity = typeof item === "string" ? null : item.severity;
+
+          return (
+            <li key={`${severity || "good"}-${message}`}>
+              {severity && (
+                <span className={`severityBadge ${severity}`}>
+                  {severity}
+                </span>
+              )}
+              <span>{message}</span>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -176,17 +181,17 @@ function ReviewAdvisorCard({ result }) {
   return (
     <details className="overviewSection" open>
       <summary>
-        AIレビューコメント
+        {"AI\u30ec\u30d3\u30e5\u30fc\u30b3\u30e1\u30f3\u30c8"}
         <span>Rule-based</span>
       </summary>
       <div className="advisorCard">
         <ReviewCommentList
-          title="良い点"
+          title={"\u826f\u3044\u70b9"}
           items={result.goodPoints}
           type="good"
         />
         <ReviewCommentList
-          title="改善候補"
+          title={"\u6539\u5584\u5019\u88dc"}
           items={result.improvementCandidates}
           type="improvement"
         />
