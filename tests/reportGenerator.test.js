@@ -40,8 +40,8 @@ const config = {
 };
 
 describe("generateReportHtml", () => {
-  it("renders a designed review report with the required sections", () => {
-    const html = generateReportHtml(config, "sample-company");
+  it("renders a designed review report with the required sections", async () => {
+    const html = await generateReportHtml(config, "sample-company");
 
     expect(html).toContain("<!doctype html>");
     expect(html).toContain("設定レビューレポート");
@@ -55,6 +55,11 @@ describe("generateReportHtml", () => {
     expect(html).toContain("判定フロー概要");
     expect(html).toContain("差分はありません");
     expect(html).toContain("Review Notes");
+    expect(html).toContain("AIレビューコメント");
+    expect(html).toContain("Rule-based Advisor");
+    expect(html).toContain("良い点");
+    expect(html).toContain("改善候補");
+    expect(html).toContain("ai-review-grid");
     expect(html).toContain("review-fields");
     expect(html).toContain("review-result");
     expect(html).toContain("review-comment");
@@ -65,8 +70,8 @@ describe("generateReportHtml", () => {
     expect(html).toContain("r-train");
   });
 
-  it("escapes HTML in config values", () => {
-    const html = generateReportHtml(
+  it("escapes HTML in config values", async () => {
+    const html = await generateReportHtml(
       {
         ...config,
         company: {
@@ -80,7 +85,7 @@ describe("generateReportHtml", () => {
     expect(html).not.toContain("<script>alert(1)</script>");
   });
 
-  it("renders config diff details when compareConfig is provided", () => {
+  it("renders config diff details when compareConfig is provided", async () => {
     const compareConfig = {
       ...config,
       questions: [
@@ -93,7 +98,7 @@ describe("generateReportHtml", () => {
       expenseTypes: [],
     };
 
-    const html = generateReportHtml(config, "sample-company", {
+    const html = await generateReportHtml(config, "sample-company", {
       compareConfig,
     });
 

@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { pathToFileURL } = require("url");
 const { compareConfigs } = require("../src/configDiffCore.cjs");
 
 function escapeHtml(value) {
@@ -498,6 +499,29 @@ function renderReviewCommentSection() {
   `;
 }
 
+function renderAiReviewComments(reviewComments) {
+  return `
+    <div class="ai-review-grid">
+      <div class="ai-review-card good">
+        <h3>良い点</h3>
+        <ul>
+          ${(reviewComments.goodPoints || [])
+            .map((comment) => `<li>${escapeHtml(comment)}</li>`)
+            .join("")}
+        </ul>
+      </div>
+      <div class="ai-review-card improvement">
+        <h3>改善候補</h3>
+        <ul>
+          ${(reviewComments.improvementCandidates || [])
+            .map((comment) => `<li>${escapeHtml(comment)}</li>`)
+            .join("")}
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
 function renderFlowSummary(config) {
   const lines = buildFlowSummary(config);
 
@@ -767,6 +791,41 @@ function renderReportStyles() {
           #e2e8f0 32px
         );
     }
+    .ai-review-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .ai-review-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #f8fafc;
+      padding: 16px;
+      break-inside: avoid;
+    }
+    .ai-review-card h3 {
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
+    .ai-review-card ul {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding-left: 20px;
+    }
+    .ai-review-card li {
+      break-inside: avoid;
+    }
+    .ai-review-card.good {
+      border-color: #bbf7d0;
+      background: #f0fdf4;
+      color: #166534;
+    }
+    .ai-review-card.improvement {
+      border-color: #fde68a;
+      background: #fffbeb;
+      color: #92400e;
+    }
     .flow-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
     .flow-list li {
       margin-left: calc(var(--depth) * 20px);
@@ -793,6 +852,7 @@ function renderReportStyles() {
       .cover-meta div { border-color: #9ca3af; background: #ffffff; }
       section { box-shadow: none; border-color: #cbd5e1; break-inside: avoid; }
       .review-field, .review-result { background: #ffffff; }
+      .ai-review-card { background: #ffffff; }
       .comment-box { min-height: 220px; }
       .data-table { font-size: 12px; }
       a { color: inherit; text-decoration: none; }
@@ -804,14 +864,24 @@ function renderReportStyles() {
       .cover h1 { font-size: 26px; }
       .data-table { display: block; overflow-x: auto; }
       .review-fields { grid-template-columns: 1fr; }
+      .ai-review-grid { grid-template-columns: 1fr; }
       .flow-list li { margin-left: 0; }
     }
   `;
 }
 
-function generateReportHtml(config, companyId, options = {}) {
+async function loadReviewAdvisor() {
+  const moduleUrl = pathToFileURL(
+    path.join(__dirname, "..", "src", "reviewAdvisorCore.mjs"),
+  ).href;
+  return import(moduleUrl);
+}
+
+async function generateReportHtml(config, companyId, options = {}) {
   const checkResult = checkConfigForReport(config);
   const configDiff = compareConfigs(options.compareConfig || config, config);
+  const { generateReviewComments } = await loadReviewAdvisor();
+  const reviewComments = generateReviewComments(config);
   const generatedAt = new Date();
   const company = config.company || {};
   const companyName = company.company_name || company.company_id || companyId;
@@ -846,6 +916,11 @@ function generateReportHtml(config, companyId, options = {}) {
     <section>
       <div class="section-heading"><h2>レビューコメント</h2><span>Review Notes</span></div>
       ${renderReviewCommentSection()}
+    </section>
+
+    <section>
+      <div class="section-heading"><h2>AIレビューコメント</h2><span>Rule-based Advisor</span></div>
+      ${renderAiReviewComments(reviewComments)}
     </section>
 
     <section>
@@ -887,7 +962,7 @@ function generateReportHtml(config, companyId, options = {}) {
 </html>`;
 }
 
-function exportReport(companyId, options = {}) {
+async function exportReport(companyId, options = {}) {
   const rootDir = options.rootDir || process.cwd();
   const configPath = path.join(rootDir, "rules", companyId, "config.json");
   const outputDir = path.join(rootDir, "reports");
@@ -896,7 +971,7 @@ function exportReport(companyId, options = {}) {
   const compareConfig = options.compareConfigPath
     ? JSON.parse(fs.readFileSync(path.resolve(rootDir, options.compareConfigPath), "utf8"))
     : options.compareConfig;
-  const html = generateReportHtml(config, companyId, { compareConfig });
+  const html = await generateReportHtml(config, companyId, { compareConfig });
 
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(outputPath, html, "utf8");
