@@ -5,7 +5,8 @@
     "preview": "vite preview",
     "generate:config": "node scripts/generate-config.js",
     "test": "vitest",
-    "update:excel": "node scripts/update-excel-template.js"
+    "update:excel": "node scripts/update-excel-template.js",
+    "export:report": "node scripts/export-report.js"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
