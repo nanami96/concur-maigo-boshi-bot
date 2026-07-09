@@ -43,6 +43,46 @@
       "receiptRequired": true,
       "active": true,
       "note": ""
+    },
+    {
+      "id": "dining",
+      "policyId": "normal_expense",
+      "name": "会食費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "entertainment",
+      "policyId": "normal_expense",
+      "name": "接待交際費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "equipment",
+      "policyId": "normal_expense",
+      "name": "備品購入",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "training",
+      "policyId": "normal_expense",
+      "name": "研修費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "communication",
+      "policyId": "normal_expense",
+      "name": "通信費",
+      "receiptRequired": false,
+      "active": true,
+      "note": ""
     }
   ],
   "questions": [
@@ -65,6 +105,30 @@
           "label": "ホテル",
           "value": "ホテル",
           "nextQuestionId": "q-business-trip"
+        },
+        {
+          "label": "会食",
+          "value": "会食",
+          "nextQuestionId": "q-receipt"
+        },
+        {
+          "label": "接待",
+          "value": "接待",
+          "nextQuestionId": "q-receipt"
+        },
+        {
+          "label": "備品購入",
+          "value": "備品購入",
+          "nextQuestionId": "q-receipt"
+        },
+        {
+          "label": "研修",
+          "value": "研修",
+          "nextQuestionId": "q-receipt"
+        },
+        {
+          "label": "通信費",
+          "value": "通信費"
         }
       ]
     },
@@ -85,7 +149,12 @@
       "text": "領収書ありですか？",
       "type": "yes_no",
       "displayOrder": 3,
-      "options": []
+      "options": [
+        {
+          "label": "はい",
+          "value": "yes"
+        }
+      ]
     }
   ],
   "rules": [
@@ -122,6 +191,65 @@
       "resultExpenseTypeId": "hotel",
       "message": "宿泊費を選択してください。",
       "warningMessage": "領収書添付が必要です。",
+      "active": true
+    },
+    {
+      "id": "r004",
+      "priority": 4,
+      "conditions": {
+        "q-category": "会食",
+        "q-receipt": "yes"
+      },
+      "resultExpenseTypeId": "dining",
+      "message": "会食は「会食費」を選択してください。",
+      "warningMessage": "領収書を添付し、参加者・目的を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r005",
+      "priority": 5,
+      "conditions": {
+        "q-category": "接待",
+        "q-receipt": "yes"
+      },
+      "resultExpenseTypeId": "entertainment",
+      "message": "接待は「接待交際費」を選択してください。",
+      "warningMessage": "取引先名・参加者・目的を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r006",
+      "priority": 6,
+      "conditions": {
+        "q-category": "備品購入",
+        "q-receipt": "yes"
+      },
+      "resultExpenseTypeId": "equipment",
+      "message": "備品購入は「備品購入」を選択してください。",
+      "warningMessage": "購入品名と業務利用目的を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r007",
+      "priority": 7,
+      "conditions": {
+        "q-category": "研修",
+        "q-receipt": "yes"
+      },
+      "resultExpenseTypeId": "training",
+      "message": "研修・セミナーは「研修費」を選択してください。",
+      "warningMessage": "研修名・受講日・業務関連性を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r008",
+      "priority": 8,
+      "conditions": {
+        "q-category": "通信費"
+      },
+      "resultExpenseTypeId": "communication",
+      "message": "通信費は「通信費」を選択してください。",
+      "warningMessage": "月額利用料やオンラインサービス利用料の場合に利用します。",
       "active": true
     }
   ]
