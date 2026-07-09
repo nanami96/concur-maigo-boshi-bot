@@ -272,6 +272,17 @@ GitHub Actionsでも自動実行されます。
 
 # Release History
 
+## v1.7.0
+
+### AI Review Assistant
+
+- AIレビューコメント生成機能を追加
+- 良い点・改善候補を自動表示
+- React画面へAIレビューコメントを追加
+- HTMLレビュー資料へAIレビューコメントを追加
+- reviewAdvisorCore にレビューコメント生成ロジックを共通化
+- HTMLレポートの印刷・PDF保存レイアウトを改善
+
 ## v1.6.0
 
 ### Review Workflow Improvements
