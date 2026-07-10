@@ -82,7 +82,45 @@ npm run generate:config sample-company
 | `npm test -- --run` | テストを一括実行する |
 | `npm run dev` | React画面を起動してブラウザで確認する |
 
-## 6. 確認ポイント
+## 6. VS Codeを使わない実行方法
+
+Windowsでは、プロジェクト直下のバッチファイルをダブルクリックして実行できます。
+
+| ファイル | 用途 |
+| --- | --- |
+| `generate-config.bat` | `sample-company` の `config.json` を生成する |
+| `update-excel.bat` | `sample-company` の入力規則付きExcelを生成する |
+| `export-report.bat` | `sample-company` のHTMLレポートを生成する |
+| `start-bot.bat` | React画面を起動する |
+| `run-all.bat` | Excel更新、config生成、HTMLレポート生成、React画面起動を順番に実行する |
+
+Excel編集後にまとめて反映したい場合は、まず `run-all.bat` を利用してください。
+
+## 7. Excel内の「設定を反映する」ボタンを使う方法
+
+Excel内にボタンを置いて実行したい場合は、マクロ有効版のExcelを別ファイルとして作成します。
+
+| 形式 | 説明 |
+| --- | --- |
+| `.xlsx` | 通常のExcelファイルです。マクロは保存できません。元ファイルとして扱います。 |
+| `.xlsm` | マクロ有効ブックです。Excel内のボタンから処理を実行できます。 |
+
+元の `excel/sample-company.xlsx` は直接変更せず、`excel/sample-company.xlsm` として別名保存してください。
+
+マクロ有効版の作成、VBAモジュールのインポート、`00_操作メニュー` シートの作成、ボタンへのマクロ割り当ては [Excelに「設定を反映する」ボタンを追加する手順](excel-macro-button.md) を参照してください。
+
+Excelでマクロ有効版を開くと、「コンテンツの有効化」が表示される場合があります。信頼できるプロジェクト内で作成した `.xlsm` の場合のみ有効化してください。会社PCでマクロが禁止されている場合は、無理に有効化せず `run-all.bat` を利用してください。
+
+`run-all.bat` が見つからないエラーが出た場合は、次の配置になっているか確認してください。
+
+```text
+プロジェクトルート/
+├── run-all.bat
+└── excel/
+    └── sample-company.xlsm
+```
+
+## 8. 確認ポイント
 
 Excelを変更したあとは、次の観点で確認してください。
 
@@ -96,7 +134,7 @@ Excelを変更したあとは、次の観点で確認してください。
 | AIレビューコメント | 良い点、改善候補、重要度がレビュー観点として妥当か |
 | HTMLレポート | 会社情報、設定内容、設定チェック、判定フロー、レビューコメント欄が出力されているか |
 
-## 7. よくある注意点
+## 9. よくある注意点
 
 - `99_expense_types` に存在しない経費タイプを `03_判定ルール` で使うと、設定チェックでErrorになります。
 - 経費タイプだけを追加し、どの判定ルールからも使わない場合はWarningになります。
@@ -106,4 +144,5 @@ Excelを変更したあとは、次の観点で確認してください。
 - `excel/output/` は入力規則を反映したExcelの生成先です。元のExcelとは別の生成物として扱います。
 - `reports/` はHTMLレポートの生成先です。Excelやconfigを変更したあとは、必要に応じて再出力してください。
 - Excelを変更しただけではReact画面やHTMLレポートには反映されません。必ず `npm run generate:config {companyId}` を実行してください。
-
+- マクロ有効版を使う場合も、元の `.xlsx` は保管用として残してください。
+- マクロが使えない環境では、Excelボタンではなく `run-all.bat` をダブルクリックしてください。

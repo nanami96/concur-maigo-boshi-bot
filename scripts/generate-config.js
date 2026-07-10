@@ -7,6 +7,11 @@ const { createExpenseTypes } = require("./generators/expenseTypes");
 const { createRules } = require("./generators/rules");
 // 質問生成
 const { createQuestions } = require("./generators/questions");
+const {
+  getDataStartRowNumber,
+  readSheet,
+  readSheetMeta,
+} = require("./generators/sheetReader");
 
 // Excelとファイル操作用のライブラリを読み込む
 // xlsx：Excelを読むため
@@ -26,73 +31,16 @@ const {
 const companyId = process.argv[2] || "sample-company";
 const workbook = XLSX.readFile(`excel/${companyId}.xlsx`);
 
-// ExcelシートをJSON配列に変換する
-function readSheet(name) {
-  const sheet = workbook.Sheets[name];
-
-  if (!sheet) {
-    return [];
-  }
-
-  const rows = XLSX.utils.sheet_to_json(sheet, {
-    header: 1,
-    defval: "",
-  });
-
-  const headers = rows[0] || [];
-  const dataRows = rows.slice(2);
-
-  return dataRows
-    .filter((row) => row.some((cell) => String(cell).trim() !== ""))
-    .map((row) => {
-      const item = {};
-
-      headers.forEach((header, index) => {
-        item[header] = row[index];
-      });
-
-      return item;
-    });
-}
-
-function readSheetMeta(name) {
-  const sheet = workbook.Sheets[name];
-
-  if (!sheet) {
-    return {};
-  }
-
-  const rows = XLSX.utils.sheet_to_json(sheet, {
-    header: 1,
-    defval: "",
-  });
-
-  const headers = rows[0] || [];
-  const metaRow = rows[1] || [];
-  const meta = {};
-
-  headers.forEach((header, index) => {
-    meta[header] = metaRow[index];
-  });
-
-  return meta;
-}
-
 // 必要なシートを読む
-const companySheet = readSheet("99_company_settings");
-const policySheet = readSheet("99_policies");
-const expenseTypeSheet = readSheet("99_expense_types");
-const simpleRuleSheet = readSheet("03_判定ルール");
+const companySheet = readSheet(workbook, "99_company_settings");
+const policySheet = readSheet(workbook, "99_policies");
+const expenseTypeSheet = readSheet(workbook, "99_expense_types");
+const simpleRuleSheet = readSheet(workbook, "03_判定ルール");
 
-const companyMeta = readSheetMeta("99_company_settings");
-const policyMeta = readSheetMeta("99_policies");
-const expenseTypeMeta = readSheetMeta("99_expense_types");
-const simpleRuleMeta = readSheetMeta("03_判定ルール");
-
-console.log(companyMeta);
-console.log(policyMeta);
-console.log(expenseTypeMeta);
-console.log(simpleRuleMeta);
+const companyMeta = readSheetMeta(workbook, "99_company_settings");
+const policyMeta = readSheetMeta(workbook, "99_policies");
+const expenseTypeMeta = readSheetMeta(workbook, "99_expense_types");
+const simpleRuleMeta = readSheetMeta(workbook, "03_判定ルール");
 
 // 申請内容がある行だけ使う
 const categoryRows = simpleRuleSheet.filter((row) => isFilled(row["申請内容"]));
@@ -112,11 +60,32 @@ const expenseTypes = createExpenseTypes(expenseTypeSheet);
 
 // Excelのエラーチェック
 const validationErrors = [
-  ...validateRequiredColumns(companySheet, companyMeta, "99_company_settings"),
-  ...validateRequiredColumns(categoryRows, simpleRuleMeta, "03_判定ルール"),
-  ...validateExpenseTypes(categoryRows, expenseTypes),
-  ...validateDuplicateExpenseTypeIds(expenseTypeSheet),
-  ...validatePolicyReferences(expenseTypeSheet, policySheet),
+  ...validateRequiredColumns(
+    companySheet,
+    companyMeta,
+    "99_company_settings",
+    getDataStartRowNumber("99_company_settings"),
+  ),
+  ...validateRequiredColumns(
+    categoryRows,
+    simpleRuleMeta,
+    "03_判定ルール",
+    getDataStartRowNumber("03_判定ルール"),
+  ),
+  ...validateExpenseTypes(
+    categoryRows,
+    expenseTypes,
+    getDataStartRowNumber("03_判定ルール"),
+  ),
+  ...validateDuplicateExpenseTypeIds(
+    expenseTypeSheet,
+    getDataStartRowNumber("99_expense_types"),
+  ),
+  ...validatePolicyReferences(
+    expenseTypeSheet,
+    policySheet,
+    getDataStartRowNumber("99_expense_types"),
+  ),
 ];
 
 if (validationErrors.length > 0) {

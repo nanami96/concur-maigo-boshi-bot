@@ -1,9 +1,9 @@
 const RULE_SHEET_NAME = "03_判定ルール";
-function validateExpenseTypes(categoryRows, expenseTypes) {
+function validateExpenseTypes(categoryRows, expenseTypes, startRowNumber = 2) {
   const errors = [];
 
   categoryRows.forEach((row, index) => {
-    const rowNumber = index + 2;
+    const rowNumber = startRowNumber + index;
     const expenseTypeName = row["経費タイプ"];
     if (!expenseTypeName) {
       return;
@@ -32,12 +32,12 @@ module.exports = {
   validateRequiredColumns,
 };
 
-function validateDuplicateExpenseTypeIds(expenseTypeSheet) {
+function validateDuplicateExpenseTypeIds(expenseTypeSheet, startRowNumber = 2) {
   const errors = [];
   const seenIds = new Set();
 
   expenseTypeSheet.forEach((row, index) => {
-    const rowNumber = index + 2;
+    const rowNumber = startRowNumber + index;
     const expenseTypeId = row.expense_type_id;
 
     if (!expenseTypeId) {
@@ -62,12 +62,16 @@ function validateDuplicateExpenseTypeIds(expenseTypeSheet) {
   return errors;
 }
 
-function validatePolicyReferences(expenseTypeSheet, policySheet) {
+function validatePolicyReferences(
+  expenseTypeSheet,
+  policySheet,
+  startRowNumber = 2,
+) {
   const errors = [];
   const policyIds = new Set(policySheet.map((row) => row.policy_id));
 
   expenseTypeSheet.forEach((row, index) => {
-    const rowNumber = index + 2;
+    const rowNumber = startRowNumber + index;
     const policyId = row.policy_id;
 
     if (!policyId) {
@@ -89,11 +93,11 @@ function validatePolicyReferences(expenseTypeSheet, policySheet) {
   return errors;
 }
 
-function validateRequiredColumns(rows, metadata, sheetName) {
+function validateRequiredColumns(rows, metadata, sheetName, startRowNumber = 2) {
   const errors = [];
 
   rows.forEach((row, index) => {
-    const rowNumber = index + 2;
+    const rowNumber = startRowNumber + index;
 
     Object.keys(metadata).forEach((columnName) => {
       if (metadata[columnName] !== "必須") {

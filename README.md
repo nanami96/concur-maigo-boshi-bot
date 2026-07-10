@@ -126,6 +126,35 @@ npm install
 
 ---
 
+# VS Codeを使わない運用方法
+
+Windowsでは、プロジェクト直下のバッチファイルをダブルクリックして主要な操作を実行できます。
+
+| ファイル | 実行内容 |
+| --- | --- |
+| `generate-config.bat` | `sample-company` の `config.json` を生成します |
+| `update-excel.bat` | `sample-company` の入力規則付きExcelを `excel/output/` に出力します |
+| `export-report.bat` | `sample-company` のHTMLレポートを `reports/` に出力します |
+| `start-bot.bat` | React画面を起動します |
+| `run-all.bat` | Excel更新、config生成、HTMLレポート出力、React画面起動を順番に実行します |
+
+通常運用では、Excelを編集したあとに `run-all.bat` を実行すると、画面確認とレポート出力までまとめて進められます。
+
+---
+
+# Excelの「設定を反映する」ボタン
+
+Windows版Excelでは、マクロ有効版の `.xlsm` を別ファイルとして作成し、Excel内のボタンから `run-all.bat` を起動できます。
+
+- 元の `excel/sample-company.xlsx` は変更せず、`excel/sample-company.xlsm` を別名保存して利用します。
+- VBAモジュールは `scripts/vba/ConcurBotOperations.bas` にあります。
+- 会社PCでマクロが禁止されている場合は、プロジェクト直下の `run-all.bat` を利用してください。
+- `run-all.bat` が見つからない場合は、`.xlsm` が `excel/` フォルダ内にあり、`run-all.bat` がプロジェクト直下にあるか確認してください。
+
+マクロ有効版の作成、VBAインポート、ボタン配置、「コンテンツの有効化」の手順は [Excelに「設定を反映する」ボタンを追加する手順](docs/excel-macro-button.md) を参照してください。
+
+---
+
 # config.json の生成
 
 Excelを編集後、以下を実行します。
