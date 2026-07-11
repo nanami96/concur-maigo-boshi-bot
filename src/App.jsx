@@ -39,6 +39,7 @@ export default function App() {
   const defaultCompanyId = availableCompanies[0]?.id || "sample-company";
   const [companyId, setCompanyId] = useState(defaultCompanyId);
   const config = getConfig(companyId) || getConfig(defaultCompanyId);
+  const showRuleOverview = !isPublicDemo;
 
   const engine = useMemo(() => new QuestionEngine(config), [config]);
   const [currentQuestion, setCurrentQuestion] = useState(() =>
@@ -214,7 +215,9 @@ export default function App() {
         )}
       </section>
 
-      <RuleOverview companyId={companyId} config={config} />
+      {showRuleOverview && (
+        <RuleOverview companyId={companyId} config={config} />
+      )}
     </main>
   );
 }
