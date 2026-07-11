@@ -147,7 +147,11 @@ export default function App() {
           </p>
         </div>
         {!isPublicDemo && (
-          <select value={companyId} onChange={handleCompanyChange}>
+          <select
+            aria-label="会社を選択"
+            value={companyId}
+            onChange={handleCompanyChange}
+          >
             {availableCompanies.map((company) => (
               <option key={company.id} value={company.id}>
                 {company.label}

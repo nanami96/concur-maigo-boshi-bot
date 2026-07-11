@@ -1,7 +1,7 @@
 {
   "company": {
-    "company_id": "sample-company",
-    "company_name": "サンプル会社",
+    "company_id": "company-a",
+    "company_name": "A株式会社",
     "default_policy_id": "normal_expense",
     "language": "ja"
   },

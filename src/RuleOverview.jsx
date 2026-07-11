@@ -413,6 +413,7 @@ export default function RuleOverview({ companyId, config, compareConfig }) {
   const shouldShowSearchEmpty = searchResult.hasQuery && !searchResult.hasMatches;
 
   useEffect(() => {
+    setSearchQuery("");
     setLoadedCompareConfig(null);
     setCompareFileName("");
     setCompareError("");
@@ -462,7 +463,7 @@ export default function RuleOverview({ companyId, config, compareConfig }) {
         </div>
         <p>
           {config.company.company_name}
-          <span>{companyId}</span>
+          <span>{config.company.company_id}</span>
         </p>
       </div>
 

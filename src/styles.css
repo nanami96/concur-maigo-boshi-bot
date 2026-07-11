@@ -182,12 +182,14 @@ button {
 .overviewGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: stretch;
   gap: 12px;
   margin-top: 14px;
 }
 
 .overviewCard {
   display: grid;
+  grid-template-rows: auto 1fr;
   gap: 14px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -197,7 +199,9 @@ button {
 
 .cardHeading {
   display: grid;
+  align-content: start;
   gap: 8px;
+  min-height: 76px;
 }
 
 .cardHeading h3 {
@@ -208,14 +212,19 @@ button {
 }
 
 .idBadge {
+  display: inline-flex;
+  align-items: center;
   width: fit-content;
   max-width: 100%;
+  min-height: 24px;
   border: 1px solid #cbd5e1;
   border-radius: 999px;
   background: #ffffff;
   color: #475569;
   padding: 3px 9px;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 700;
 }
