@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-const configs = import.meta.glob("../rules/*/config.json", { eager: true });
+import {
+  availableCompanies,
+  getConfig,
+  isPublicDemo,
+} from "@configSource";
 import QuestionEngine from "./engine/QuestionEngine";
 import RuleOverview from "./RuleOverview";
 
@@ -32,8 +36,9 @@ function ChoiceButtons({ options, selected, onSelect }) {
 }
 
 export default function App() {
-  const [companyId, setCompanyId] = useState("sample-company");
-  const config = configs[`../rules/${companyId}/config.json`].default;
+  const defaultCompanyId = availableCompanies[0]?.id || "sample-company";
+  const [companyId, setCompanyId] = useState(defaultCompanyId);
+  const config = getConfig(companyId) || getConfig(defaultCompanyId);
 
   const engine = useMemo(() => new QuestionEngine(config), [config]);
   const [currentQuestion, setCurrentQuestion] = useState(() =>
@@ -141,10 +146,15 @@ export default function App() {
             質問に答えるだけで、申請に使う経費タイプと入力のコツを確認できます。
           </p>
         </div>
-        <select value={companyId} onChange={handleCompanyChange}>
-          <option value="sample-company">サンプル会社</option>
-          <option value="company-a">A株式会社</option>
-        </select>
+        {!isPublicDemo && (
+          <select value={companyId} onChange={handleCompanyChange}>
+            {availableCompanies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.label}
+              </option>
+            ))}
+          </select>
+        )}
         <button
           className="resetButton"
           type="button"
