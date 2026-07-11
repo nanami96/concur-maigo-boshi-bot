@@ -81,17 +81,40 @@ button {
   line-height: 1;
 }
 
+.companySelectWrap {
+  position: relative;
+  display: inline-flex;
+  max-width: 220px;
+  color: #475569;
+}
+
 .companySelector select {
   min-height: 42px;
+  width: 100%;
   max-width: 220px;
   border: 1px solid #cbd5e1;
   border-radius: 999px;
   background: #ffffff;
   color: #243047;
-  padding: 9px 28px 9px 14px;
+  padding: 9px 48px 9px 14px;
+  appearance: none;
+  -webkit-appearance: none;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+.companySelectWrap::after {
+  content: "";
+  position: absolute;
+  right: 22px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  pointer-events: none;
+  transform: translateY(-65%) rotate(45deg);
 }
 
 .companySelector select:hover {
@@ -1132,6 +1155,11 @@ button {
 
   .companySelector {
     flex: 1 1 220px;
+  }
+
+  .companySelectWrap {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .companySelector select {

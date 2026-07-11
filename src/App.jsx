@@ -10,7 +10,7 @@ import RuleOverview from "./RuleOverview";
 function ChatMessage({ speaker = "bot", children }) {
   return (
     <div className={`messageRow ${speaker}`}>
-      <div className="avatar">{speaker === "bot" ? "B" : "あなた"}</div>
+      <div className="avatar">{speaker === "bot" ? "Bot" : "あなた"}</div>
       <div className="messageBubble">{children}</div>
     </div>
   );
@@ -147,30 +147,37 @@ export default function App() {
             質問に答えるだけで、申請に使う経費タイプと入力のコツを確認できます。
           </p>
         </div>
-        {!isPublicDemo && (
-          <select
-            aria-label="会社を選択"
-            value={companyId}
-            onChange={handleCompanyChange}
+        <div className="headerActions">
+          {!isPublicDemo && (
+            <label className="companySelector">
+              <span className="companySelectorLabel">会社</span>
+              <span className="companySelectWrap">
+                <select
+                  aria-label="会社を選択"
+                  value={companyId}
+                  onChange={handleCompanyChange}
+                >
+                  {availableCompanies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.label}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            </label>
+          )}
+          <button
+            className="resetButton"
+            type="button"
+            onClick={goBack}
+            disabled={history.length === 0}
           >
-            {availableCompanies.map((company) => (
-              <option key={company.id} value={company.id}>
-                {company.label}
-              </option>
-            ))}
-          </select>
-        )}
-        <button
-          className="resetButton"
-          type="button"
-          onClick={goBack}
-          disabled={history.length === 0}
-        >
-          戻る
-        </button>
-        <button className="resetButton" type="button" onClick={resetAnswers}>
-          最初から
-        </button>
+            戻る
+          </button>
+          <button className="resetButton" type="button" onClick={resetAnswers}>
+            最初から
+          </button>
+        </div>
       </header>
 
       <section className="chatPanel" aria-label="Concur迷子防止Botの質問">
