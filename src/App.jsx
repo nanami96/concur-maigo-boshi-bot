@@ -204,19 +204,27 @@ export default function App() {
         {result && (
           <ChatMessage>
             <div className="recommendationCard">
-              <p className="cardLabel">おすすめの経費タイプ</p>
-              <h2>{result.expenseType.name}</h2>
-              <p>{result.rule.message}</p>
-
-              <div className="resultItem">
-                <h3>領収書要否</h3>
-                <p>{result.expenseType.receiptRequired ? "必要" : "不要"}</p>
+              <div className="resultHero">
+                <p className="cardLabel">おすすめの経費タイプ</p>
+                <h2>{result.expenseType.name}</h2>
               </div>
 
-              <div className="resultItem">
-                <h3>注意点</h3>
-                <p>{result.expenseType.note}</p>
+              <div className="resultInfoCard">
+                <h3>入力のポイント</h3>
+                <p>{result.rule.message}</p>
               </div>
+
+              <div className="receiptBadge">
+                <span aria-hidden="true">✓</span>
+                領収書：{result.expenseType.receiptRequired ? "必要" : "不要"}
+              </div>
+
+              {result.expenseType.note && (
+                <div className="resultWarningCard">
+                  <h3>注意事項</h3>
+                  <p>{result.expenseType.note}</p>
+                </div>
+              )}
             </div>
           </ChatMessage>
         )}

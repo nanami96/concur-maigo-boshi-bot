@@ -1096,8 +1096,8 @@ button {
 
 .recommendationCard {
   display: grid;
-  gap: 16px;
-  max-width: 720px;
+  gap: 18px;
+  width: min(100%, 720px);
 }
 
 .cardLabel {
@@ -1107,29 +1107,81 @@ button {
   font-weight: 700;
 }
 
-.recommendationCard h2 {
-  margin: -8px 0 0;
+.resultHero {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
+  padding: 18px;
+}
+
+.resultHero h2 {
+  margin: 0;
   color: #174ea6;
-  font-size: 24px;
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
-.resultItem {
-  border-top: 1px solid #e2e8f0;
-  padding-top: 14px;
+.resultInfoCard,
+.resultWarningCard {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
 }
 
-.resultItem h3 {
+.resultInfoCard h3,
+.resultWarningCard h3 {
   margin: 0 0 8px;
   font-size: 15px;
 }
 
-.resultItem ul {
+.resultInfoCard p,
+.resultWarningCard p {
   margin: 0;
-  padding-left: 20px;
+  color: #334155;
+  overflow-wrap: anywhere;
 }
 
-.resultItem li + li {
-  margin-top: 6px;
+.receiptBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #174ea6;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.receiptBadge span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #174ea6;
+  color: #ffffff;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.resultWarningCard {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.resultWarningCard h3 {
+  color: #92400e;
 }
 
 .commentExample {
