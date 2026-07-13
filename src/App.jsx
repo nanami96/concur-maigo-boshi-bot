@@ -7,6 +7,27 @@ import {
 import QuestionEngine from "./engine/QuestionEngine";
 import RuleOverview from "./RuleOverview";
 
+function getReceiptStatus(receiptRequired) {
+  if (receiptRequired === true) {
+    return {
+      className: "receiptStatusBadge required",
+      label: "必要",
+    };
+  }
+
+  if (receiptRequired === false) {
+    return {
+      className: "receiptStatusBadge optional",
+      label: "不要",
+    };
+  }
+
+  return {
+    className: "receiptStatusBadge neutral",
+    label: receiptRequired == null ? "未設定" : String(receiptRequired),
+  };
+}
+
 function ChatMessage({ speaker = "bot", children }) {
   return (
     <div className={`messageRow ${speaker}`}>
@@ -53,6 +74,9 @@ export default function App() {
   const selectedOption = currentQuestion.options.find(
     (option) => option.value === selectedAnswer,
   );
+  const resultNote =
+    result?.rule?.warningMessage?.trim() || result?.expenseType?.note?.trim();
+  const receiptStatus = getReceiptStatus(result?.expenseType?.receiptRequired);
 
   function handleSelect(answer) {
     const selected = currentQuestion.options.find(
@@ -205,24 +229,58 @@ export default function App() {
           <ChatMessage>
             <div className="recommendationCard">
               <div className="resultHero">
-                <p className="cardLabel">おすすめの経費タイプ</p>
-                <h2>{result.expenseType.name}</h2>
+                <p className="resultHeroLabel">
+                  <span className="resultLabelIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M20.6 13.1 13.1 20.6a2.1 2.1 0 0 1-3 0L3.8 14.3A2.8 2.8 0 0 1 3 12.4V5.8A2.8 2.8 0 0 1 5.8 3h6.6a2.8 2.8 0 0 1 1.9.8l6.3 6.3a2.1 2.1 0 0 1 0 3Z" />
+                      <path d="M8 8h.01" />
+                    </svg>
+                  </span>
+                  おすすめの経費タイプ
+                </p>
+                <div className="resultExpenseType">
+                  <h2>{result.expenseType.name}</h2>
+                </div>
               </div>
 
-              <div className="resultInfoCard">
-                <h3>入力のポイント</h3>
+              <div className="resultAdviceBubble">
+                <h3>
+                  <span className="inputPointIcon" aria-hidden="true">
+                    💡
+                  </span>
+                  入力のポイント
+                </h3>
                 <p>{result.rule.message}</p>
               </div>
 
-              <div className="receiptBadge">
-                <span aria-hidden="true">✓</span>
-                領収書：{result.expenseType.receiptRequired ? "必要" : "不要"}
+              <div className="receiptSummary">
+                <span className="receiptIcon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M6 3h12v18l-2-1.2-2 1.2-2-1.2-2 1.2-2-1.2L6 21V3Z" />
+                    <path d="M9 8h6" />
+                    <path d="M9 12h6" />
+                    <path d="M9 16h4" />
+                  </svg>
+                </span>
+                <span className="receiptLabel">領収書</span>
+                <span className={receiptStatus.className}>
+                  {receiptStatus.label}
+                </span>
               </div>
 
-              {result.expenseType.note && (
+              {resultNote && (
                 <div className="resultWarningCard">
-                  <h3>注意事項</h3>
-                  <p>{result.expenseType.note}</p>
+                  <h3>
+                    <span className="warningIcon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 3 22 21H2L12 3Z" />
+                        <path d="M12 9v5" />
+                        <path d="M12 17.5h.01" />
+                      </svg>
+                    </span>
+                    注意事項
+                  </h3>
+                  <p>{resultNote}</p>
                 </div>
               )}
             </div>

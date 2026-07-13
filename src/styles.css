@@ -2,7 +2,12 @@
   color: #162033;
   background: #eef2f7;
   font-family:
-    Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   line-height: 1.5;
 }
 
@@ -969,7 +974,11 @@ button {
   padding: 10px;
   white-space: pre-wrap;
   word-break: break-word;
-  font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
+  font:
+    12px/1.5 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    "Liberation Mono",
     monospace;
 }
 
@@ -1095,93 +1104,235 @@ button {
 }
 
 .recommendationCard {
-  display: grid;
-  gap: 18px;
-  width: min(100%, 720px);
-}
-
-.cardLabel {
-  margin: 0;
-  color: #5b6575;
-  font-size: 13px;
-  font-weight: 700;
+  width: min(100%, 560px);
+  padding: 0;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #dce4ef;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
 }
 
 .resultHero {
-  display: grid;
+  padding: 24px 28px 20px;
+  background: linear-gradient(135deg, #f6faff 0%, #eef6ff 100%);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.resultHeroLabel {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  border: 1px solid #bfdbfe;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
-  padding: 18px;
+  margin-bottom: 22px;
+  color: #1d4ed8;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.resultLabelIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  flex: 0 0 28px;
+}
+
+.resultLabelIcon svg,
+.receiptIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.resultExpenseType {
+  margin: 0;
+  color: #172033;
+  font-size: clamp(25px, 3vw, 32px);
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .resultHero h2 {
   margin: 0;
-  color: #174ea6;
-  font-size: clamp(28px, 4vw, 40px);
-  line-height: 1.2;
+  color: #172033;
+  font-size: clamp(26px, 3vw, 32px);
+  font-weight: 800;
+  line-height: 1.18;
   overflow-wrap: anywhere;
 }
 
-.resultInfoCard,
+.resultAdviceBubble,
 .resultWarningCard {
+  position: relative;
   display: grid;
   gap: 8px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border: 0;
+  border-radius: 6px;
   background: #ffffff;
-  padding: 16px;
+  padding: 12px 14px;
 }
 
-.resultInfoCard h3,
+.resultAdviceBubble {
+  margin: 0 18px 0;
+  padding: 14px 18px 18px;
+  background: #eef6ff;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.resultAdviceBubble::before,
+.resultAdviceBubble::after {
+  content: none;
+}
+
+.resultAdviceBubble h3,
 .resultWarningCard h3 {
-  margin: 0 0 8px;
-  font-size: 15px;
-}
-
-.resultInfoCard p,
-.resultWarningCard p {
-  margin: 0;
-  color: #334155;
-  overflow-wrap: anywhere;
-}
-
-.receiptBadge {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
-  width: fit-content;
-  max-width: 100%;
-  border: 1px solid #bfdbfe;
-  border-radius: 999px;
-  background: #eff6ff;
-  color: #174ea6;
-  padding: 8px 12px;
-  font-size: 14px;
+  margin: 0 0 6px;
+  color: #1761c5;
+  font-size: 16px;
   font-weight: 700;
 }
 
-.receiptBadge span {
+.inputPointIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  background: #174ea6;
-  color: #ffffff;
-  font-size: 12px;
+  width: 34px;
+  min-width: 34px;
+  flex: 0 0 34px;
+  font-size: 30px;
   line-height: 1;
 }
 
+.resultAdviceBubble p,
+.resultWarningCard p {
+  margin: 0;
+  color: #283548;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.7;
+}
+
+.receiptSummary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 20px 28px;
+  background: #fff;
+  border: 0;
+  border-top: 1px solid #e5eaf1;
+  border-bottom: 1px solid #e5eaf1;
+  border-radius: 0;
+}
+
+.receiptIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  flex: 0 0 34px;
+  border-radius: 0;
+  background: transparent;
+  color: #374151;
+  line-height: 1;
+}
+
+.receiptLabel {
+  color: #263244;
+  margin-right: 36px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.receiptStatusBadge {
+  min-width: 78px;
+  padding: 9px 18px;
+  border-radius: 999px;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+}
+
+.receiptStatusBadge.required {
+  background: #ecfdf3;
+  color: #15803d;
+  box-shadow: inset 0 0 0 1px #bbf7d0;
+}
+
+.receiptStatusBadge.optional {
+  background: #f1f5f9;
+  color: #475569;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+
+.receiptStatusBadge.neutral {
+  background: #fef3c7;
+  color: #92400e;
+  box-shadow: inset 0 0 0 1px #fde68a;
+}
+
 .resultWarningCard {
-  border-color: #fde68a;
-  background: #fffbeb;
+  margin: 20px 18px 18px;
+  padding: 16px 18px 16px;
+  background: #fff9eb;
+  border: 0;
+  border-left: 3px solid #f5b400;
+  border-radius: 7px;
+  box-shadow: none;
 }
 
 .resultWarningCard h3 {
   color: #92400e;
+}
+
+.warningIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  flex: 0 0 28px;
+  color: #f5b51b;
+}
+
+.warningIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.warningIcon path:first-child {
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.warningIcon path:not(:first-child) {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .commentExample {
@@ -1224,6 +1375,36 @@ button {
   }
 
   .chatPanel {
+    padding: 14px;
+  }
+
+  .resultHero {
+    padding: 18px 16px 16px;
+  }
+
+  .resultAdviceBubble {
+    margin: 0 12px;
+    padding: 14px;
+  }
+
+  .receiptSummary {
+    gap: 10px;
+    padding: 16px;
+  }
+
+  .receiptLabel {
+    margin-right: 12px;
+    font-size: 18px;
+  }
+
+  .receiptStatusBadge {
+    min-width: 68px;
+    font-size: 16px;
+    padding: 8px 14px;
+  }
+
+  .resultWarningCard {
+    margin: 16px 12px 14px;
     padding: 14px;
   }
 
