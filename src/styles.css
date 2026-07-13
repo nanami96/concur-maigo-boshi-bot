@@ -1065,7 +1065,7 @@ button {
 }
 
 .messageBubble h2 {
-  margin: 0 0 14px;
+  margin: 7px 0 7px;
   font-size: 20px;
 }
 
@@ -1104,7 +1104,7 @@ button {
 }
 
 .recommendationCard {
-  width: min(100%, 560px);
+  width: min(100%, 680px);
   padding: 0;
   overflow: hidden;
   background: #fff;
@@ -1114,8 +1114,8 @@ button {
 }
 
 .resultHero {
-  padding: 24px 28px 20px;
-  background: linear-gradient(135deg, #f6faff 0%, #eef6ff 100%);
+  padding: 24px 28px 26px;
+  background: transparent;
   border: 0;
   border-radius: 0;
   box-shadow: none;
@@ -1124,8 +1124,8 @@ button {
 .resultHeroLabel {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 22px;
+  gap: 10px;
+  margin-bottom: 32px;
   color: #1d4ed8;
   font-size: 18px;
   font-weight: 800;
@@ -1136,10 +1136,10 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  flex: 0 0 28px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  flex: 0 0 24px;
 }
 
 .resultLabelIcon svg,
@@ -1166,10 +1166,11 @@ button {
 .resultHero h2 {
   margin: 0;
   color: #172033;
-  font-size: clamp(26px, 3vw, 32px);
+  font-size: 32px;
   font-weight: 800;
-  line-height: 1.18;
+  line-height: 1.2;
   overflow-wrap: anywhere;
+  padding-top: 10px;
 }
 
 .resultAdviceBubble,
@@ -1184,11 +1185,11 @@ button {
 }
 
 .resultAdviceBubble {
-  margin: 0 18px 0;
-  padding: 14px 18px 18px;
-  background: #eef6ff;
-  border: 0;
-  border-radius: 0;
+  margin: 0 18px 20px;
+  padding: 16px 18px 18px;
+  background: #f3f7ff;
+  border: 1px solid #dbe8ff;
+  border-radius: 10px;
   box-shadow: none;
 }
 
@@ -1201,10 +1202,10 @@ button {
 .resultWarningCard h3 {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 0 6px;
+  gap: 10px;
+  margin: 0;
   color: #1761c5;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
 }
 
@@ -1212,33 +1213,33 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  min-width: 34px;
-  flex: 0 0 34px;
-  font-size: 30px;
+  width: 26px;
+  min-width: 26px;
+  flex: 0 0 26px;
+  font-size: 24px;
   line-height: 1;
 }
 
 .resultAdviceBubble p,
 .resultWarningCard p {
-  margin: 0;
+  margin: 10px 0 0;
   color: #283548;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
-  line-height: 1.7;
+  line-height: 1.6;
 }
 
 .receiptSummary {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 14px;
-  margin-top: 18px;
-  padding: 20px 28px;
+  gap: 22px;
+  margin-top: 0;
+  padding: 18px 28px;
   background: #fff;
   border: 0;
-  border-top: 1px solid #e5eaf1;
-  border-bottom: 1px solid #e5eaf1;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
   border-radius: 0;
 }
 
@@ -1246,10 +1247,10 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  flex: 0 0 34px;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  flex: 0 0 28px;
   border-radius: 0;
   background: transparent;
   color: #374151;
@@ -1258,16 +1259,16 @@ button {
 
 .receiptLabel {
   color: #263244;
-  margin-right: 36px;
+  margin-right: 24px;
   font-size: 20px;
   font-weight: 800;
 }
 
 .receiptStatusBadge {
-  min-width: 78px;
-  padding: 9px 18px;
+  min-width: 82px;
+  padding: 8px 18px;
   border-radius: 999px;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 800;
   line-height: 1;
   text-align: center;
@@ -1293,27 +1294,32 @@ button {
 
 .resultWarningCard {
   margin: 20px 18px 18px;
-  padding: 16px 18px 16px;
+  padding: 16px 18px 18px;
   background: #fff9eb;
   border: 0;
-  border-left: 3px solid #f5b400;
-  border-radius: 7px;
+  border-left: 3px solid #f5b51b;
+  border-radius: 12px;
   box-shadow: none;
 }
 
 .resultWarningCard h3 {
   color: #92400e;
+  font-size: 16px;
 }
 
 .warningIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  flex: 0 0 28px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  flex: 0 0 24px;
   color: #f5b51b;
+}
+
+.resultWarningCard p {
+  font-size: 16px;
 }
 
 .warningIcon svg {
@@ -1325,6 +1331,9 @@ button {
 .warningIcon path:first-child {
   fill: currentColor;
   stroke: currentColor;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
 
 .warningIcon path:not(:first-child) {
@@ -1382,14 +1391,59 @@ button {
     padding: 18px 16px 16px;
   }
 
+  .resultHeroLabel {
+    gap: 8px;
+    margin-bottom: 22px;
+    font-size: 18px;
+  }
+
+  .resultLabelIcon {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    flex-basis: 28px;
+  }
+
+  .resultHero h2 {
+    font-size: clamp(26px, 8vw, 32px);
+  }
+
   .resultAdviceBubble {
     margin: 0 12px;
     padding: 14px;
+    border-radius: 8px;
+  }
+
+  .resultAdviceBubble h3,
+  .resultWarningCard h3 {
+    gap: 8px;
+    font-size: 16px;
+  }
+
+  .inputPointIcon {
+    width: 34px;
+    min-width: 34px;
+    flex-basis: 34px;
+    font-size: 30px;
+  }
+
+  .resultAdviceBubble p,
+  .resultWarningCard p {
+    margin-top: 14px;
+    font-size: 15px;
   }
 
   .receiptSummary {
     gap: 10px;
+    min-height: auto;
     padding: 16px;
+  }
+
+  .receiptIcon {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    flex-basis: 34px;
   }
 
   .receiptLabel {
@@ -1406,6 +1460,15 @@ button {
   .resultWarningCard {
     margin: 16px 12px 14px;
     padding: 14px;
+    border-left-width: 3px;
+    border-radius: 7px;
+  }
+
+  .warningIcon {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    flex-basis: 28px;
   }
 
   .overviewPanel {
