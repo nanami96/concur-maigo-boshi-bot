@@ -9,6 +9,13 @@ const DATA_START_ROW_BY_SHEET = {
   "99_questions": 2,
   "99_options": 2,
   "99_rules": 2,
+  // 新スキーマ（関係モデル）: ヘッダー行の次から即データ、メタ行なし
+  "01_基本設定": 2,
+  "02_ポリシー": 2,
+  "03_経費タイプ": 2,
+  "04_質問": 2,
+  "05_選択肢": 2,
+  "06_判定ルール": 2,
 };
 
 function getDataStartRowNumber(sheetName) {

@@ -1,22 +1,18 @@
 {
   "company": {
     "company_id": "sample-company",
-    "company_name": "サンプル会社",
-    "default_policy_id": "normal_expense",
-    "language": "ja"
+    "company_name": "サンプル会社"
   },
   "policies": [
     {
       "policy_id": "normal_expense",
-      "policy_name": "通常経費及び交通費",
-      "enabled": "Y",
-      "display_order": 1
+      "policy_name": "通常経費",
+      "enabled": "Y"
     },
     {
-      "policy_id": "overseas_expense",
-      "policy_name": "海外出張費",
-      "enabled": "Y",
-      "display_order": 2
+      "policy_id": "business_trip",
+      "policy_name": "出張経費",
+      "enabled": "Y"
     }
   ],
   "expenseTypes": [
@@ -37,15 +33,15 @@
       "note": ""
     },
     {
-      "id": "hotel",
+      "id": "parking",
       "policyId": "normal_expense",
-      "name": "宿泊費",
+      "name": "駐車場代",
       "receiptRequired": true,
       "active": true,
       "note": ""
     },
     {
-      "id": "dining",
+      "id": "business_meal",
       "policyId": "normal_expense",
       "name": "会食費",
       "receiptRequired": true,
@@ -61,9 +57,169 @@
       "note": ""
     },
     {
+      "id": "internal_meeting_meal",
+      "policyId": "normal_expense",
+      "name": "社内会議飲食費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "refreshments",
+      "policyId": "normal_expense",
+      "name": "飲料・軽食費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "gift",
+      "policyId": "normal_expense",
+      "name": "贈答品費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "condolence_celebration",
+      "policyId": "normal_expense",
+      "name": "慶弔費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "office_supplies",
+      "policyId": "normal_expense",
+      "name": "事務用品費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "consumables",
+      "policyId": "normal_expense",
+      "name": "消耗品費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
       "id": "equipment",
       "policyId": "normal_expense",
       "name": "備品購入",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "small_asset",
+      "policyId": "normal_expense",
+      "name": "少額資産購入",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "fixed_asset",
+      "policyId": "normal_expense",
+      "name": "固定資産購入",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "software",
+      "policyId": "normal_expense",
+      "name": "ソフトウェア購入",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "software_subscription",
+      "policyId": "normal_expense",
+      "name": "ソフトウェア利用料",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "cloud_service",
+      "policyId": "normal_expense",
+      "name": "クラウドサービス利用料",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "mobile_phone",
+      "policyId": "normal_expense",
+      "name": "携帯電話料金",
+      "receiptRequired": false,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "internet",
+      "policyId": "normal_expense",
+      "name": "インターネット利用料",
+      "receiptRequired": false,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "telephone",
+      "policyId": "normal_expense",
+      "name": "固定電話料金",
+      "receiptRequired": false,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "postage",
+      "policyId": "normal_expense",
+      "name": "郵便料金",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "courier",
+      "policyId": "normal_expense",
+      "name": "宅配便・配送費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "printing",
+      "policyId": "normal_expense",
+      "name": "印刷・製本費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "books",
+      "policyId": "normal_expense",
+      "name": "書籍購入費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "newspaper",
+      "policyId": "normal_expense",
+      "name": "新聞購読料",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "subscription",
+      "policyId": "normal_expense",
+      "name": "専門誌・情報サービス購読料",
       "receiptRequired": true,
       "active": true,
       "note": ""
@@ -77,179 +233,2180 @@
       "note": ""
     },
     {
-      "id": "communication",
+      "id": "seminar",
       "policyId": "normal_expense",
-      "name": "通信費",
+      "name": "セミナー参加費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "conference_fee",
+      "policyId": "normal_expense",
+      "name": "カンファレンス参加費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "qualification_exam",
+      "policyId": "normal_expense",
+      "name": "資格試験受験料",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "membership",
+      "policyId": "normal_expense",
+      "name": "会費・年会費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "recruitment",
+      "policyId": "normal_expense",
+      "name": "採用関連費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "advertising",
+      "policyId": "normal_expense",
+      "name": "広告宣伝費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "sales_promotion",
+      "policyId": "normal_expense",
+      "name": "販売促進費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "translation",
+      "policyId": "normal_expense",
+      "name": "翻訳・通訳費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "outsourcing",
+      "policyId": "normal_expense",
+      "name": "業務委託費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "consulting",
+      "policyId": "normal_expense",
+      "name": "コンサルティング費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "legal_fee",
+      "policyId": "normal_expense",
+      "name": "弁護士・司法書士費用",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "accounting_fee",
+      "policyId": "normal_expense",
+      "name": "税理士・会計士費用",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "bank_fee",
+      "policyId": "normal_expense",
+      "name": "振込・銀行手数料",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "card_fee",
+      "policyId": "normal_expense",
+      "name": "カード決済手数料",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "repair",
+      "policyId": "normal_expense",
+      "name": "修理・修繕費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "maintenance",
+      "policyId": "normal_expense",
+      "name": "保守・メンテナンス費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "cleaning",
+      "policyId": "normal_expense",
+      "name": "清掃費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "uniform",
+      "policyId": "normal_expense",
+      "name": "制服・作業着費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "safety_equipment",
+      "policyId": "normal_expense",
+      "name": "安全衛生用品費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "medical_checkup",
+      "policyId": "normal_expense",
+      "name": "健康診断費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "employee_welfare",
+      "policyId": "normal_expense",
+      "name": "福利厚生費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "company_event",
+      "policyId": "normal_expense",
+      "name": "社内イベント費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "rent",
+      "policyId": "normal_expense",
+      "name": "会場・施設利用料",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "rental_equipment",
+      "policyId": "normal_expense",
+      "name": "機器レンタル料",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "utilities",
+      "policyId": "normal_expense",
+      "name": "水道光熱費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "insurance",
+      "policyId": "normal_expense",
+      "name": "保険料",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "tax_and_dues",
+      "policyId": "normal_expense",
+      "name": "租税公課",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "miscellaneous",
+      "policyId": "normal_expense",
+      "name": "雑費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "other_normal",
+      "policyId": "normal_expense",
+      "name": "その他（通常経費）",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "bullet_train",
+      "policyId": "business_trip",
+      "name": "新幹線",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "limited_express",
+      "policyId": "business_trip",
+      "name": "特急列車",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "airfare_domestic",
+      "policyId": "business_trip",
+      "name": "国内航空券",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "airfare_international",
+      "policyId": "business_trip",
+      "name": "海外航空券",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "airport_access",
+      "policyId": "business_trip",
+      "name": "空港アクセス交通費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "highway_bus",
+      "policyId": "business_trip",
+      "name": "高速バス",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "rental_car",
+      "policyId": "business_trip",
+      "name": "レンタカー",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "gasoline",
+      "policyId": "business_trip",
+      "name": "ガソリン代",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "expressway",
+      "policyId": "business_trip",
+      "name": "高速道路料金",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "ferry",
+      "policyId": "business_trip",
+      "name": "フェリー・船舶運賃",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "local_transport_overseas",
+      "policyId": "business_trip",
+      "name": "海外現地交通費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "hotel_domestic",
+      "policyId": "business_trip",
+      "name": "国内宿泊費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "hotel_overseas",
+      "policyId": "business_trip",
+      "name": "海外宿泊費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "travel_meal",
+      "policyId": "business_trip",
+      "name": "出張中食事代",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "daily_allowance",
+      "policyId": "business_trip",
+      "name": "日当",
       "receiptRequired": false,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "trip_allowance",
+      "policyId": "business_trip",
+      "name": "出張手当",
+      "receiptRequired": false,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "baggage_delivery",
+      "policyId": "business_trip",
+      "name": "手荷物・荷物配送費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "visa",
+      "policyId": "business_trip",
+      "name": "ビザ取得費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "passport",
+      "policyId": "business_trip",
+      "name": "旅券取得関連費",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "travel_insurance",
+      "policyId": "business_trip",
+      "name": "海外旅行保険料",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "cancellation_fee",
+      "policyId": "business_trip",
+      "name": "出張キャンセル料",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "airport_fee",
+      "policyId": "business_trip",
+      "name": "空港使用料・諸税",
+      "receiptRequired": true,
+      "active": true,
+      "note": ""
+    },
+    {
+      "id": "other_trip",
+      "policyId": "business_trip",
+      "name": "その他（出張経費）",
+      "receiptRequired": true,
       "active": true,
       "note": ""
     }
   ],
   "questions": [
     {
-      "id": "q-category",
-      "text": "今日は何を申請しますか？",
+      "id": "Q001",
+      "text": "今回申請する費用の大分類を選択してください。",
       "type": "single_select",
-      "displayOrder": 1,
+      "displayOrder": 10,
       "options": [
         {
-          "label": "電車・バス",
-          "value": "電車・バス",
-          "nextQuestionId": "q-business-trip"
+          "id": "O001",
+          "value": "O001",
+          "questionId": "Q001",
+          "label": "通常の交通費",
+          "nextQuestionId": "Q002"
         },
         {
-          "label": "タクシー",
-          "value": "タクシー"
+          "id": "O002",
+          "value": "O002",
+          "questionId": "Q001",
+          "label": "飲食費",
+          "nextQuestionId": "Q003"
         },
         {
-          "label": "ホテル",
-          "value": "ホテル",
-          "nextQuestionId": "q-business-trip"
+          "id": "O003",
+          "value": "O003",
+          "questionId": "Q001",
+          "label": "物品購入",
+          "nextQuestionId": "Q004"
         },
         {
-          "label": "会食",
-          "value": "会食",
-          "nextQuestionId": "q-receipt"
+          "id": "O004",
+          "value": "O004",
+          "questionId": "Q001",
+          "label": "ソフトウェア・通信費",
+          "nextQuestionId": "Q005"
         },
         {
-          "label": "接待",
-          "value": "接待",
-          "nextQuestionId": "q-receipt"
+          "id": "O005",
+          "value": "O005",
+          "questionId": "Q001",
+          "label": "配送・印刷・購読費",
+          "nextQuestionId": "Q006"
         },
         {
-          "label": "備品購入",
-          "value": "備品購入",
-          "nextQuestionId": "q-receipt"
+          "id": "O006",
+          "value": "O006",
+          "questionId": "Q001",
+          "label": "研修・資格・会費",
+          "nextQuestionId": "Q007"
         },
         {
-          "label": "研修",
-          "value": "研修",
-          "nextQuestionId": "q-receipt"
+          "id": "O007",
+          "value": "O007",
+          "questionId": "Q001",
+          "label": "専門サービス・手数料・採用・販促",
+          "nextQuestionId": "Q008"
         },
         {
-          "label": "通信費",
-          "value": "通信費"
+          "id": "O008",
+          "value": "O008",
+          "questionId": "Q001",
+          "label": "施設・維持管理・社内運営・その他",
+          "nextQuestionId": "Q010"
+        },
+        {
+          "id": "O009",
+          "value": "O009",
+          "questionId": "Q001",
+          "label": "出張関連",
+          "nextQuestionId": "Q012"
         }
       ]
     },
     {
-      "id": "q-business-trip",
-      "text": "出張に関係ですか？",
-      "type": "yes_no",
-      "displayOrder": 2,
+      "id": "Q002",
+      "text": "通常の交通費の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 20,
       "options": [
         {
-          "label": "はい",
-          "value": "yes"
+          "id": "O010",
+          "value": "O010",
+          "questionId": "Q002",
+          "label": "電車・近隣交通費"
+        },
+        {
+          "id": "O011",
+          "value": "O011",
+          "questionId": "Q002",
+          "label": "タクシー"
+        },
+        {
+          "id": "O012",
+          "value": "O012",
+          "questionId": "Q002",
+          "label": "駐車場代"
         }
       ]
     },
     {
-      "id": "q-receipt",
-      "text": "領収書ありですか？",
-      "type": "yes_no",
-      "displayOrder": 3,
+      "id": "Q003",
+      "text": "飲食費の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 30,
       "options": [
         {
-          "label": "はい",
-          "value": "yes"
+          "id": "O013",
+          "value": "O013",
+          "questionId": "Q003",
+          "label": "会食費"
+        },
+        {
+          "id": "O014",
+          "value": "O014",
+          "questionId": "Q003",
+          "label": "接待交際費"
+        },
+        {
+          "id": "O015",
+          "value": "O015",
+          "questionId": "Q003",
+          "label": "社内会議飲食費"
+        },
+        {
+          "id": "O016",
+          "value": "O016",
+          "questionId": "Q003",
+          "label": "飲料・軽食費"
+        }
+      ]
+    },
+    {
+      "id": "Q004",
+      "text": "購入した物品の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 40,
+      "options": [
+        {
+          "id": "O017",
+          "value": "O017",
+          "questionId": "Q004",
+          "label": "贈答品費"
+        },
+        {
+          "id": "O018",
+          "value": "O018",
+          "questionId": "Q004",
+          "label": "慶弔費"
+        },
+        {
+          "id": "O019",
+          "value": "O019",
+          "questionId": "Q004",
+          "label": "事務用品費"
+        },
+        {
+          "id": "O020",
+          "value": "O020",
+          "questionId": "Q004",
+          "label": "消耗品費"
+        },
+        {
+          "id": "O021",
+          "value": "O021",
+          "questionId": "Q004",
+          "label": "備品購入"
+        },
+        {
+          "id": "O022",
+          "value": "O022",
+          "questionId": "Q004",
+          "label": "少額資産購入"
+        },
+        {
+          "id": "O023",
+          "value": "O023",
+          "questionId": "Q004",
+          "label": "固定資産購入"
+        },
+        {
+          "id": "O024",
+          "value": "O024",
+          "questionId": "Q004",
+          "label": "制服・作業着費"
+        },
+        {
+          "id": "O025",
+          "value": "O025",
+          "questionId": "Q004",
+          "label": "安全衛生用品費"
+        }
+      ]
+    },
+    {
+      "id": "Q005",
+      "text": "ソフトウェア・通信費の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 50,
+      "options": [
+        {
+          "id": "O026",
+          "value": "O026",
+          "questionId": "Q005",
+          "label": "ソフトウェア購入"
+        },
+        {
+          "id": "O027",
+          "value": "O027",
+          "questionId": "Q005",
+          "label": "ソフトウェア利用料"
+        },
+        {
+          "id": "O028",
+          "value": "O028",
+          "questionId": "Q005",
+          "label": "クラウドサービス利用料"
+        },
+        {
+          "id": "O029",
+          "value": "O029",
+          "questionId": "Q005",
+          "label": "携帯電話料金"
+        },
+        {
+          "id": "O030",
+          "value": "O030",
+          "questionId": "Q005",
+          "label": "インターネット利用料"
+        },
+        {
+          "id": "O031",
+          "value": "O031",
+          "questionId": "Q005",
+          "label": "固定電話料金"
+        }
+      ]
+    },
+    {
+      "id": "Q006",
+      "text": "配送・印刷・購読費の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 60,
+      "options": [
+        {
+          "id": "O032",
+          "value": "O032",
+          "questionId": "Q006",
+          "label": "郵便料金"
+        },
+        {
+          "id": "O033",
+          "value": "O033",
+          "questionId": "Q006",
+          "label": "宅配便・配送費"
+        },
+        {
+          "id": "O034",
+          "value": "O034",
+          "questionId": "Q006",
+          "label": "印刷・製本費"
+        },
+        {
+          "id": "O035",
+          "value": "O035",
+          "questionId": "Q006",
+          "label": "書籍購入費"
+        },
+        {
+          "id": "O036",
+          "value": "O036",
+          "questionId": "Q006",
+          "label": "新聞購読料"
+        },
+        {
+          "id": "O037",
+          "value": "O037",
+          "questionId": "Q006",
+          "label": "専門誌・情報サービス購読料"
+        }
+      ]
+    },
+    {
+      "id": "Q007",
+      "text": "研修・資格・会費の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 70,
+      "options": [
+        {
+          "id": "O038",
+          "value": "O038",
+          "questionId": "Q007",
+          "label": "研修費"
+        },
+        {
+          "id": "O039",
+          "value": "O039",
+          "questionId": "Q007",
+          "label": "セミナー参加費"
+        },
+        {
+          "id": "O040",
+          "value": "O040",
+          "questionId": "Q007",
+          "label": "カンファレンス参加費"
+        },
+        {
+          "id": "O041",
+          "value": "O041",
+          "questionId": "Q007",
+          "label": "資格試験受験料"
+        },
+        {
+          "id": "O042",
+          "value": "O042",
+          "questionId": "Q007",
+          "label": "会費・年会費"
+        }
+      ]
+    },
+    {
+      "id": "Q008",
+      "text": "専門サービスの種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 80,
+      "options": [
+        {
+          "id": "O043",
+          "value": "O043",
+          "questionId": "Q008",
+          "label": "翻訳・通訳費"
+        },
+        {
+          "id": "O044",
+          "value": "O044",
+          "questionId": "Q008",
+          "label": "業務委託費"
+        },
+        {
+          "id": "O045",
+          "value": "O045",
+          "questionId": "Q008",
+          "label": "コンサルティング費"
+        },
+        {
+          "id": "O046",
+          "value": "O046",
+          "questionId": "Q008",
+          "label": "弁護士・司法書士費用"
+        },
+        {
+          "id": "O047",
+          "value": "O047",
+          "questionId": "Q008",
+          "label": "税理士・会計士費用"
+        },
+        {
+          "id": "O048",
+          "value": "O048",
+          "questionId": "Q008",
+          "label": "手数料・採用・販促",
+          "nextQuestionId": "Q009"
+        }
+      ]
+    },
+    {
+      "id": "Q009",
+      "text": "手数料・採用・販促費の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 90,
+      "options": [
+        {
+          "id": "O049",
+          "value": "O049",
+          "questionId": "Q009",
+          "label": "振込・銀行手数料"
+        },
+        {
+          "id": "O050",
+          "value": "O050",
+          "questionId": "Q009",
+          "label": "カード決済手数料"
+        },
+        {
+          "id": "O051",
+          "value": "O051",
+          "questionId": "Q009",
+          "label": "採用関連費"
+        },
+        {
+          "id": "O052",
+          "value": "O052",
+          "questionId": "Q009",
+          "label": "広告宣伝費"
+        },
+        {
+          "id": "O053",
+          "value": "O053",
+          "questionId": "Q009",
+          "label": "販売促進費"
+        }
+      ]
+    },
+    {
+      "id": "Q010",
+      "text": "施設・維持管理費の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 100,
+      "options": [
+        {
+          "id": "O054",
+          "value": "O054",
+          "questionId": "Q010",
+          "label": "修理・修繕費"
+        },
+        {
+          "id": "O055",
+          "value": "O055",
+          "questionId": "Q010",
+          "label": "保守・メンテナンス費"
+        },
+        {
+          "id": "O056",
+          "value": "O056",
+          "questionId": "Q010",
+          "label": "清掃費"
+        },
+        {
+          "id": "O057",
+          "value": "O057",
+          "questionId": "Q010",
+          "label": "会場・施設利用料"
+        },
+        {
+          "id": "O058",
+          "value": "O058",
+          "questionId": "Q010",
+          "label": "機器レンタル料"
+        },
+        {
+          "id": "O059",
+          "value": "O059",
+          "questionId": "Q010",
+          "label": "水道光熱費"
+        },
+        {
+          "id": "O060",
+          "value": "O060",
+          "questionId": "Q010",
+          "label": "保険料"
+        },
+        {
+          "id": "O061",
+          "value": "O061",
+          "questionId": "Q010",
+          "label": "租税公課"
+        },
+        {
+          "id": "O062",
+          "value": "O062",
+          "questionId": "Q010",
+          "label": "福利厚生・社内運営・その他",
+          "nextQuestionId": "Q011"
+        }
+      ]
+    },
+    {
+      "id": "Q011",
+      "text": "福利厚生・社内運営・その他経費の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 110,
+      "options": [
+        {
+          "id": "O063",
+          "value": "O063",
+          "questionId": "Q011",
+          "label": "健康診断費"
+        },
+        {
+          "id": "O064",
+          "value": "O064",
+          "questionId": "Q011",
+          "label": "福利厚生費"
+        },
+        {
+          "id": "O065",
+          "value": "O065",
+          "questionId": "Q011",
+          "label": "社内イベント費"
+        },
+        {
+          "id": "O066",
+          "value": "O066",
+          "questionId": "Q011",
+          "label": "雑費"
+        },
+        {
+          "id": "O067",
+          "value": "O067",
+          "questionId": "Q011",
+          "label": "その他（通常経費）"
+        }
+      ]
+    },
+    {
+      "id": "Q012",
+      "text": "出張経費の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 120,
+      "options": [
+        {
+          "id": "O068",
+          "value": "O068",
+          "questionId": "Q012",
+          "label": "鉄道・道路交通",
+          "nextQuestionId": "Q013"
+        },
+        {
+          "id": "O069",
+          "value": "O069",
+          "questionId": "Q012",
+          "label": "航空・船舶・海外現地交通",
+          "nextQuestionId": "Q014"
+        },
+        {
+          "id": "O070",
+          "value": "O070",
+          "questionId": "Q012",
+          "label": "宿泊・食事・手当",
+          "nextQuestionId": "Q015"
+        },
+        {
+          "id": "O071",
+          "value": "O071",
+          "questionId": "Q012",
+          "label": "渡航準備・その他",
+          "nextQuestionId": "Q016"
+        }
+      ]
+    },
+    {
+      "id": "Q013",
+      "text": "鉄道・道路交通の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 130,
+      "options": [
+        {
+          "id": "O072",
+          "value": "O072",
+          "questionId": "Q013",
+          "label": "新幹線"
+        },
+        {
+          "id": "O073",
+          "value": "O073",
+          "questionId": "Q013",
+          "label": "特急列車"
+        },
+        {
+          "id": "O074",
+          "value": "O074",
+          "questionId": "Q013",
+          "label": "空港アクセス交通費"
+        },
+        {
+          "id": "O075",
+          "value": "O075",
+          "questionId": "Q013",
+          "label": "高速バス"
+        },
+        {
+          "id": "O076",
+          "value": "O076",
+          "questionId": "Q013",
+          "label": "レンタカー"
+        },
+        {
+          "id": "O077",
+          "value": "O077",
+          "questionId": "Q013",
+          "label": "ガソリン代"
+        },
+        {
+          "id": "O078",
+          "value": "O078",
+          "questionId": "Q013",
+          "label": "高速道路料金"
+        }
+      ]
+    },
+    {
+      "id": "Q014",
+      "text": "航空・船舶・海外現地交通の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 140,
+      "options": [
+        {
+          "id": "O079",
+          "value": "O079",
+          "questionId": "Q014",
+          "label": "国内航空券"
+        },
+        {
+          "id": "O080",
+          "value": "O080",
+          "questionId": "Q014",
+          "label": "海外航空券"
+        },
+        {
+          "id": "O081",
+          "value": "O081",
+          "questionId": "Q014",
+          "label": "フェリー・船舶運賃"
+        },
+        {
+          "id": "O082",
+          "value": "O082",
+          "questionId": "Q014",
+          "label": "海外現地交通費"
+        },
+        {
+          "id": "O083",
+          "value": "O083",
+          "questionId": "Q014",
+          "label": "空港使用料・諸税"
+        }
+      ]
+    },
+    {
+      "id": "Q015",
+      "text": "宿泊・食事・手当の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 150,
+      "options": [
+        {
+          "id": "O084",
+          "value": "O084",
+          "questionId": "Q015",
+          "label": "国内宿泊費"
+        },
+        {
+          "id": "O085",
+          "value": "O085",
+          "questionId": "Q015",
+          "label": "海外宿泊費"
+        },
+        {
+          "id": "O086",
+          "value": "O086",
+          "questionId": "Q015",
+          "label": "出張中食事代"
+        },
+        {
+          "id": "O087",
+          "value": "O087",
+          "questionId": "Q015",
+          "label": "日当"
+        },
+        {
+          "id": "O088",
+          "value": "O088",
+          "questionId": "Q015",
+          "label": "出張手当"
+        }
+      ]
+    },
+    {
+      "id": "Q016",
+      "text": "渡航準備・その他出張経費の種類を選択してください。",
+      "type": "single_select",
+      "displayOrder": 160,
+      "options": [
+        {
+          "id": "O089",
+          "value": "O089",
+          "questionId": "Q016",
+          "label": "手荷物・荷物配送費"
+        },
+        {
+          "id": "O090",
+          "value": "O090",
+          "questionId": "Q016",
+          "label": "ビザ取得費"
+        },
+        {
+          "id": "O091",
+          "value": "O091",
+          "questionId": "Q016",
+          "label": "旅券取得関連費"
+        },
+        {
+          "id": "O092",
+          "value": "O092",
+          "questionId": "Q016",
+          "label": "海外旅行保険料"
+        },
+        {
+          "id": "O093",
+          "value": "O093",
+          "questionId": "Q016",
+          "label": "出張キャンセル料"
+        },
+        {
+          "id": "O094",
+          "value": "O094",
+          "questionId": "Q016",
+          "label": "その他（出張経費）"
         }
       ]
     }
   ],
   "rules": [
     {
-      "id": "r001",
+      "id": "r001-g1",
+      "sourceRuleId": "r001",
       "priority": 1,
       "conditions": {
-        "q-category": "電車・バス",
-        "q-business-trip": "yes"
+        "Q001": "O001",
+        "Q002": "O010"
       },
       "resultExpenseTypeId": "train_local",
-      "message": "電車・バスは「電車・近隣交通費」を選択してください。",
-      "warningMessage": "領収書が不要な場合でも会社規定に従ってください。",
+      "message": "「電車・近隣交通費」を選択してください。",
+      "warningMessage": "ICカード利用時も、利用区間や会社規程を確認してください。",
       "active": true
     },
     {
-      "id": "r002",
+      "id": "r002-g1",
+      "sourceRuleId": "r002",
       "priority": 2,
       "conditions": {
-        "q-category": "タクシー"
+        "Q001": "O001",
+        "Q002": "O011"
       },
       "resultExpenseTypeId": "taxi",
-      "message": "タクシーは「タクシー」を選択してください。",
-      "warningMessage": "深夜・緊急時など利用理由をコメントに記載してください。",
+      "message": "「タクシー」を選択してください。",
+      "warningMessage": "業務上の利用理由をコメントに記載してください。",
       "active": true
     },
     {
-      "id": "r003",
+      "id": "r003-g1",
+      "sourceRuleId": "r003",
       "priority": 3,
       "conditions": {
-        "q-category": "ホテル",
-        "q-business-trip": "yes"
+        "Q001": "O001",
+        "Q002": "O012"
       },
-      "resultExpenseTypeId": "hotel",
-      "message": "宿泊費を選択してください。",
-      "warningMessage": "領収書添付が必要です。",
+      "resultExpenseTypeId": "parking",
+      "message": "「駐車場代」を選択してください。",
+      "warningMessage": "駐車場所・利用目的をコメントに記載してください。",
       "active": true
     },
     {
-      "id": "r004",
+      "id": "r004-g1",
+      "sourceRuleId": "r004",
       "priority": 4,
       "conditions": {
-        "q-category": "会食",
-        "q-receipt": "yes"
+        "Q001": "O002",
+        "Q003": "O013"
       },
-      "resultExpenseTypeId": "dining",
-      "message": "会食は「会食費」を選択してください。",
-      "warningMessage": "領収書を添付し、参加者・目的を記載してください。",
+      "resultExpenseTypeId": "business_meal",
+      "message": "「会食費」を選択してください。",
+      "warningMessage": "参加者・目的・人数を記載してください。",
       "active": true
     },
     {
-      "id": "r005",
+      "id": "r005-g1",
+      "sourceRuleId": "r005",
       "priority": 5,
       "conditions": {
-        "q-category": "接待",
-        "q-receipt": "yes"
+        "Q001": "O002",
+        "Q003": "O014"
       },
       "resultExpenseTypeId": "entertainment",
-      "message": "接待は「接待交際費」を選択してください。",
+      "message": "「接待交際費」を選択してください。",
       "warningMessage": "取引先名・参加者・目的を記載してください。",
       "active": true
     },
     {
-      "id": "r006",
+      "id": "r006-g1",
+      "sourceRuleId": "r006",
       "priority": 6,
       "conditions": {
-        "q-category": "備品購入",
-        "q-receipt": "yes"
+        "Q001": "O002",
+        "Q003": "O015"
       },
-      "resultExpenseTypeId": "equipment",
-      "message": "備品購入は「備品購入」を選択してください。",
-      "warningMessage": "購入品名と業務利用目的を記載してください。",
+      "resultExpenseTypeId": "internal_meeting_meal",
+      "message": "「社内会議飲食費」を選択してください。",
+      "warningMessage": "会議名・参加者・目的を記載してください。",
       "active": true
     },
     {
-      "id": "r007",
+      "id": "r007-g1",
+      "sourceRuleId": "r007",
       "priority": 7,
       "conditions": {
-        "q-category": "研修",
-        "q-receipt": "yes"
+        "Q001": "O002",
+        "Q003": "O016"
       },
-      "resultExpenseTypeId": "training",
-      "message": "研修・セミナーは「研修費」を選択してください。",
-      "warningMessage": "研修名・受講日・業務関連性を記載してください。",
+      "resultExpenseTypeId": "refreshments",
+      "message": "「飲料・軽食費」を選択してください。",
+      "warningMessage": "利用目的と対象者を記載してください。",
       "active": true
     },
     {
-      "id": "r008",
+      "id": "r008-g1",
+      "sourceRuleId": "r008",
       "priority": 8,
       "conditions": {
-        "q-category": "通信費"
+        "Q001": "O003",
+        "Q004": "O017"
       },
-      "resultExpenseTypeId": "communication",
-      "message": "通信費は「通信費」を選択してください。",
-      "warningMessage": "月額利用料やオンラインサービス利用料の場合に利用します。",
+      "resultExpenseTypeId": "gift",
+      "message": "「贈答品費」を選択してください。",
+      "warningMessage": "贈答先・目的を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r009-g1",
+      "sourceRuleId": "r009",
+      "priority": 9,
+      "conditions": {
+        "Q001": "O003",
+        "Q004": "O018"
+      },
+      "resultExpenseTypeId": "condolence_celebration",
+      "message": "「慶弔費」を選択してください。",
+      "warningMessage": "会社規程の支給・申請基準を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r010-g1",
+      "sourceRuleId": "r010",
+      "priority": 10,
+      "conditions": {
+        "Q001": "O003",
+        "Q004": "O019"
+      },
+      "resultExpenseTypeId": "office_supplies",
+      "message": "「事務用品費」を選択してください。",
+      "warningMessage": "購入品名と業務用途を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r011-g1",
+      "sourceRuleId": "r011",
+      "priority": 11,
+      "conditions": {
+        "Q001": "O003",
+        "Q004": "O020"
+      },
+      "resultExpenseTypeId": "consumables",
+      "message": "「消耗品費」を選択してください。",
+      "warningMessage": "購入品名と業務用途を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r012-g1",
+      "sourceRuleId": "r012",
+      "priority": 12,
+      "conditions": {
+        "Q001": "O003",
+        "Q004": "O021"
+      },
+      "resultExpenseTypeId": "equipment",
+      "message": "「備品購入」を選択してください。",
+      "warningMessage": "購入品名を記載し、資産計上基準も確認してください。",
+      "active": true
+    },
+    {
+      "id": "r013-g1",
+      "sourceRuleId": "r013",
+      "priority": 13,
+      "conditions": {
+        "Q001": "O003",
+        "Q004": "O022"
+      },
+      "resultExpenseTypeId": "small_asset",
+      "message": "「少額資産購入」を選択してください。",
+      "warningMessage": "会社の少額資産の金額基準を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r014-g1",
+      "sourceRuleId": "r014",
+      "priority": 14,
+      "conditions": {
+        "Q001": "O003",
+        "Q004": "O023"
+      },
+      "resultExpenseTypeId": "fixed_asset",
+      "message": "「固定資産購入」を選択してください。",
+      "warningMessage": "資産計上基準・耐用年数・管理番号の要否を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r015-g1",
+      "sourceRuleId": "r015",
+      "priority": 15,
+      "conditions": {
+        "Q001": "O004",
+        "Q005": "O026"
+      },
+      "resultExpenseTypeId": "software",
+      "message": "「ソフトウェア購入」を選択してください。",
+      "warningMessage": "製品名・ライセンス内容を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r016-g1",
+      "sourceRuleId": "r016",
+      "priority": 16,
+      "conditions": {
+        "Q001": "O004",
+        "Q005": "O027"
+      },
+      "resultExpenseTypeId": "software_subscription",
+      "message": "「ソフトウェア利用料」を選択してください。",
+      "warningMessage": "サービス名・契約期間を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r017-g1",
+      "sourceRuleId": "r017",
+      "priority": 17,
+      "conditions": {
+        "Q001": "O004",
+        "Q005": "O028"
+      },
+      "resultExpenseTypeId": "cloud_service",
+      "message": "「クラウドサービス利用料」を選択してください。",
+      "warningMessage": "サービス名・利用期間を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r018-g1",
+      "sourceRuleId": "r018",
+      "priority": 18,
+      "conditions": {
+        "Q001": "O004",
+        "Q005": "O029"
+      },
+      "resultExpenseTypeId": "mobile_phone",
+      "message": "「携帯電話料金」を選択してください。",
+      "warningMessage": "業務利用分と会社規程を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r019-g1",
+      "sourceRuleId": "r019",
+      "priority": 19,
+      "conditions": {
+        "Q001": "O004",
+        "Q005": "O030"
+      },
+      "resultExpenseTypeId": "internet",
+      "message": "「インターネット利用料」を選択してください。",
+      "warningMessage": "業務利用分のみ申請してください。",
+      "active": true
+    },
+    {
+      "id": "r020-g1",
+      "sourceRuleId": "r020",
+      "priority": 20,
+      "conditions": {
+        "Q001": "O004",
+        "Q005": "O031"
+      },
+      "resultExpenseTypeId": "telephone",
+      "message": "「固定電話料金」を選択してください。",
+      "warningMessage": "請求期間と業務利用分を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r021-g1",
+      "sourceRuleId": "r021",
+      "priority": 21,
+      "conditions": {
+        "Q001": "O005",
+        "Q006": "O032"
+      },
+      "resultExpenseTypeId": "postage",
+      "message": "「郵便料金」を選択してください。",
+      "warningMessage": "送付先・送付物・目的を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r022-g1",
+      "sourceRuleId": "r022",
+      "priority": 22,
+      "conditions": {
+        "Q001": "O005",
+        "Q006": "O033"
+      },
+      "resultExpenseTypeId": "courier",
+      "message": "「宅配便・配送費」を選択してください。",
+      "warningMessage": "配送先・配送内容・目的を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r023-g1",
+      "sourceRuleId": "r023",
+      "priority": 23,
+      "conditions": {
+        "Q001": "O005",
+        "Q006": "O034"
+      },
+      "resultExpenseTypeId": "printing",
+      "message": "「印刷・製本費」を選択してください。",
+      "warningMessage": "印刷物・製本物の名称と用途を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r024-g1",
+      "sourceRuleId": "r024",
+      "priority": 24,
+      "conditions": {
+        "Q001": "O005",
+        "Q006": "O035"
+      },
+      "resultExpenseTypeId": "books",
+      "message": "「書籍購入費」を選択してください。",
+      "warningMessage": "書籍名と業務上の利用目的を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r025-g1",
+      "sourceRuleId": "r025",
+      "priority": 25,
+      "conditions": {
+        "Q001": "O005",
+        "Q006": "O036"
+      },
+      "resultExpenseTypeId": "newspaper",
+      "message": "「新聞購読料」を選択してください。",
+      "warningMessage": "新聞名・購読期間を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r026-g1",
+      "sourceRuleId": "r026",
+      "priority": 26,
+      "conditions": {
+        "Q001": "O005",
+        "Q006": "O037"
+      },
+      "resultExpenseTypeId": "subscription",
+      "message": "「専門誌・情報サービス購読料」を選択してください。",
+      "warningMessage": "サービス名・購読期間を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r027-g1",
+      "sourceRuleId": "r027",
+      "priority": 27,
+      "conditions": {
+        "Q001": "O006",
+        "Q007": "O038"
+      },
+      "resultExpenseTypeId": "training",
+      "message": "「研修費」を選択してください。",
+      "warningMessage": "研修名・受講日・受講者を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r028-g1",
+      "sourceRuleId": "r028",
+      "priority": 28,
+      "conditions": {
+        "Q001": "O006",
+        "Q007": "O039"
+      },
+      "resultExpenseTypeId": "seminar",
+      "message": "「セミナー参加費」を選択してください。",
+      "warningMessage": "セミナー名・開催日を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r029-g1",
+      "sourceRuleId": "r029",
+      "priority": 29,
+      "conditions": {
+        "Q001": "O006",
+        "Q007": "O040"
+      },
+      "resultExpenseTypeId": "conference_fee",
+      "message": "「カンファレンス参加費」を選択してください。",
+      "warningMessage": "イベント名・開催日を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r030-g1",
+      "sourceRuleId": "r030",
+      "priority": 30,
+      "conditions": {
+        "Q001": "O006",
+        "Q007": "O041"
+      },
+      "resultExpenseTypeId": "qualification_exam",
+      "message": "「資格試験受験料」を選択してください。",
+      "warningMessage": "資格名・受験日・会社負担対象かを確認してください。",
+      "active": true
+    },
+    {
+      "id": "r031-g1",
+      "sourceRuleId": "r031",
+      "priority": 31,
+      "conditions": {
+        "Q001": "O006",
+        "Q007": "O042"
+      },
+      "resultExpenseTypeId": "membership",
+      "message": "「会費・年会費」を選択してください。",
+      "warningMessage": "団体名・対象期間・業務上の必要性を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r032-g1",
+      "sourceRuleId": "r032",
+      "priority": 32,
+      "conditions": {
+        "Q001": "O007",
+        "Q009": "O051"
+      },
+      "resultExpenseTypeId": "recruitment",
+      "message": "「採用関連費」を選択してください。",
+      "warningMessage": "採用活動名・対象職種を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r033-g1",
+      "sourceRuleId": "r033",
+      "priority": 33,
+      "conditions": {
+        "Q001": "O007",
+        "Q009": "O052"
+      },
+      "resultExpenseTypeId": "advertising",
+      "message": "「広告宣伝費」を選択してください。",
+      "warningMessage": "媒体名・掲載内容・掲載期間を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r034-g1",
+      "sourceRuleId": "r034",
+      "priority": 34,
+      "conditions": {
+        "Q001": "O007",
+        "Q009": "O053"
+      },
+      "resultExpenseTypeId": "sales_promotion",
+      "message": "「販売促進費」を選択してください。",
+      "warningMessage": "施策名・対象商品やサービスを記載してください。",
+      "active": true
+    },
+    {
+      "id": "r035-g1",
+      "sourceRuleId": "r035",
+      "priority": 35,
+      "conditions": {
+        "Q001": "O007",
+        "Q008": "O043"
+      },
+      "resultExpenseTypeId": "translation",
+      "message": "「翻訳・通訳費」を選択してください。",
+      "warningMessage": "対象資料・言語・案件名を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r036-g1",
+      "sourceRuleId": "r036",
+      "priority": 36,
+      "conditions": {
+        "Q001": "O007",
+        "Q008": "O044"
+      },
+      "resultExpenseTypeId": "outsourcing",
+      "message": "「業務委託費」を選択してください。",
+      "warningMessage": "委託先・委託内容・対象期間を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r037-g1",
+      "sourceRuleId": "r037",
+      "priority": 37,
+      "conditions": {
+        "Q001": "O007",
+        "Q008": "O045"
+      },
+      "resultExpenseTypeId": "consulting",
+      "message": "「コンサルティング費」を選択してください。",
+      "warningMessage": "委託先・案件名・対象期間を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r038-g1",
+      "sourceRuleId": "r038",
+      "priority": 38,
+      "conditions": {
+        "Q001": "O007",
+        "Q008": "O046"
+      },
+      "resultExpenseTypeId": "legal_fee",
+      "message": "「弁護士・司法書士費用」を選択してください。",
+      "warningMessage": "案件名・依頼内容を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r039-g1",
+      "sourceRuleId": "r039",
+      "priority": 39,
+      "conditions": {
+        "Q001": "O007",
+        "Q008": "O047"
+      },
+      "resultExpenseTypeId": "accounting_fee",
+      "message": "「税理士・会計士費用」を選択してください。",
+      "warningMessage": "対象業務・対象期間を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r040-g1",
+      "sourceRuleId": "r040",
+      "priority": 40,
+      "conditions": {
+        "Q001": "O007",
+        "Q009": "O049"
+      },
+      "resultExpenseTypeId": "bank_fee",
+      "message": "「振込・銀行手数料」を選択してください。",
+      "warningMessage": "関連する取引・振込先を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r041-g1",
+      "sourceRuleId": "r041",
+      "priority": 41,
+      "conditions": {
+        "Q001": "O007",
+        "Q009": "O050"
+      },
+      "resultExpenseTypeId": "card_fee",
+      "message": "「カード決済手数料」を選択してください。",
+      "warningMessage": "関連する決済・取引を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r042-g1",
+      "sourceRuleId": "r042",
+      "priority": 42,
+      "conditions": {
+        "Q001": "O008",
+        "Q010": "O054"
+      },
+      "resultExpenseTypeId": "repair",
+      "message": "「修理・修繕費」を選択してください。",
+      "warningMessage": "対象物・修理内容を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r043-g1",
+      "sourceRuleId": "r043",
+      "priority": 43,
+      "conditions": {
+        "Q001": "O008",
+        "Q010": "O055"
+      },
+      "resultExpenseTypeId": "maintenance",
+      "message": "「保守・メンテナンス費」を選択してください。",
+      "warningMessage": "対象機器・サービスと対象期間を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r044-g1",
+      "sourceRuleId": "r044",
+      "priority": 44,
+      "conditions": {
+        "Q001": "O008",
+        "Q010": "O056"
+      },
+      "resultExpenseTypeId": "cleaning",
+      "message": "「清掃費」を選択してください。",
+      "warningMessage": "対象場所・作業内容を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r045-g1",
+      "sourceRuleId": "r045",
+      "priority": 45,
+      "conditions": {
+        "Q001": "O003",
+        "Q004": "O024"
+      },
+      "resultExpenseTypeId": "uniform",
+      "message": "「制服・作業着費」を選択してください。",
+      "warningMessage": "品名・対象者・業務用途を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r046-g1",
+      "sourceRuleId": "r046",
+      "priority": 46,
+      "conditions": {
+        "Q001": "O003",
+        "Q004": "O025"
+      },
+      "resultExpenseTypeId": "safety_equipment",
+      "message": "「安全衛生用品費」を選択してください。",
+      "warningMessage": "品名・用途・対象者を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r047-g1",
+      "sourceRuleId": "r047",
+      "priority": 47,
+      "conditions": {
+        "Q001": "O008",
+        "Q011": "O063"
+      },
+      "resultExpenseTypeId": "medical_checkup",
+      "message": "「健康診断費」を選択してください。",
+      "warningMessage": "受診者・受診日・検診内容を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r048-g1",
+      "sourceRuleId": "r048",
+      "priority": 48,
+      "conditions": {
+        "Q001": "O008",
+        "Q011": "O064"
+      },
+      "resultExpenseTypeId": "employee_welfare",
+      "message": "「福利厚生費」を選択してください。",
+      "warningMessage": "対象者・実施内容・目的を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r049-g1",
+      "sourceRuleId": "r049",
+      "priority": 49,
+      "conditions": {
+        "Q001": "O008",
+        "Q011": "O065"
+      },
+      "resultExpenseTypeId": "company_event",
+      "message": "「社内イベント費」を選択してください。",
+      "warningMessage": "イベント名・開催日・参加者を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r050-g1",
+      "sourceRuleId": "r050",
+      "priority": 50,
+      "conditions": {
+        "Q001": "O008",
+        "Q010": "O057"
+      },
+      "resultExpenseTypeId": "rent",
+      "message": "「会場・施設利用料」を選択してください。",
+      "warningMessage": "施設名・利用日・利用目的を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r051-g1",
+      "sourceRuleId": "r051",
+      "priority": 51,
+      "conditions": {
+        "Q001": "O008",
+        "Q010": "O058"
+      },
+      "resultExpenseTypeId": "rental_equipment",
+      "message": "「機器レンタル料」を選択してください。",
+      "warningMessage": "機器名・利用期間・利用目的を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r052-g1",
+      "sourceRuleId": "r052",
+      "priority": 52,
+      "conditions": {
+        "Q001": "O008",
+        "Q010": "O059"
+      },
+      "resultExpenseTypeId": "utilities",
+      "message": "「水道光熱費」を選択してください。",
+      "warningMessage": "対象拠点・請求期間を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r053-g1",
+      "sourceRuleId": "r053",
+      "priority": 53,
+      "conditions": {
+        "Q001": "O008",
+        "Q010": "O060"
+      },
+      "resultExpenseTypeId": "insurance",
+      "message": "「保険料」を選択してください。",
+      "warningMessage": "保険の種類・対象期間を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r054-g1",
+      "sourceRuleId": "r054",
+      "priority": 54,
+      "conditions": {
+        "Q001": "O008",
+        "Q010": "O061"
+      },
+      "resultExpenseTypeId": "tax_and_dues",
+      "message": "「租税公課」を選択してください。",
+      "warningMessage": "税・公課の種類と対象期間を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r055-g1",
+      "sourceRuleId": "r055",
+      "priority": 55,
+      "conditions": {
+        "Q001": "O008",
+        "Q011": "O066"
+      },
+      "resultExpenseTypeId": "miscellaneous",
+      "message": "「雑費」を選択してください。",
+      "warningMessage": "他の経費タイプに該当しないことを確認し、内容を具体的に記載してください。",
+      "active": true
+    },
+    {
+      "id": "r056-g1",
+      "sourceRuleId": "r056",
+      "priority": 56,
+      "conditions": {
+        "Q001": "O008",
+        "Q011": "O067"
+      },
+      "resultExpenseTypeId": "other_normal",
+      "message": "「その他（通常経費）」を選択してください。",
+      "warningMessage": "該当する経費タイプがない理由と内容を具体的に記載してください。",
+      "active": true
+    },
+    {
+      "id": "r057-g1",
+      "sourceRuleId": "r057",
+      "priority": 57,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O068",
+        "Q013": "O072"
+      },
+      "resultExpenseTypeId": "bullet_train",
+      "message": "「新幹線」を選択してください。",
+      "warningMessage": "利用日・利用区間・座席種別を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r058-g1",
+      "sourceRuleId": "r058",
+      "priority": 58,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O068",
+        "Q013": "O073"
+      },
+      "resultExpenseTypeId": "limited_express",
+      "message": "「特急列車」を選択してください。",
+      "warningMessage": "利用日・利用区間を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r059-g1",
+      "sourceRuleId": "r059",
+      "priority": 59,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O069",
+        "Q014": "O079"
+      },
+      "resultExpenseTypeId": "airfare_domestic",
+      "message": "「国内航空券」を選択してください。",
+      "warningMessage": "搭乗日・区間・便名を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r060-g1",
+      "sourceRuleId": "r060",
+      "priority": 60,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O069",
+        "Q014": "O080"
+      },
+      "resultExpenseTypeId": "airfare_international",
+      "message": "「海外航空券」を選択してください。",
+      "warningMessage": "搭乗日・区間・便名・現地通貨を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r061-g1",
+      "sourceRuleId": "r061",
+      "priority": 61,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O068",
+        "Q013": "O074"
+      },
+      "resultExpenseTypeId": "airport_access",
+      "message": "「空港アクセス交通費」を選択してください。",
+      "warningMessage": "空港までの利用区間と交通手段を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r062-g1",
+      "sourceRuleId": "r062",
+      "priority": 62,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O068",
+        "Q013": "O075"
+      },
+      "resultExpenseTypeId": "highway_bus",
+      "message": "「高速バス」を選択してください。",
+      "warningMessage": "利用日・利用区間を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r063-g1",
+      "sourceRuleId": "r063",
+      "priority": 63,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O068",
+        "Q013": "O076"
+      },
+      "resultExpenseTypeId": "rental_car",
+      "message": "「レンタカー」を選択してください。",
+      "warningMessage": "利用期間・利用目的・利用区間を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r064-g1",
+      "sourceRuleId": "r064",
+      "priority": 64,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O068",
+        "Q013": "O077"
+      },
+      "resultExpenseTypeId": "gasoline",
+      "message": "「ガソリン代」を選択してください。",
+      "warningMessage": "業務利用分のみ申請し、車両・走行目的を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r065-g1",
+      "sourceRuleId": "r065",
+      "priority": 65,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O068",
+        "Q013": "O078"
+      },
+      "resultExpenseTypeId": "expressway",
+      "message": "「高速道路料金」を選択してください。",
+      "warningMessage": "利用区間を確認し、ETC利用時は明細を添付してください。",
+      "active": true
+    },
+    {
+      "id": "r066-g1",
+      "sourceRuleId": "r066",
+      "priority": 66,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O069",
+        "Q014": "O081"
+      },
+      "resultExpenseTypeId": "ferry",
+      "message": "「フェリー・船舶運賃」を選択してください。",
+      "warningMessage": "利用日・利用区間を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r067-g1",
+      "sourceRuleId": "r067",
+      "priority": 67,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O069",
+        "Q014": "O082"
+      },
+      "resultExpenseTypeId": "local_transport_overseas",
+      "message": "「海外現地交通費」を選択してください。",
+      "warningMessage": "利用区間・交通手段・現地通貨を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r068-g1",
+      "sourceRuleId": "r068",
+      "priority": 68,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O070",
+        "Q015": "O084"
+      },
+      "resultExpenseTypeId": "hotel_domestic",
+      "message": "「国内宿泊費」を選択してください。",
+      "warningMessage": "宿泊日・宿泊先・宿泊者を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r069-g1",
+      "sourceRuleId": "r069",
+      "priority": 69,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O070",
+        "Q015": "O085"
+      },
+      "resultExpenseTypeId": "hotel_overseas",
+      "message": "「海外宿泊費」を選択してください。",
+      "warningMessage": "宿泊日・宿泊先・現地通貨を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r070-g1",
+      "sourceRuleId": "r070",
+      "priority": 70,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O070",
+        "Q015": "O086"
+      },
+      "resultExpenseTypeId": "travel_meal",
+      "message": "「出張中食事代」を選択してください。",
+      "warningMessage": "出張日・食事の内容を記載し、出張規程を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r071-g1",
+      "sourceRuleId": "r071",
+      "priority": 71,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O070",
+        "Q015": "O087"
+      },
+      "resultExpenseTypeId": "daily_allowance",
+      "message": "「日当」を選択してください。",
+      "warningMessage": "出張日程と会社の出張規程を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r072-g1",
+      "sourceRuleId": "r072",
+      "priority": 72,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O070",
+        "Q015": "O088"
+      },
+      "resultExpenseTypeId": "trip_allowance",
+      "message": "「出張手当」を選択してください。",
+      "warningMessage": "出張日程と会社の出張規程を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r073-g1",
+      "sourceRuleId": "r073",
+      "priority": 73,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O071",
+        "Q016": "O089"
+      },
+      "resultExpenseTypeId": "baggage_delivery",
+      "message": "「手荷物・荷物配送費」を選択してください。",
+      "warningMessage": "配送先・配送内容・出張との関連を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r074-g1",
+      "sourceRuleId": "r074",
+      "priority": 74,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O071",
+        "Q016": "O090"
+      },
+      "resultExpenseTypeId": "visa",
+      "message": "「ビザ取得費」を選択してください。",
+      "warningMessage": "渡航先・申請者・会社負担対象かを確認してください。",
+      "active": true
+    },
+    {
+      "id": "r075-g1",
+      "sourceRuleId": "r075",
+      "priority": 75,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O071",
+        "Q016": "O091"
+      },
+      "resultExpenseTypeId": "passport",
+      "message": "「旅券取得関連費」を選択してください。",
+      "warningMessage": "会社負担対象となる費用か確認してください。",
+      "active": true
+    },
+    {
+      "id": "r076-g1",
+      "sourceRuleId": "r076",
+      "priority": 76,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O071",
+        "Q016": "O092"
+      },
+      "resultExpenseTypeId": "travel_insurance",
+      "message": "「海外旅行保険料」を選択してください。",
+      "warningMessage": "渡航先・対象期間・被保険者を確認してください。",
+      "active": true
+    },
+    {
+      "id": "r077-g1",
+      "sourceRuleId": "r077",
+      "priority": 77,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O071",
+        "Q016": "O093"
+      },
+      "resultExpenseTypeId": "cancellation_fee",
+      "message": "「出張キャンセル料」を選択してください。",
+      "warningMessage": "キャンセル理由と返金の有無を記載してください。",
+      "active": true
+    },
+    {
+      "id": "r078-g1",
+      "sourceRuleId": "r078",
+      "priority": 78,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O069",
+        "Q014": "O083"
+      },
+      "resultExpenseTypeId": "airport_fee",
+      "message": "「空港使用料・諸税」を選択してください。",
+      "warningMessage": "航空券代との二重申請にならないよう確認してください。",
+      "active": true
+    },
+    {
+      "id": "r079-g1",
+      "sourceRuleId": "r079",
+      "priority": 79,
+      "conditions": {
+        "Q001": "O009",
+        "Q012": "O071",
+        "Q016": "O094"
+      },
+      "resultExpenseTypeId": "other_trip",
+      "message": "「その他（出張経費）」を選択してください。",
+      "warningMessage": "該当する出張経費タイプがない理由と内容を具体的に記載してください。",
       "active": true
     }
   ]

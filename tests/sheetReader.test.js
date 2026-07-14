@@ -36,22 +36,29 @@ describe("sheetReader", () => {
     expect(JSON.stringify(rows)).not.toContain("任意");
   });
 
-  it.each(["99_questions", "99_options", "99_rules"])(
-    "%s は2行目から実データとして読む",
-    (sheetName) => {
-      const rows = toObjects(directDataRows, sheetName);
+  it.each([
+    "99_questions",
+    "99_options",
+    "99_rules",
+    "01_基本設定",
+    "02_ポリシー",
+    "03_経費タイプ",
+    "04_質問",
+    "05_選択肢",
+    "06_判定ルール",
+  ])("%s は2行目から実データとして読む", (sheetName) => {
+    const rows = toObjects(directDataRows, sheetName);
 
-      expect(getDataStartRowNumber(sheetName)).toBe(2);
-      expect(rows).toEqual([
-        {
-          id: "first-id",
-          name: "1行目の実データ",
-        },
-        {
-          id: "second-id",
-          name: "2行目の実データ",
-        },
-      ]);
-    },
-  );
+    expect(getDataStartRowNumber(sheetName)).toBe(2);
+    expect(rows).toEqual([
+      {
+        id: "first-id",
+        name: "1行目の実データ",
+      },
+      {
+        id: "second-id",
+        name: "2行目の実データ",
+      },
+    ]);
+  });
 });

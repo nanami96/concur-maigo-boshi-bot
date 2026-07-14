@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { parseCompareConfigText } from "./compareConfigFile";
 import { checkConfig } from "./configChecks";
-import { compareConfigs } from "./configDiff";
 import { searchConfig } from "./configSearch";
 import { generateReviewComments } from "./reviewAdvisor";
 import RuleFlowTree from "./RuleFlowTree";
@@ -25,6 +23,22 @@ function getOptionLabel(config, questionId, value) {
   const option = question?.options.find((item) => item.value === value);
 
   return option?.label || value;
+}
+
+// 画面表示用のルールID。Excel上のルールID(sourceRuleId)があればそれを使い、
+// 無い場合（旧スキーマ等）はconfig.json内部のidをそのまま使う。
+function getDisplayRuleId(rule) {
+  return rule.sourceRuleId || rule.id;
+}
+
+// config.json内部id（例: "r058-g1"）からExcelの「条件グループ」番号だけを取り出す。
+// sourceRuleIdが無い場合や、内部idがその形式でない場合はnullを返す。
+function getConditionGroup(rule) {
+  if (!rule.sourceRuleId || !rule.id.startsWith(`${rule.sourceRuleId}-g`)) {
+    return null;
+  }
+
+  return rule.id.slice(rule.sourceRuleId.length + 2);
 }
 
 function QuestionCard({ question }) {
@@ -60,15 +74,23 @@ function QuestionCard({ question }) {
 
 function RuleCard({ config, rule }) {
   const conditions = Object.entries(rule.conditions);
+  const displayRuleId = getDisplayRuleId(rule);
+  const conditionGroup = getConditionGroup(rule);
 
   return (
     <article className="overviewCard ruleCard">
       <div className="cardHeading">
-        <span className="idBadge">{rule.id}</span>
+        <span className="idBadge">{displayRuleId}</span>
         <h3>{getExpenseTypeName(config, rule.resultExpenseTypeId)}</h3>
       </div>
 
       <dl className="ruleDetails">
+        {conditionGroup && conditionGroup !== "1" && (
+          <div>
+            <dt>条件グループ</dt>
+            <dd>{conditionGroup}</dd>
+          </div>
+        )}
         <div>
           <dt>条件</dt>
           <dd>
@@ -200,165 +222,6 @@ function ReviewAdvisorCard({ result }) {
   );
 }
 
-function DiffMetric({ label, value, type }) {
-  return (
-    <div className={`diffMetric ${type}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function formatDiffValue(value) {
-  if (value === undefined) {
-    return "(未設定)";
-  }
-
-  if (value === null) {
-    return "null";
-  }
-
-  if (typeof value === "object") {
-    return JSON.stringify(value, null, 2);
-  }
-
-  return String(value);
-}
-
-function DiffItemGroup({ title, items, type }) {
-  if (items.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className={`diffGroup ${type}`}>
-      <h4>{title}</h4>
-      <ul className="diffDetailList">
-        {items.map((item) => (
-          <li className="diffDetailItem" key={`${type}-${item.id}`}>
-            <span className="diffDetailId">{item.id}</span>
-            {type === "changed" ? (
-              <div className="diffChangeList">
-                {item.changes.map((change) => (
-                  <div
-                    className="diffChangeRow"
-                    key={`${item.id}-${change.field}`}
-                  >
-                    <span>{change.field}</span>
-                    <div>
-                      <strong>Before</strong>
-                      <pre>{formatDiffValue(change.before)}</pre>
-                    </div>
-                    <div>
-                      <strong>After</strong>
-                      <pre>{formatDiffValue(change.after)}</pre>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <pre>
-                {formatDiffValue(type === "added" ? item.current : item.previous)}
-              </pre>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function ConfigDiffSection({
-  diff,
-  fileInputKey,
-  fileName,
-  error,
-  hasCompareConfig,
-  onClear,
-  onFileChange,
-}) {
-  return (
-    <details className="overviewSection" open>
-      <summary>
-        設定差分
-        <span>
-          Added {diff.summary.added} / Removed {diff.summary.removed} / Changed{" "}
-          {diff.summary.changed}
-        </span>
-      </summary>
-
-      <div className="compareConfigLoader">
-        <div>
-          <label htmlFor="compare-config-file">比較用config.json</label>
-          <input
-            accept="application/json,.json"
-            id="compare-config-file"
-            key={fileInputKey}
-            type="file"
-            onChange={onFileChange}
-          />
-        </div>
-        {hasCompareConfig && (
-          <button className="clearCompareButton" type="button" onClick={onClear}>
-            比較をクリア
-          </button>
-        )}
-      </div>
-
-      {fileName && (
-        <p className="compareConfigFileName">読み込み中: {fileName}</p>
-      )}
-      {error && <p className="compareConfigError">{error}</p>}
-
-      {!diff.hasDiff ? (
-        <div className="diffEmpty">
-          <strong>差分はありません</strong>
-          <p>現在の設定と比較元の設定は同じ内容です。</p>
-        </div>
-      ) : (
-        <>
-          <div className="diffSummaryGrid">
-            <DiffMetric label="Added" value={diff.summary.added} type="added" />
-            <DiffMetric
-              label="Removed"
-              value={diff.summary.removed}
-              type="removed"
-            />
-            <DiffMetric
-              label="Changed"
-              value={diff.summary.changed}
-              type="changed"
-            />
-          </div>
-
-          <div className="diffTargetList">
-          {Object.entries(diff.targets).map(([targetKey, targetDiff]) => (
-            <section className="diffTarget" key={targetKey}>
-              <h3>{targetDiff.label}</h3>
-              <DiffItemGroup
-                title="Added"
-                items={targetDiff.added}
-                type="added"
-              />
-              <DiffItemGroup
-                title="Removed"
-                items={targetDiff.removed}
-                type="removed"
-              />
-              <DiffItemGroup
-                title="Changed"
-                items={targetDiff.changed}
-                type="changed"
-              />
-            </section>
-          ))}
-          </div>
-        </>
-      )}
-    </details>
-  );
-}
-
 function ConfigSearchBox({ value, onChange }) {
   return (
     <div className="configSearch">
@@ -382,20 +245,11 @@ function NoSearchResults() {
   );
 }
 
-export default function RuleOverview({ companyId, config, compareConfig }) {
+export default function RuleOverview({ companyId, config }) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [loadedCompareConfig, setLoadedCompareConfig] = useState(null);
-  const [compareFileName, setCompareFileName] = useState("");
-  const [compareError, setCompareError] = useState("");
-  const [fileInputKey, setFileInputKey] = useState(0);
-  const activeCompareConfig = loadedCompareConfig || compareConfig || config;
-  const configDiffResult = useMemo(
-    () => compareConfigs(activeCompareConfig, config),
-    [activeCompareConfig, config],
-  );
   const searchResult = useMemo(
-    () => searchConfig(config, searchQuery, configDiffResult),
-    [config, searchQuery, configDiffResult],
+    () => searchConfig(config, searchQuery),
+    [config, searchQuery],
   );
   const visibleQuestions = searchResult.filtered.questions;
   const visibleRules = searchResult.filtered.rules;
@@ -409,50 +263,11 @@ export default function RuleOverview({ companyId, config, compareConfig }) {
   const reviewAdvisorResult = useMemo(() => generateReviewComments(config), [
     config,
   ]);
-  const visibleDiff = searchResult.filtered.diff || configDiffResult;
   const shouldShowSearchEmpty = searchResult.hasQuery && !searchResult.hasMatches;
 
   useEffect(() => {
     setSearchQuery("");
-    setLoadedCompareConfig(null);
-    setCompareFileName("");
-    setCompareError("");
-    setFileInputKey((currentKey) => currentKey + 1);
   }, [companyId]);
-
-  async function handleCompareFileChange(event) {
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    setCompareFileName(file.name);
-    setCompareError("");
-
-    try {
-      const text = await file.text();
-      const result = parseCompareConfigText(text);
-
-      if (result.error) {
-        setLoadedCompareConfig(null);
-        setCompareError(result.error);
-        return;
-      }
-
-      setLoadedCompareConfig(result.config);
-    } catch {
-      setLoadedCompareConfig(null);
-      setCompareError("ファイルを読み込めませんでした。もう一度選択してください。");
-    }
-  }
-
-  function clearCompareConfig() {
-    setLoadedCompareConfig(null);
-    setCompareFileName("");
-    setCompareError("");
-    setFileInputKey((currentKey) => currentKey + 1);
-  }
 
   return (
     <section className="overviewPanel" aria-label="ルール確認">
@@ -504,17 +319,6 @@ export default function RuleOverview({ companyId, config, compareConfig }) {
 
       <ConfigCheckSection result={configCheckResult} />
       <ReviewAdvisorCard result={reviewAdvisorResult} />
-      {!shouldShowSearchEmpty && (
-        <ConfigDiffSection
-          diff={visibleDiff}
-          error={compareError}
-          fileInputKey={fileInputKey}
-          fileName={compareFileName}
-          hasCompareConfig={Boolean(loadedCompareConfig || compareFileName)}
-          onClear={clearCompareConfig}
-          onFileChange={handleCompareFileChange}
-        />
-      )}
     </section>
   );
 }

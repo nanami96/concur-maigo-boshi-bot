@@ -32,6 +32,14 @@ function branchHasMatch(searchResult, node) {
   }
 
   if (node.type === "result") {
+    if (node.candidates) {
+      return node.candidates.some(
+        (candidate) =>
+          includesMatch(searchResult, "ruleIds", candidate.ruleId) ||
+          includesMatch(searchResult, "expenseTypeIds", candidate.expenseTypeId),
+      );
+    }
+
     return (
       includesMatch(searchResult, "ruleIds", node.ruleId) ||
       includesMatch(searchResult, "expenseTypeIds", node.expenseTypeId)
@@ -69,9 +77,23 @@ function ResultNode({ node }) {
     );
   }
 
+  if (node.candidates) {
+    return (
+      <div className="resultNodeGroup">
+        {node.candidates.map((candidate) => (
+          <div className="treeNode resultNode" key={candidate.ruleId}>
+            <span>{candidate.displayRuleId}</span>
+            <strong>{candidate.expenseTypeName}</strong>
+            <small>{candidate.expenseTypeId}</small>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="treeNode resultNode">
-      <span>{node.ruleId}</span>
+      <span>{node.displayRuleId}</span>
       <strong>{node.expenseTypeName}</strong>
       <small>{node.expenseTypeId}</small>
     </div>

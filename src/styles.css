@@ -450,6 +450,11 @@ button {
   color: #166534;
 }
 
+.resultNodeGroup {
+  display: grid;
+  gap: 8px;
+}
+
 .missingNode {
   border-color: #fecaca;
   background: #fef2f2;
@@ -713,304 +718,6 @@ button {
   color: #1d4ed8;
 }
 
-.diffSummaryGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.compareConfigLoader {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 14px;
-}
-
-.compareConfigLoader div {
-  display: grid;
-  flex: 1 1 auto;
-  gap: 8px;
-  min-width: 0;
-}
-
-.compareConfigLoader label {
-  color: #475569;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.compareConfigLoader input {
-  width: 100%;
-  color: #172033;
-  font: inherit;
-}
-
-.clearCompareButton {
-  flex: 0 0 auto;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #243047;
-  padding: 9px 12px;
-  cursor: pointer;
-}
-
-.clearCompareButton:hover {
-  background: #eef2f7;
-}
-
-.compareConfigFileName,
-.compareConfigError {
-  margin: 10px 0 0;
-  overflow-wrap: anywhere;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.compareConfigFileName {
-  color: #475569;
-}
-
-.compareConfigError {
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  background: #fef2f2;
-  color: #991b1b;
-  padding: 10px 12px;
-}
-
-.diffMetric {
-  border: 1px solid #d7deea;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 12px;
-}
-
-.diffMetric span {
-  display: block;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.diffMetric strong {
-  display: block;
-  margin-top: 4px;
-  font-size: 22px;
-}
-
-.diffMetric.added {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
-  color: #166534;
-}
-
-.diffMetric.removed {
-  border-color: #fecaca;
-  background: #fef2f2;
-  color: #991b1b;
-}
-
-.diffMetric.changed {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
-}
-
-.diffEmpty {
-  margin-top: 14px;
-  border: 1px solid #d7deea;
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 14px;
-}
-
-.diffEmpty strong {
-  display: block;
-  color: #172033;
-  font-size: 16px;
-}
-
-.diffEmpty p {
-  display: none;
-}
-
-.diffTargetList {
-  display: grid;
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.diffTarget {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 14px;
-}
-
-.diffTarget h3 {
-  margin: 0 0 10px;
-  color: #172033;
-  font-size: 16px;
-}
-
-.diffGroup + .diffGroup {
-  margin-top: 10px;
-}
-
-.diffGroup h4 {
-  margin: 0 0 8px;
-  font-size: 13px;
-}
-
-.diffGroup.added h4 {
-  color: #166534;
-}
-
-.diffGroup.removed h4 {
-  color: #991b1b;
-}
-
-.diffGroup.changed h4 {
-  color: #1d4ed8;
-}
-
-.diffList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.diffList span {
-  display: inline-block;
-  max-width: 100%;
-  border: 1px solid #cbd5e1;
-  border-radius: 999px;
-  background: #ffffff;
-  color: #475569;
-  padding: 3px 9px;
-  overflow-wrap: anywhere;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.diffGroup.added .diffList span {
-  border-color: #bbf7d0;
-  color: #166534;
-}
-
-.diffGroup.removed .diffList span {
-  border-color: #fecaca;
-  color: #991b1b;
-}
-
-.diffGroup.changed .diffList span {
-  border-color: #bfdbfe;
-  color: #1d4ed8;
-}
-
-.diffDetailList {
-  display: grid;
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.diffDetailItem {
-  display: grid;
-  gap: 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 12px;
-}
-
-.diffDetailId {
-  width: fit-content;
-  max-width: 100%;
-  border: 1px solid #cbd5e1;
-  border-radius: 999px;
-  background: #f8fafc;
-  color: #475569;
-  padding: 3px 9px;
-  overflow-wrap: anywhere;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.diffGroup.added .diffDetailId {
-  border-color: #bbf7d0;
-  color: #166534;
-}
-
-.diffGroup.removed .diffDetailId {
-  border-color: #fecaca;
-  color: #991b1b;
-}
-
-.diffGroup.changed .diffDetailId {
-  border-color: #bfdbfe;
-  color: #1d4ed8;
-}
-
-.diffDetailItem pre,
-.diffChangeRow pre {
-  max-height: 220px;
-  margin: 0;
-  overflow: auto;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fafc;
-  color: #172033;
-  padding: 10px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font:
-    12px/1.5 ui-monospace,
-    SFMono-Regular,
-    Consolas,
-    "Liberation Mono",
-    monospace;
-}
-
-.diffChangeList {
-  display: grid;
-  gap: 10px;
-}
-
-.diffChangeRow {
-  display: grid;
-  grid-template-columns: minmax(120px, 180px) repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  align-items: start;
-}
-
-.diffChangeRow > span,
-.diffChangeRow strong {
-  display: block;
-  overflow-wrap: anywhere;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.diffChangeRow > span {
-  color: #1d4ed8;
-}
-
-.diffChangeRow strong {
-  margin-bottom: 4px;
-  color: #64748b;
-}
-
 .messageRow {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
@@ -1104,7 +811,7 @@ button {
 }
 
 .recommendationCard {
-  width: min(100%, 680px);
+  width: min(420px, calc(100vw - 100px));
   padding: 0;
   overflow: hidden;
   background: #fff;
@@ -1161,6 +868,10 @@ button {
   font-weight: 700;
   line-height: 1.3;
   overflow-wrap: anywhere;
+}
+
+.resultPolicySection {
+  margin-top: 24px;
 }
 
 .resultHero h2 {
@@ -1350,6 +1061,86 @@ button {
   padding: 10px 12px;
 }
 
+.candidateList {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 680px);
+}
+
+.candidateListHeading {
+  margin: 0;
+  color: #1761c5;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.candidateCard {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dce4ef;
+  border-radius: 10px;
+  background: #fff;
+  padding: 14px 16px;
+}
+
+.candidateName {
+  margin: 0;
+  color: #172033;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.candidatePolicySection {
+  margin-top: 4px;
+}
+
+.candidatePolicyLabel {
+  margin: 0;
+  color: #1761c5;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.candidateReceiptRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.candidateReceiptLabel {
+  color: #263244;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.candidateMessage,
+.candidateNote {
+  margin: 0;
+  color: #283548;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.candidateNote {
+  color: #92400e;
+}
+
+.candidateSelectButton {
+  justify-self: start;
+  border: 1px solid #2563eb;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.candidateSelectButton:hover {
+  background: #dbeafe;
+}
+
 @media (max-width: 760px) {
   .appShell {
     width: min(100% - 20px, 680px);
@@ -1487,24 +1278,7 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .diffSummaryGrid {
-    grid-template-columns: 1fr;
-  }
-
   .advisorCard {
-    grid-template-columns: 1fr;
-  }
-
-  .compareConfigLoader {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .clearCompareButton {
-    width: 100%;
-  }
-
-  .diffChangeRow {
     grid-template-columns: 1fr;
   }
 

@@ -28,6 +28,21 @@ function getReceiptStatus(receiptRequired) {
   };
 }
 
+function getPolicyName(policies, policyId) {
+  return policies?.find((policy) => policy.policy_id === policyId)?.policy_name;
+}
+
+function TagIcon() {
+  return (
+    <span className="resultLabelIcon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" focusable="false">
+        <path d="M20.6 13.1 13.1 20.6a2.1 2.1 0 0 1-3 0L3.8 14.3A2.8 2.8 0 0 1 3 12.4V5.8A2.8 2.8 0 0 1 5.8 3h6.6a2.8 2.8 0 0 1 1.9.8l6.3 6.3a2.1 2.1 0 0 1 0 3Z" />
+        <path d="M8 8h.01" />
+      </svg>
+    </span>
+  );
+}
+
 function ChatMessage({ speaker = "bot", children }) {
   return (
     <div className={`messageRow ${speaker}`}>
@@ -56,6 +71,52 @@ function ChoiceButtons({ options, selected, onSelect }) {
   );
 }
 
+function CandidateList({ candidates, policies, onSelect }) {
+  return (
+    <div className="candidateList">
+      <h3 className="candidateListHeading">候補となる経費タイプ</h3>
+      {candidates.map((candidate) => {
+        const receiptStatus = getReceiptStatus(
+          candidate.expenseType?.receiptRequired,
+        );
+        const note =
+          candidate.rule?.warningMessage?.trim() ||
+          candidate.expenseType?.note?.trim();
+        const policyName = getPolicyName(policies, candidate.expenseType?.policyId);
+
+        return (
+          <div className="candidateCard" key={candidate.rule.id}>
+            <h4 className="candidateName">{candidate.expenseType?.name}</h4>
+            {policyName && (
+              <div className="candidatePolicySection">
+                <p className="candidatePolicyLabel">ポリシー</p>
+                <h4 className="candidateName">{policyName}</h4>
+              </div>
+            )}
+            <div className="candidateReceiptRow">
+              <span className="candidateReceiptLabel">領収書</span>
+              <span className={receiptStatus.className}>
+                {receiptStatus.label}
+              </span>
+            </div>
+            {candidate.rule.message && (
+              <p className="candidateMessage">{candidate.rule.message}</p>
+            )}
+            {note && <p className="candidateNote">{note}</p>}
+            <button
+              className="candidateSelectButton"
+              type="button"
+              onClick={() => onSelect(candidate)}
+            >
+              この経費タイプにする
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function App() {
   const defaultCompanyId = availableCompanies[0]?.id || "sample-company";
   const [companyId, setCompanyId] = useState(defaultCompanyId);
@@ -77,6 +138,7 @@ export default function App() {
   const resultNote =
     result?.rule?.warningMessage?.trim() || result?.expenseType?.note?.trim();
   const receiptStatus = getReceiptStatus(result?.expenseType?.receiptRequired);
+  const policyName = getPolicyName(config.policies, result?.expenseType?.policyId);
 
   function handleSelect(answer) {
     const selected = currentQuestion.options.find(
@@ -225,22 +287,38 @@ export default function App() {
           </ChatMessage>
         )}
 
-        {result && (
+        {result && result.candidates && (
+          <ChatMessage>
+            <CandidateList
+              candidates={result.candidates}
+              policies={config.policies}
+              onSelect={(candidate) => setResult(candidate)}
+            />
+          </ChatMessage>
+        )}
+
+        {result && !result.candidates && (
           <ChatMessage>
             <div className="recommendationCard">
               <div className="resultHero">
                 <p className="resultHeroLabel">
-                  <span className="resultLabelIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false">
-                      <path d="M20.6 13.1 13.1 20.6a2.1 2.1 0 0 1-3 0L3.8 14.3A2.8 2.8 0 0 1 3 12.4V5.8A2.8 2.8 0 0 1 5.8 3h6.6a2.8 2.8 0 0 1 1.9.8l6.3 6.3a2.1 2.1 0 0 1 0 3Z" />
-                      <path d="M8 8h.01" />
-                    </svg>
-                  </span>
+                  <TagIcon />
                   おすすめの経費タイプ
                 </p>
                 <div className="resultExpenseType">
                   <h2>{result.expenseType.name}</h2>
                 </div>
+                {policyName && (
+                  <div className="resultPolicySection">
+                    <p className="resultHeroLabel">
+                      <TagIcon />
+                      ポリシー
+                    </p>
+                    <div className="resultExpenseType">
+                      <h2>{policyName}</h2>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="resultAdviceBubble">

@@ -35,10 +35,10 @@ export default class QuestionEngine {
     return this.currentQuestion;
   }
   getResult() {
-    const matchedRule = this.config.rules
+    const matchedRules = this.config.rules
       .filter((rule) => rule.active)
       .sort((a, b) => a.priority - b.priority)
-      .find((rule) =>
+      .filter((rule) =>
         Object.entries(rule.conditions).every(([questionId, answer]) =>
           this.answers.some(
             (item) => item.questionId === questionId && item.answer === answer,
@@ -46,18 +46,22 @@ export default class QuestionEngine {
         ),
       );
 
-    if (!matchedRule) {
+    if (matchedRules.length === 0) {
       return null;
     }
 
-    const expenseType = this.config.expenseTypes.find(
-      (item) => item.id === matchedRule.resultExpenseTypeId,
-    );
+    const toResult = (rule) => ({
+      rule,
+      expenseType: this.config.expenseTypes.find(
+        (item) => item.id === rule.resultExpenseTypeId,
+      ),
+    });
 
-    return {
-      rule: matchedRule,
-      expenseType,
-    };
+    if (matchedRules.length === 1) {
+      return toResult(matchedRules[0]);
+    }
+
+    return { candidates: matchedRules.map(toResult) };
   }
   getSnapshot() {
     return {
