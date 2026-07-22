@@ -53,7 +53,7 @@ export default function App() {
     <>
       {!isPublicDemo && (
         <a className="resetButton" href="#admin">
-          管理画面（検証中）
+          管理画面
         </a>
       )}
       {companies.length > 1 && (

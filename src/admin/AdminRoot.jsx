@@ -718,7 +718,7 @@ export default function AdminRoot() {
       <header className="appHeader">
         <div>
           <p className="eyebrow">Concur迷子防止Bot</p>
-          <h1>管理画面（検証中）</h1>
+          <h1>管理画面</h1>
           <p>
             基本設定・ポリシー・経費タイプ・質問・選択肢・分岐・結果をここで編集できます。
           </p>
