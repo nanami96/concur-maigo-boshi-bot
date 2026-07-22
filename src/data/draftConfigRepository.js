@@ -48,6 +48,38 @@ export function resolveInitialWorkspaceState({ draftRow, staticConfig }) {
   return { initialState: null, initialUpdatedAt: null, source: "none" };
 }
 
+// ログイン中の管理者が所属する会社の一覧を取得する（管理画面の会社セレクタ用）。
+//
+// 専用RPCは新設せず、companiesへの通常SELECTをそのまま使う。既存のRLS
+// （companies_select_member: company_membersに自分が所属する会社のみ）が
+// 既に「自分の所属会社しか見えない」を保証しているため、これで十分安全に
+// スコープされる（他の管理者の所属会社の存在・名前は一切見えない）。
+export async function fetchMyCompanies() {
+  if (!isSupabaseConfigured) {
+    return { companies: [], error: null };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("companies")
+      .select("company_code, company_name")
+      .order("company_code");
+
+    if (error) {
+      return { companies: [], error: { type: "unknown", message: error.message } };
+    }
+
+    const companies = (data || []).map((row) => ({
+      id: row.company_code,
+      label: row.company_name,
+    }));
+
+    return { companies, error: null };
+  } catch (caughtError) {
+    return { companies: [], error: { type: "network", message: caughtError.message } };
+  }
+}
+
 // company_code（例: "sample-company"）から、draft_configs操作に必要な
 // companies.id（uuid）を引く。
 //

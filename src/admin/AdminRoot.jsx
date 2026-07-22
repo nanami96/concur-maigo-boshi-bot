@@ -4,9 +4,11 @@ import { buildFlowFromConfig } from "../flow/buildFlowFromConfig";
 import { useWorkspaceEditor } from "./useWorkspaceEditor";
 import { useDraftSave } from "./useDraftSave";
 import { usePublish } from "./usePublish";
+import { isSupabaseConfigured } from "../lib/supabaseClient";
 import {
   getCompanyDbId,
   fetchDraft,
+  fetchMyCompanies,
   resolveInitialWorkspaceState,
   mapDraftRowToWorkspaceState,
 } from "../data/draftConfigRepository";
@@ -374,8 +376,23 @@ function CompanyEditor({ companyId, onPersistenceChange }) {
 }
 
 export default function AdminRoot() {
-  const defaultCompanyId = availableCompanies[0]?.id || "sample-company";
-  const [companyId, setCompanyId] = useState(defaultCompanyId);
+  // 管理画面の会社一覧は「静的configの一覧」ではなく「ログイン中の管理者が
+  // 実際に所属している会社（company_membersに行がある会社）」を使う。
+  // Supabase未設定（ローカルの非ログイン運用）時のみ、従来通りconfigSource側の
+  // 静的一覧にフォールバックする。
+  //
+  // company一覧の取得は非同期（Supabase設定時）なので、companyIdの初期値は
+  // 「一覧が既に同期的に確定している場合（Supabase未設定時）だけ」その場で決め、
+  // それ以外（Supabase設定時）はnull（未決定）から始めて、一覧が届いた最初の
+  // 1回だけ自動選択する（後述のuseEffect）。
+  const [myCompaniesState, setMyCompaniesState] = useState(() =>
+    isSupabaseConfigured
+      ? { status: "loading", companies: [] }
+      : { status: "ready", companies: availableCompanies },
+  );
+  const [companyId, setCompanyId] = useState(() =>
+    isSupabaseConfigured ? null : availableCompanies[0]?.id ?? null,
+  );
   const [customSetup, setCustomSetup] = useState(null);
 
   // 現在表示中のAdminWorkspaceの「未保存の変更があるか」「今すぐ保存する関数」を
@@ -391,6 +408,45 @@ export default function AdminRoot() {
   useEffect(() => {
     document.title = "Concur迷子防止Bot 管理画面";
   }, []);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
+    let cancelled = false;
+
+    fetchMyCompanies().then(({ companies, error }) => {
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        console.error("所属会社一覧の取得に失敗しました", error);
+        setMyCompaniesState({ status: "error", companies: [] });
+        return;
+      }
+
+      setMyCompaniesState({ status: "ready", companies });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 所属会社一覧が確定した最初の1回だけ、初期表示する会社を自動選択する
+  // （companyIdがまだnull＝未決定の間だけ動く。以降にこの一覧が更新されても
+  // 既にユーザーが選択・新規作成モードへ進んだ選択を勝手に上書きしない）。
+  useEffect(() => {
+    if (myCompaniesState.status !== "ready" || companyId !== null) {
+      return;
+    }
+
+    if (myCompaniesState.companies.length > 0) {
+      setCompanyId(myCompaniesState.companies[0].id);
+    }
+  }, [myCompaniesState, companyId]);
 
   const handlePersistenceChange = useCallback((next) => {
     persistenceRef.current = next;
@@ -463,6 +519,10 @@ export default function AdminRoot() {
   };
 
   const isNewCompanyMode = companyId === NEW_COMPANY_ID;
+  const isCompanyListLoading = myCompaniesState.status === "loading";
+  const companyListFailed = myCompaniesState.status === "error";
+  const myCompanies = myCompaniesState.companies;
+  const hasNoCompanies = myCompaniesState.status === "ready" && myCompanies.length === 0;
 
   return (
     <main className="appShell adminShell">
@@ -480,11 +540,16 @@ export default function AdminRoot() {
             <span className="companySelectWrap">
               <select
                 aria-label="会社を選択"
-                value={isNewCompanyMode ? "" : companyId}
+                value={isNewCompanyMode || companyId === null ? "" : companyId}
                 onChange={handleCompanyChange}
+                disabled={isCompanyListLoading}
               >
-                {isNewCompanyMode && <option value="">（新規セットアップ中）</option>}
-                {availableCompanies.map((company) => (
+                {(isNewCompanyMode || companyId === null) && (
+                  <option value="">
+                    {isNewCompanyMode ? "（新規セットアップ中）" : isCompanyListLoading ? "読み込み中…" : "－"}
+                  </option>
+                )}
+                {myCompanies.map((company) => (
                   <option key={company.id} value={company.id}>
                     {company.label}
                   </option>
@@ -514,6 +579,18 @@ export default function AdminRoot() {
         ) : (
           <InitialSetupScreen onSetupComplete={handleSetupComplete} />
         )
+      ) : isCompanyListLoading ? (
+        <p className="flowEmptyState">読み込み中…</p>
+      ) : companyListFailed ? (
+        <p className="flowEmptyState">
+          所属会社一覧を取得できませんでした。しばらくしてから再度お試しください。
+        </p>
+      ) : hasNoCompanies ? (
+        <p className="flowEmptyState">
+          まだどの会社にも登録されていません。管理者にご確認ください。
+        </p>
+      ) : companyId === null ? (
+        <p className="flowEmptyState">読み込み中…</p>
       ) : (
         <CompanyEditor key={companyId} companyId={companyId} onPersistenceChange={handlePersistenceChange} />
       )}

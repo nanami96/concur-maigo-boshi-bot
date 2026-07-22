@@ -12,7 +12,7 @@ vi.mock("../src/lib/supabaseClient.js", () => ({
   },
 }));
 
-const { fetchPublicConfig } = await import("../src/data/publicConfigRepository.js");
+const { fetchPublicConfig, fetchPublicCompanies } = await import("../src/data/publicConfigRepository.js");
 
 beforeEach(() => {
   mockState.isSupabaseConfigured = true;
@@ -66,6 +66,55 @@ describe("fetchPublicConfig", () => {
   it("通信例外が投げられた場合はnetworkエラーとして返す", async () => {
     rpcMock.mockRejectedValue(new Error("network down"));
     const result = await fetchPublicConfig("sample-company");
+    expect(result.error).toEqual({ type: "network", message: "network down" });
+  });
+});
+
+describe("fetchPublicCompanies", () => {
+  it("公開中の会社一覧をid/labelの形へ変換して返す", async () => {
+    rpcMock.mockResolvedValue({
+      data: [
+        { company_code: "sample-company", company_name: "サンプル会社" },
+        { company_code: "company-a", company_name: "A株式会社" },
+      ],
+      error: null,
+    });
+
+    const result = await fetchPublicCompanies();
+
+    expect(result).toEqual({
+      companies: [
+        { id: "sample-company", label: "サンプル会社" },
+        { id: "company-a", label: "A株式会社" },
+      ],
+      error: null,
+    });
+    expect(rpcMock).toHaveBeenCalledWith("list_public_companies");
+  });
+
+  it("公開中の会社が0件でもエラーではなく空配列を返す", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
+    const result = await fetchPublicCompanies();
+    expect(result).toEqual({ companies: [], error: null });
+  });
+
+  it("RPC自体がエラーを返した場合はerrorを返す", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+    const result = await fetchPublicCompanies();
+    expect(result.companies).toEqual([]);
+    expect(result.error).toEqual({ type: "unknown", message: "boom" });
+  });
+
+  it("Supabase未設定なら呼び出さず空配列を返す", async () => {
+    mockState.isSupabaseConfigured = false;
+    const result = await fetchPublicCompanies();
+    expect(result).toEqual({ companies: [], error: null });
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it("通信例外が投げられた場合はnetworkエラーとして返す", async () => {
+    rpcMock.mockRejectedValue(new Error("network down"));
+    const result = await fetchPublicCompanies();
     expect(result.error).toEqual({ type: "network", message: "network down" });
   });
 });

@@ -24,6 +24,7 @@ function makeChain(result) {
     eq: vi.fn(() => chain),
     upsert: vi.fn(() => chain),
     maybeSingle: vi.fn(() => Promise.resolve(result)),
+    order: vi.fn(() => Promise.resolve(result)),
   };
   return chain;
 }
@@ -35,6 +36,7 @@ const {
   getCompanyDbId,
   fetchDraft,
   saveDraft,
+  fetchMyCompanies,
 } = await import("../src/data/draftConfigRepository.js");
 
 beforeEach(() => {
@@ -103,6 +105,51 @@ describe("resolveInitialWorkspaceState", () => {
     const result = resolveInitialWorkspaceState({ draftRow: null, staticConfig: null });
     expect(result.source).toBe("none");
     expect(result.initialState).toBeNull();
+  });
+});
+
+describe("fetchMyCompanies", () => {
+  it("Supabase未設定なら問い合わせず空配列を返す", async () => {
+    mockState.isSupabaseConfigured = false;
+    const result = await fetchMyCompanies();
+    expect(result).toEqual({ companies: [], error: null });
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("RLSでスコープされたcompaniesの行をid/labelの形へ変換して返す", async () => {
+    fromMock.mockReturnValue(
+      makeChain({
+        data: [{ company_code: "sample-company", company_name: "サンプル会社" }],
+        error: null,
+      }),
+    );
+    const result = await fetchMyCompanies();
+    expect(result).toEqual({
+      companies: [{ id: "sample-company", label: "サンプル会社" }],
+      error: null,
+    });
+    expect(fromMock).toHaveBeenCalledWith("companies");
+  });
+
+  it("所属会社が0件でもエラーではなく空配列を返す", async () => {
+    fromMock.mockReturnValue(makeChain({ data: [], error: null }));
+    const result = await fetchMyCompanies();
+    expect(result).toEqual({ companies: [], error: null });
+  });
+
+  it("取得に失敗した場合はerrorを返す", async () => {
+    fromMock.mockReturnValue(makeChain({ data: null, error: { message: "boom" } }));
+    const result = await fetchMyCompanies();
+    expect(result.companies).toEqual([]);
+    expect(result.error).toEqual({ type: "unknown", message: "boom" });
+  });
+
+  it("通信例外が投げられた場合はnetworkエラーとして返す", async () => {
+    const chain = makeChain(null);
+    chain.order = vi.fn(() => Promise.reject(new Error("network down")));
+    fromMock.mockReturnValue(chain);
+    const result = await fetchMyCompanies();
+    expect(result.error).toEqual({ type: "network", message: "network down" });
   });
 });
 

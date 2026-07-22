@@ -1,25 +1,28 @@
--- Concur迷子防止Bot 管理画面 永続化基盤 スキーマ（Phase 1〜Phase 4）
+-- Concur迷子防止Bot 管理画面 永続化基盤 スキーマ（Phase 1〜Phase 6）
 --
 -- Supabaseダッシュボードの「SQL Editor」に、このファイルの内容をそのまま貼り付けて
 -- 実行してください（手順の詳細は docs/supabase-setup.md を参照）。
 --
 -- 既にPhase 1時点のschema.sqlを実行済みのプロジェクトに対しては、このファイルを
 -- 丸ごと再実行しても問題ありません（create table if not exists・drop policy if
--- exists等でべき等に書かれています）。ただしPhase 3・Phase 4で追加した部分だけを
--- 適用したい場合は、各Phaseの完了報告に記載した「既存Supabaseへ追加実行するSQL」を
--- 使ってください。
+-- exists等でべき等に書かれています）。ただしPhase 3・Phase 4・Phase 6で追加した
+-- 部分だけを適用したい場合は、各Phaseの完了報告に記載した「既存Supabaseへ追加実行
+-- するSQL」を使ってください。
 --
 -- 設計方針：
 --   ・全テーブルでRLS（Row Level Security）を有効化する
 --   ・「デフォルト拒否＋必要な操作だけ許可」を徹底する
 --   ・anon（未ログインの匿名ユーザー）には、いかなるテーブルへのアクセスも許可しない。
 --     本番Bot向けの公開読み取りは、companies/published_versionsの生テーブルへは
---     一切触れさせず、専用のRPC（get_public_config、Phase 4節）1つだけを
---     唯一の入り口とする。
+--     一切触れさせず、専用のRPCだけを入り口とする：
+--       ・get_public_config（Phase 4節）: 指定した1社の公開中の設定内容を取得
+--       ・list_public_companies（Phase 6節）: 公開中の会社の一覧（コードと名前のみ）を取得
+--     いずれもcompanies/published_versionsの生テーブルへの直接アクセスは一切許可しない。
 --   ・SECURITY DEFINER関数は、本当に必要な場合（anonに本来アクセス権の無い
 --     テーブルから、ごく限定的な列だけを安全に見せる場合）にのみ、search_path
 --     固定・返す列の限定・EXECUTE権限の限定を徹底した上で使う
---     （Phase 4のget_public_configのみ。それ以外の関数はSECURITY INVOKERのまま）
+--     （Phase 4のget_public_config、Phase 6のlist_public_companiesのみ。
+--     それ以外の関数はSECURITY INVOKERのまま）
 
 -- gen_random_uuid() を使うための拡張機能。Supabaseでは通常デフォルトで有効だが、
 -- 念のため明示しておく（既に有効な場合は何も起きない）。
@@ -491,13 +494,65 @@ revoke all on function get_public_config(text) from public;
 grant execute on function get_public_config(text) to anon, authenticated;
 
 -- ============================================================================
--- ここまででPhase 4のスキーマも完成です。
+-- 6. Phase 6: 匿名向け「公開中の会社一覧」の入り口（複数社対応）
+-- ============================================================================
+--
+-- 目的：
+--   本番Bot画面の会社セレクタ・?company=xxxの初期表示判断のために、
+--   「現在公開されている会社」の一覧（company_codeとcompany_nameのみ）を
+--   匿名ユーザーが取得できるようにする。これにより、Supabase側で会社を
+--   登録・公開するだけで、Reactコードの変更・再デプロイ無しに新しい会社が
+--   本番Botで使えるようになる。
+--
+-- なぜここもSECURITY DEFINERを使うか：
+--   get_public_configと全く同じ理由。anonはcompaniesへの素のSELECT権限を
+--   持たない（意図的にそうしている）ため、「本来アクセスできないテーブルの、
+--   ごく狭い一部だけを、決められた形でのみ見せる」ためにSECURITY DEFINERを使う。
+--   以下の対策を徹底する：
+--     ・search_pathを明示的にpublicへ固定する
+--     ・select * を使わず、返す列を company_code / company_name の2つだけに限定する
+--       （companies.id・current_published_version_id・created_at・
+--       company_members・draft_configs・published_versions履歴等は一切返さない）
+--     ・current_published_version_id is not null （＝公開済み）の会社のみを返す。
+--       未公開の会社は一覧に一切現れない
+--     ・書き込みは一切行わない（読み取り専用、stable）
+--     ・EXECUTE権限はanon・authenticatedにのみ付与し、それ以外は剥奪する
+--     ・パラメータを取らない（特定の会社を狙い撃ちで問い合わせる用途では
+--       なく、あくまで「公開中の会社の一覧」を返すだけの関数にする。
+--       個別の会社の設定内容はget_public_configを別途呼ぶ）
+create or replace function list_public_companies()
+returns table (company_code text, company_name text)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select c.company_code, c.company_name
+  from companies c
+  where c.current_published_version_id is not null
+  order by c.company_code;
+$$;
+
+comment on function list_public_companies() is
+  '匿名の利用者Bot向け、公開中の会社一覧の唯一の読み取り口。company_code・'
+  'company_nameの2列だけを返す。current_published_version_idがnull（未公開）の'
+  '会社は一覧に含まれない。companies/published_versionsの生テーブルへは'
+  'anonからは一切アクセスできない。';
+
+revoke all on function list_public_companies() from public;
+grant execute on function list_public_companies() to anon, authenticated;
+
+-- ============================================================================
+-- ここまででPhase 6のスキーマも完成です。
 --
 -- まだ実装していないもの（後続Phaseで対応）：
 --   ・過去バージョンへのロールバック（current_published_version_idを
 --     過去のpublished_versions.idへ切り替えるだけで実現できる構造にはなっている）
 --   ・複数人同時編集の考慮
---   ・get_public_configの呼び出し頻度制限・キャッシュ
+--   ・get_public_config / list_public_companiesの呼び出し頻度制限・キャッシュ
+--   ・顧客によるセルフサービスの会社登録（companiesへのINSERTは引き続き
+--     authenticatedへ付与しない。会社の新規登録はSupabase側の作業者が
+--     SQL Editor等から行う運用のまま）
 --
 -- 「下書き変更履歴（draft_config_versions・save_draft_with_history・
 -- restore_draft_version）」は一度Phase 5として実装したが、オーバースペックと

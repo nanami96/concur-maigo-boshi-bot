@@ -50,3 +50,30 @@ export async function fetchPublicConfig(companyCode) {
     return { config: null, publishedAt: null, error: { type: "network", message: caughtError.message } };
   }
 }
+
+// list_public_companies() を呼び、現在公開中の会社一覧を取得する。
+// これもget_public_config同様、認証不要（利用者Bot画面から直接呼ばれる）。
+// 返る列はcompany_code/company_nameのみで、companies.idや未公開の会社は含まれない
+// （RPC自体がその形でしか返さないよう設計されているため、ここでの追加フィルタは不要）。
+export async function fetchPublicCompanies() {
+  if (!isSupabaseConfigured) {
+    return { companies: [], error: null };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc("list_public_companies");
+
+    if (error) {
+      return { companies: [], error: { type: "unknown", message: error.message } };
+    }
+
+    const companies = (Array.isArray(data) ? data : []).map((row) => ({
+      id: row.company_code,
+      label: row.company_name,
+    }));
+
+    return { companies, error: null };
+  } catch (caughtError) {
+    return { companies: [], error: { type: "network", message: caughtError.message } };
+  }
+}
