@@ -2,10 +2,12 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import {
   hasPendingAuthCallback,
   isAdminAuthCallback,
+  isRecoveryAuthCallback,
   resolveRootTree,
   cleanGeneralAuthCallbackUrl,
   exchangeAuthCallback,
   resolvePendingAuthSession,
+  resolveRecoverySession,
 } from "../src/admin/authCallback";
 
 describe("hasPendingAuthCallback", () => {
@@ -51,6 +53,24 @@ describe("isAdminAuthCallback", () => {
   });
 });
 
+describe("isRecoveryAuthCallback", () => {
+  it("authFlow=recoveryが付いている場合はtrue（パスワード再設定リンク由来）", () => {
+    expect(isRecoveryAuthCallback({ search: "?authFlow=recovery&code=abc123" })).toBe(true);
+  });
+
+  it("authFlowが無い場合はfalse（一般ユーザーのsignUp確認メール由来）", () => {
+    expect(isRecoveryAuthCallback({ search: "?code=abc123" })).toBe(false);
+  });
+
+  it("authFlowがadmin等recovery以外の値の場合はfalse", () => {
+    expect(isRecoveryAuthCallback({ search: "?authFlow=admin&code=abc123" })).toBe(false);
+  });
+
+  it("searchが省略された場合もエラーにならずfalse", () => {
+    expect(isRecoveryAuthCallback()).toBe(false);
+  });
+});
+
 describe("resolveRootTree", () => {
   it("#adminが既にある場合はadmin", () => {
     expect(resolveRootTree({ hash: "#admin", search: "" })).toBe("admin");
@@ -60,8 +80,16 @@ describe("resolveRootTree", () => {
     expect(resolveRootTree({ hash: "", search: "?authFlow=admin&code=abc123" })).toBe("admin");
   });
 
+  it("#adminが無く、authFlow=recovery付きの認証コールバックがある場合はrecovery（パスワード再設定リンク）", () => {
+    expect(resolveRootTree({ hash: "", search: "?authFlow=recovery&code=abc123" })).toBe("recovery");
+  });
+
   it("#adminが無く、authFlowマーカーの無い認証コールバックの場合はgeneral（一般ユーザーのsignUp確認メール）", () => {
     expect(resolveRootTree({ hash: "", search: "?code=abc123" })).toBe("general");
+  });
+
+  it("authFlow=recoveryが付いていてもcode（認証コールバック）自体が無ければgeneral（マーカーだけでは再設定フローとして扱わない）", () => {
+    expect(resolveRootTree({ hash: "", search: "?authFlow=recovery" })).toBe("general");
   });
 
   it("認証コールバックが何も無い通常のトップページはgeneral", () => {
@@ -112,6 +140,18 @@ describe("cleanGeneralAuthCallbackUrl", () => {
     cleanGeneralAuthCallbackUrl();
 
     expect(replaceStateMock).not.toHaveBeenCalled();
+  });
+
+  it("authFlow=recoveryも取り除く（PasswordRecoveryGateでの再利用時にマーカーを残さない）", () => {
+    const replaceStateMock = stubWindowLocation(
+      "http://localhost:5173/?authFlow=recovery&code=abc123",
+    );
+    cleanGeneralAuthCallbackUrl();
+
+    expect(replaceStateMock).toHaveBeenCalledTimes(1);
+    const newUrl = replaceStateMock.mock.calls[0][2];
+    expect(newUrl).not.toContain("authFlow");
+    expect(newUrl).not.toContain("code=");
   });
 });
 
@@ -253,5 +293,42 @@ describe("resolvePendingAuthSession", () => {
     expect(deps.onExchangeSettled).toHaveBeenCalledWith({ success: false, error: authError });
     expect(deps.getSession).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ session: null });
+  });
+});
+
+describe("resolveRecoverySession", () => {
+  it("認証コールバック自体が無い場合、exchangeAuthCallbackを呼ばずinvalidLink:trueを返す（無効なリンクを誤ってexchangeしない）", async () => {
+    const exchangeAuthCallbackMock = vi.fn();
+
+    const result = await resolveRecoverySession({
+      location: { search: "", hash: "" },
+      hasPendingAuthCallback: () => false,
+      exchangeAuthCallback: exchangeAuthCallbackMock,
+    });
+
+    expect(exchangeAuthCallbackMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: false, invalidLink: true, error: null });
+  });
+
+  it("交換が成功した場合、success:trueを返す", async () => {
+    const result = await resolveRecoverySession({
+      location: { search: "?authFlow=recovery&code=abc123", hash: "" },
+      hasPendingAuthCallback: () => true,
+      exchangeAuthCallback: vi.fn().mockResolvedValue({ error: null }),
+    });
+
+    expect(result).toEqual({ success: true, invalidLink: false, error: null });
+  });
+
+  it("交換が失敗した場合（期限切れ・無効なリンク等）、success:falseとエラーを返す", async () => {
+    const authError = { message: "otp_expired" };
+
+    const result = await resolveRecoverySession({
+      location: { search: "?authFlow=recovery&code=expired", hash: "" },
+      hasPendingAuthCallback: () => true,
+      exchangeAuthCallback: vi.fn().mockResolvedValue({ error: authError }),
+    });
+
+    expect(result).toEqual({ success: false, invalidLink: false, error: authError });
   });
 });

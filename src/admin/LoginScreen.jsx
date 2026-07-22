@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { translateAuthError } from "./authErrorMessages";
+import { translateResetRequestError } from "./passwordResetErrorMessages";
 
 // emailRedirectTo は「リンクをクリックした後に戻ってくるURL」で、実行時の
 // window.location から組み立てる。こうすることで、ローカル開発
@@ -26,6 +27,19 @@ import { translateAuthError } from "./authErrorMessages";
 // （実際に起きていた不具合。詳細はsrc/admin/authCallback.jsのコメント参照）。
 function buildRedirectUrl() {
   return `${window.location.origin}${window.location.pathname}?authFlow=admin`;
+}
+
+// パスワード再設定メール（resetPasswordForEmail）専用のredirectTo。buildRedirectUrl
+// （Magic Link・admin専用）と同じ理由でorigin+pathnameを実行時に組み立てるが、
+// マーカーは ?authFlow=recovery にする。一般ユーザーのsignUp確認メール
+// （マーカー無し）・admin Magic Link（authFlow=admin）のどちらとも区別するためで、
+// これによりmain.jsxのresolveRootTreeがパスワード再設定リンクだけを
+// PasswordRecoveryGateへルーティングできる（src/admin/authCallback.js参照）。
+// パスワード再設定は一般ユーザー・admin・platform_adminの全員が同じ画面
+// （このLoginScreen）から行うため、admin/一般のどちらの文脈で呼ばれても
+// このマーカーは常に同じ値になる。
+function buildRecoveryRedirectUrl() {
+  return `${window.location.origin}${window.location.pathname}?authFlow=recovery`;
 }
 
 // 管理画面ログイン画面。
@@ -55,7 +69,7 @@ export default function LoginScreen({
   signUpSwitchLabel = "アカウントを作成",
   bannerMessage = null,
 }) {
-  const [mode, setMode] = useState("password"); // "password" | "magiclink"
+  const [mode, setMode] = useState("password"); // "password" | "magiclink" | "forgot"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("idle"); // idle | submitting | sent | error
@@ -121,10 +135,39 @@ export default function LoginScreen({
     setStatus("sent");
   }
 
+  // パスワードを忘れた方向け。resetPasswordForEmail()はメールアドレスが実際に
+  // 登録されているかどうかに関わらず同じ成功レスポンスを返す（Supabase Auth標準の
+  // 仕様。第三者にアカウントの存在有無を推測されないための設計）ため、成功時は
+  // 常に同一の文言を表示し、「このアドレスは登録されていません」等は一切出さない
+  // （詳細はpasswordResetErrorMessages.js参照）。
+  async function handleForgotPasswordSubmit(event) {
+    event.preventDefault();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
+      return;
+    }
+
+    setStatus("submitting");
+    setErrorMessage(null);
+
+    const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+      redirectTo: buildRecoveryRedirectUrl(),
+    });
+
+    if (error) {
+      setStatus("error");
+      setErrorMessage(translateResetRequestError(error));
+      return;
+    }
+
+    setStatus("sent");
+  }
+
   return (
     <main className="appShell adminShell">
       <div className="authScreen">
-        <h1>{title}</h1>
+        <h1>{mode === "forgot" ? "パスワードを再設定" : title}</h1>
 
         {bannerMessage && (
           <p className="settingsErrorText" role="alert">
@@ -181,6 +224,10 @@ export default function LoginScreen({
               </button>
             )}
 
+            <button type="button" className="authModeSwitchLink" onClick={() => switchMode("forgot")}>
+              パスワードを忘れた方
+            </button>
+
             {onSwitchToSignUp && (
               <button type="button" className="authModeSwitchLink" onClick={onSwitchToSignUp}>
                 {signUpSwitchLabel}
@@ -229,6 +276,55 @@ export default function LoginScreen({
               onClick={() => switchMode("password")}
             >
               パスワードでログインする
+            </button>
+          </>
+        )}
+
+        {mode === "forgot" && (
+          <>
+            {status === "sent" ? (
+              <p className="authSentMessage">
+                パスワード再設定メールを送信しました。メール内のリンクから新しいパスワードを
+                設定してください。
+              </p>
+            ) : (
+              <form onSubmit={handleForgotPasswordSubmit} className="authForm">
+                <p>
+                  登録しているメールアドレスを入力してください。パスワード再設定用のメールを
+                  送信します。
+                </p>
+
+                <label className="flowFieldLabel">
+                  メールアドレス
+                  <input
+                    type="email"
+                    className="settingsTextInput"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    autoComplete="email"
+                  />
+                </label>
+
+                {status === "error" && <p className="settingsErrorText">{errorMessage}</p>}
+
+                <button
+                  type="submit"
+                  className="importConfirmButton"
+                  disabled={status === "submitting" || !email.trim()}
+                >
+                  {status === "submitting" ? "送信中…" : "再設定メールを送信"}
+                </button>
+              </form>
+            )}
+
+            <button
+              type="button"
+              className="authModeSwitchLink"
+              onClick={() => switchMode("password")}
+            >
+              ログインへ戻る
             </button>
           </>
         )}

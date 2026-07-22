@@ -505,6 +505,94 @@ Authは（Magic Linkログインでも、一般ユーザーのアカウント作
 
 ---
 
+## Step 17. パスワード再設定機能
+
+一般ユーザー・admin・platform_adminの全員が、ログイン画面の
+「パスワードを忘れた方」から自分でパスワードを再設定できます
+（`src/admin/LoginScreen.jsx`の`forgot`モード）。company_members・role・
+platform_adminsには一切触れないSupabase Auth標準機能だけで完結しており、
+DBスキーマの変更は不要です。
+
+### 17-1. 全体の仕組み
+
+1. ログイン画面で「パスワードを忘れた方」→ メールアドレスを入力し
+   「再設定メールを送信」を押す
+2. `supabase.auth.resetPasswordForEmail(email, { redirectTo })`を呼ぶ
+   （`redirectTo`には自前のマーカー`?authFlow=recovery`を付与する）
+3. Supabaseから再設定メールが届く（存在しないメールアドレスの場合も、
+   第三者にアカウントの有無を推測されないよう同じ成功レスポンスが返るのが
+   Supabase Auth標準の仕様。アプリ側の表示も常に同一の成功メッセージにしている）
+4. メール内リンクをクリックすると、`?authFlow=recovery&code=...`付きで
+   アプリへ戻ってくる
+5. `main.jsx`の`resolveRootTree`がこのマーカーを検知し、`AppAuthGate`・
+   `AuthGate`のどちらとも別の専用ツリー`PasswordRecoveryGate`
+   （`src/PasswordRecoveryGate.jsx`）を表示する
+6. `PasswordRecoveryGate`が`exchangeCodeForSession`でセッションを確立し、
+   新しいパスワードの入力画面（`src/admin/ResetPasswordScreen.jsx`）を表示する
+7. `supabase.auth.updateUser({ password })`でパスワードを変更し、成功したら
+   その場のセッションを`signOut()`してから、通常のログイン画面へ戻す
+   （新しいパスワードで改めてログインしてもらう。中途半端な再設定用セッションを
+   残さないため、変更完了後は必ずログアウトする設計にしている）
+
+### 17-2. なぜ独自マーカー（`authFlow=recovery`）で判定しているか
+
+このプロジェクトは`detectSessionInUrl: false`にしており、認証コールバックは
+常に`exchangeAuthCallback()`が明示的に`exchangeCodeForSession`/`setSession`を
+呼ぶ設計です（16-10節参照）。Supabase Authの`PASSWORD_RECOVERY`イベントは
+`detectSessionInUrl`の自動URL検出パスでしか発火しないため、このプロジェクトの
+構成では届きません。そのため、管理画面Magic Link（`authFlow=admin`）と
+全く同じ仕組みで、パスワード再設定リンクにも`authFlow=recovery`という
+自前のマーカーを付け、それだけで判定しています。
+
+### 17-3. Redirect URLsの追加設定は不要です
+
+16-10節と同じ理由（ワイルドカード付きのRedirect URLs）で、追加のDashboard設定は
+不要です。ワイルドカードを使わず完全一致のURLだけを登録している場合のみ、
+`?authFlow=recovery`付きのバリエーションも許可リストに追加してください。
+
+### 17-4. pending invite（招待コード）との関係
+
+`PasswordRecoveryGate`は`AuthenticatedBotScreen`・招待コードの自動redeem処理
+（`NoMembershipGate`）を一切importしていません。パスワード再設定リンクの交換も
+「ログイン済み」セッションを作りますが、この専用ツリーがAuthenticatedBotScreenを
+経由しない設計になっているため、招待コード入力〜アカウント作成の途中で保存された
+pending invite（`localStorage`）が誤って自動redeemされることはありません。
+
+### 17-5. 実地確認手順
+
+1. `#admin`または一般利用者画面のログイン画面で「パスワードを忘れた方」を開く
+2. 実際に使っているアカウントのメールアドレスを入力し「再設定メールを送信」
+3. 「パスワード再設定メールを送信しました」の案内が出ることを確認
+4. 届いたメール内のリンクを**同じブラウザ**でクリックする
+   （PKCEのcode_verifierがブラウザのlocalStorageに保存されているため、
+   別ブラウザ・別端末で開くと交換に失敗します。詳細は下記17-6参照）
+5. 「新しいパスワードを設定」画面が表示され、`#admin`や通常のBot画面・
+   招待コード入力画面へ誤って遷移しないことを確認する
+6. 新しいパスワードを入力し「パスワードを変更」を押す
+7. 「パスワードを変更しました。」の案内後、ログイン画面へ戻ることを確認する
+8. 新しいパスワードでログインできることを確認する
+9. （admin/platform_adminの場合）ログイン後、`#admin`へ問題なくアクセスできる
+   ことを確認する
+
+### 17-6. 別ブラウザ・別端末でリンクを開いた場合
+
+パスワード再設定リンクの交換も、既存の確認メール同様PKCEを使っているため、
+リンクを送信したときと**同じブラウザ**で開く必要があります。別ブラウザ・
+別端末で開いた場合は「パスワード再設定リンクの有効期限が切れているか、
+無効です」というエラーになり、「ログイン画面へ戻る」から改めて
+パスワード再設定をやり直すことになります（詰みにはなりません）。
+
+### 17-7. 将来Custom SMTP / Resendへ切り替える場合
+
+今回の実装は`supabase.auth.resetPasswordForEmail()`というSupabase Auth標準の
+APIだけを使っており、メール送信経路（Supabase標準メール／Custom SMTP／Resend等）
+には一切依存していません。将来Supabase DashboardのAuthentication設定で
+Custom SMTP（Resend等）へ切り替えても、**アプリ側のコード変更は不要**です
+（送信元・送信上限が変わるだけで、`resetPasswordForEmail`の呼び出し方・
+`redirectTo`の仕組み・`PasswordRecoveryGate`の処理は一切変わりません）。
+
+---
+
 ## 生成AI（ChatGPT等）へ顧客情報を入力する場合の注意
 
 このアプリは、Concurの経費タイプ一覧や経費規程等の顧客情報をChatGPT等の生成AIへ入力し、

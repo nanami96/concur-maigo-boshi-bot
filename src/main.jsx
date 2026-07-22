@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import AppAuthGate from './AppAuthGate.jsx';
 import AdminRoot from './admin/AdminRoot.jsx';
 import AuthGate from './admin/AuthGate.jsx';
+import PasswordRecoveryGate from './PasswordRecoveryGate.jsx';
 import { resolveRootTree } from './admin/authCallback.js';
 import './styles.css';
 
@@ -22,28 +23,38 @@ import './styles.css';
 // resolveRootTreeはLoginScreen.jsxのMagic Linkだけに付与しているauthFlow=admin
 // マーカーの有無で区別し、それが無い認証コールバック（＝一般ユーザーのsignUp確認メール）は
 // 通常のAppAuthGateツリーへ進ませる（自動的な会社参加処理はAuthenticatedBotScreen側が担当する）。
-function shouldShowAdminTree() {
-  return (
-    resolveRootTree({ hash: window.location.hash, search: window.location.search }) === 'admin'
-  );
+//
+// パスワード再設定リンク（authFlow=recoveryマーカー）は、admin・generalのどちらとも
+// 別の第3のツリー（PasswordRecoveryGate）へルーティングする。パスワード再設定リンクの
+// 交換も通常のサインインと同じ形でセッションを確立するため、もしAppAuthGateの通常ツリーで
+// 処理すると、ログイン済み・未所属と誤認されてpending invite（招待コード）の自動redeemが
+// 意図せず走ってしまう恐れがある。詳細はPasswordRecoveryGate.jsx参照。
+function resolveTree() {
+  return resolveRootTree({ hash: window.location.hash, search: window.location.search });
 }
 
 function RootSwitch() {
-  const [isAdmin, setIsAdmin] = useState(shouldShowAdminTree);
+  const [tree, setTree] = useState(resolveTree);
 
   useEffect(() => {
-    const handleHashChange = () => setIsAdmin(shouldShowAdminTree());
+    const handleHashChange = () => setTree(resolveTree());
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  return isAdmin ? (
-    <AuthGate>
-      <AdminRoot />
-    </AuthGate>
-  ) : (
-    <AppAuthGate />
-  );
+  if (tree === 'admin') {
+    return (
+      <AuthGate>
+        <AdminRoot />
+      </AuthGate>
+    );
+  }
+
+  if (tree === 'recovery') {
+    return <PasswordRecoveryGate />;
+  }
+
+  return <AppAuthGate />;
 }
 
 createRoot(document.getElementById('root')).render(

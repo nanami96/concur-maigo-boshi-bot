@@ -26,16 +26,37 @@ export function isAdminAuthCallback({ search = "" } = {}) {
   return new URLSearchParams(search).get("authFlow") === "admin";
 }
 
-// main.jsxの「#adminツリー（AuthGate+AdminRoot）を表示すべきか、一般利用者ツリー
-// （AppAuthGate）を表示すべきか」という起動時の振り分け判断を、window.location等の
-// ブラウザAPIから切り離した純粋関数として切り出したもの（authGateStatus.jsの
-// resolveAuthGateViewと同じ狙い：ロジックだけをテストしやすくする）。
+// 認証コールバックが「パスワード再設定（resetPasswordForEmail経由）」由来かどうかを
+// 判定する。isAdminAuthCallback()と全く同じ考え方：LoginScreen.jsxの
+// buildRecoveryRedirectUrlがresetPasswordForEmail()のredirectToへ付与する
+// ?authFlow=recovery マーカーの有無だけで判定する。
+//
+// なぜSupabaseの"type=recovery"パラメータやonAuthStateChangeの"PASSWORD_RECOVERY"
+// イベントに頼らないか：このプロジェクトはdetectSessionInUrl:falseにしており、
+// 認証コールバックの処理は常にexchangeAuthCallback()（exchangeCodeForSession/
+// setSessionの明示呼び出し）で行っている。この明示呼び出しは、リンクの種類
+// （signup確認・Magic Link・パスワード再設定のどれか）に関わらず常に"SIGNED_IN"
+// イベントを発火する（"PASSWORD_RECOVERY"イベントはsupabase-js内部のURL自動検出
+// パス経由でしか発火しないため、detectSessionInUrl:falseの構成では届かない）。
+// そのため「これがrecoveryかどうか」はイベント種別ではなく、authFlow=admin方式と
+// 全く同じ自前マーカーで判定する。
+export function isRecoveryAuthCallback({ search = "" } = {}) {
+  return new URLSearchParams(search).get("authFlow") === "recovery";
+}
+
+// main.jsxの「#adminツリー（AuthGate+AdminRoot）・パスワード再設定ツリー
+// （PasswordRecoveryGate）・一般利用者ツリー（AppAuthGate）のどれを表示すべきか」
+// という起動時の振り分け判断を、window.location等のブラウザAPIから切り離した
+// 純粋関数として切り出したもの（authGateStatus.jsのresolveAuthGateViewと
+// 同じ狙い：ロジックだけをテストしやすくする）。
 //
 //   ・#adminが既にURLに付いている                         → "admin"
 //   ・#adminは無いが、管理画面Magic Linkの認証コールバック  → "admin"
 //     （authFlow=adminマーカー付きの?code=...等。ログイン処理完了後、
 //     AuthGate.jsxのredirectToAdminAfterSignInが#adminへ書き換える）
-//   ・それ以外（#adminも無く、管理画面マーカーも無い）      → "general"
+//   ・#adminは無いが、パスワード再設定の認証コールバック    → "recovery"
+//     （authFlow=recoveryマーカー付きの?code=...等）
+//   ・それ以外（#adminも無く、上記マーカーも無い）          → "general"
 //     （一般ユーザーのsignUp確認メール由来の?code=...を含む）
 export function resolveRootTree({ hash = "", search = "" } = {}) {
   if (hash.startsWith("#admin")) {
@@ -43,7 +64,20 @@ export function resolveRootTree({ hash = "", search = "" } = {}) {
   }
 
   const location = { hash, search };
-  return hasPendingAuthCallback(location) && isAdminAuthCallback(location) ? "admin" : "general";
+
+  if (!hasPendingAuthCallback(location)) {
+    return "general";
+  }
+
+  if (isAdminAuthCallback(location)) {
+    return "admin";
+  }
+
+  if (isRecoveryAuthCallback(location)) {
+    return "recovery";
+  }
+
+  return "general";
 }
 
 // URLに含まれる認証コールバック情報（PKCEの?code=、またはimplicit flowの
@@ -125,20 +159,52 @@ export async function resolvePendingAuthSession({
   return { session: data.session };
 }
 
-// 一般ユーザー側(AppAuthGate)向け：認証コールバックの痕跡（?code=・#access_token=等）を
-// URLから取り除く。管理画面側のredirectToAdminAfterSignIn（AuthGate.jsx）とは異なり、
-// ハッシュを#adminへ書き換えることはしない（一般ユーザーは常にルート(/)に留まる）。
+// PasswordRecoveryGate.jsx向け：パスワード再設定リンクの認証コールバックを
+// 明示的に交換するだけの、resolvePendingAuthSessionより単純な専用フロー。
+//
+// パスワード再設定は「セッションが確立できたかどうか」だけを見ればよく、
+// 一般ユーザー/管理画面のように「交換失敗時に別のURLへ正規化する」といった
+// 後処理の分岐が無いため、resolvePendingAuthSessionを流用せずこの専用関数に
+// している。また、URLにcode自体が無い（＝そもそも有効なリンクではない）場合を
+// 「invalidLink」として明確に区別し、exchangeAuthCallbackを呼ばずに即座に
+// エラー扱いにする（hasPendingAuthCallbackがfalseのままexchangeAuthCallbackを
+// 呼んでも、内部でcode/tokenが見つからずerror:nullを返すだけなので、呼び出し側が
+// 誤って「成功した」と扱ってしまう危険があるため、ここで明示的に弾く）。
+export async function resolveRecoverySession({
+  location,
+  hasPendingAuthCallback: hasPendingAuthCallbackFn,
+  exchangeAuthCallback: exchangeAuthCallbackFn,
+}) {
+  if (!hasPendingAuthCallbackFn(location)) {
+    return { success: false, invalidLink: true, error: null };
+  }
+
+  const { error } = await exchangeAuthCallbackFn(location);
+
+  if (error) {
+    return { success: false, invalidLink: false, error };
+  }
+
+  return { success: true, invalidLink: false, error: null };
+}
+
+// 一般ユーザー側(AppAuthGate)・パスワード再設定側(PasswordRecoveryGate)向け：
+// 認証コールバックの痕跡（?code=・?authFlow=・#access_token=等）をURLから取り除く。
+// 管理画面側のredirectToAdminAfterSignIn（AuthGate.jsx）とは異なり、ハッシュを
+// #adminへ書き換えることはしない（どちらも常にルート(/)に留まる）。
 // 何も取り除くものが無ければ履歴を一切操作しない（無駄なreplaceStateを避ける）。
 export function cleanGeneralAuthCallbackUrl() {
   const url = new URL(window.location.href);
   const hadCode = url.searchParams.has("code");
+  const hadAuthFlow = url.searchParams.has("authFlow");
   const hadHashToken = /(^|[#&])access_token=/.test(url.hash);
 
-  if (!hadCode && !hadHashToken) {
+  if (!hadCode && !hadAuthFlow && !hadHashToken) {
     return;
   }
 
   url.searchParams.delete("code");
+  url.searchParams.delete("authFlow");
   if (hadHashToken) {
     url.hash = "";
   }
