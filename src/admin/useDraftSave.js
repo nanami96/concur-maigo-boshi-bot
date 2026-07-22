@@ -3,9 +3,9 @@ import { isSupabaseConfigured } from "../lib/supabaseClient";
 import { getCompanyDbId, saveDraft } from "../data/draftConfigRepository";
 import {
   canAttemptSave,
+  computeDirtyTransition,
   computeStateAfterSaveResult,
   resolveSaveErrorMessage,
-  shouldMarkDirtyOnEditorChange,
 } from "./draftSaveState";
 
 // AdminWorkspaceの編集内容(company/policies/expenseTypes/flow)を
@@ -19,8 +19,11 @@ import {
 // ・companyCodeから対象会社のcompanies.id（uuid）を解決する
 //   （見つからない＝未登録 or 権限なしの場合は保存を無効化するだけで、
 //   ローカルでの編集自体は妨げない）
-// ・dirty判定: company/policies/expenseTypes/flowのいずれかの参照が
-//   変わったら「未保存」とみなす（マウント直後の1回目は除く）。
+// ・dirty判定: company/policies/expenseTypes/flowのいずれかの参照が、
+//   直前に確定させたbaseline（＝最後に保存済み/読み込み済みとみなした内容）
+//   から変わったら「未保存」とみなす（初回ロード・normalizeFlowによる
+//   自動正規化・保存前の状態に戻す、等の「ユーザーが編集していない」変化は
+//   baselineの更新だけに留め、dirty化しない）。
 //   dirtyのまま何分・何時間経ってもSupabaseへは一切書き込まれない。
 // ・saveNow()を呼んだ時だけdraft_configsへ保存する
 //   （明示保存ボタン・公開直前の強制保存・会社切替時の「保存して移動」等、
@@ -37,10 +40,21 @@ export function useDraftSave({ companyCode, editorState, initialUpdatedAt }) {
   const [lastSavedAt, setLastSavedAt] = useState(initialUpdatedAt || null);
   const [errorType, setErrorType] = useState(null);
 
-  const isFirstEditorRun = useRef(true);
   const savingRef = useRef(false);
   const editorStateRef = useRef(editorState);
   editorStateRef.current = editorState;
+
+  // dirty判定の基準となる「最後に保存済み/読み込み済みとみなした内容」への参照
+  // （baseline）。computeDirtyTransition参照。
+  const baselineRef = useRef({
+    company: editorState.company,
+    policies: editorState.policies,
+    expenseTypes: editorState.expenseTypes,
+    flow: editorState.flow,
+  });
+  // 「保存前の状態に戻す」等、外部からeditorStateを丸ごと差し替えた直後の
+  // 1回だけ、その変化をdirty化しない（loadCleanStateが立てる）。
+  const skipNextChangeRef = useRef(false);
 
   // --- 会社codeから保存先(companies.id)を解決する ---------------------------
   useEffect(() => {
@@ -88,11 +102,27 @@ export function useDraftSave({ companyCode, editorState, initialUpdatedAt }) {
   // --- dirty判定 -----------------------------------------------------------
   // ここではdirtyフラグを立てるだけで、保存は一切行わない
   // （以前はこの変化を起点に自動保存タイマーを張っていたが、今は張らない）。
+  //
+  // baselineRef.currentとの参照比較（computeDirtyTransition）で判定する。
+  // React.StrictMode下でこのeffect自体が（依存配列が変わらないまま）2回
+  // 実行されても、2回目の時点でeditorStateとbaselineの参照は一致したままの
+  // ため、誤ってdirty化されることはない。
   useEffect(() => {
-    if (shouldMarkDirtyOnEditorChange({ isFirstRun: isFirstEditorRun.current })) {
+    const transition = computeDirtyTransition({
+      editorState,
+      baseline: baselineRef.current,
+      skipNextChange: skipNextChangeRef.current,
+    });
+
+    if (!transition.changed) {
+      return;
+    }
+
+    if (transition.shouldMarkDirty) {
       setIsDirty(true);
     }
-    isFirstEditorRun.current = false;
+    baselineRef.current = transition.nextBaseline;
+    skipNextChangeRef.current = transition.nextSkipNextChange;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorState.company, editorState.policies, editorState.expenseTypes, editorState.flow]);
 
@@ -108,7 +138,11 @@ export function useDraftSave({ companyCode, editorState, initialUpdatedAt }) {
     setSaveStatus("saving");
     setErrorType(null);
 
-    const { row, error } = await saveDraft(companyDbId, editorStateRef.current);
+    // 保存に送る内容と、成功時にbaselineへ反映する内容は、必ずこの呼び出し開始時点の
+    // 値で揃える（await中にユーザーがさらに編集してeditorStateRef.currentが
+    // 進んでしまっても、baselineが「実際に保存した内容」からずれないようにするため）。
+    const stateAtSaveStart = editorStateRef.current;
+    const { row, error } = await saveDraft(companyDbId, stateAtSaveStart);
     savingRef.current = false;
 
     if (error) {
@@ -123,16 +157,25 @@ export function useDraftSave({ companyCode, editorState, initialUpdatedAt }) {
       setLastSavedAt(next.lastSavedAt);
     }
 
+    if (!error) {
+      baselineRef.current = {
+        company: stateAtSaveStart.company,
+        policies: stateAtSaveStart.policies,
+        expenseTypes: stateAtSaveStart.expenseTypes,
+        flow: stateAtSaveStart.flow,
+      };
+    }
+
     return !error;
   }, [canSave, companyDbId]);
 
   // 「保存前の状態に戻す」のように、外部（AdminWorkspace）が
   // editor.loadState()でstateを丸ごと差し替えた直後に呼ぶ。
   // dirty判定のuseEffectは、editorStateの参照が変わるたびに発火するが、
-  // isFirstEditorRunを再度trueにしておくことで「読み込み直しただけ」として
-  // 次の1回だけdirty化をスキップさせる（マウント直後の初回と全く同じ仕組み）。
+  // skipNextChangeRefを立てておくことで「読み込み直しただけ」として
+  // 次の1回だけdirty化をスキップし、baselineの更新だけに留めさせる。
   const loadCleanState = useCallback((updatedAt) => {
-    isFirstEditorRun.current = true;
+    skipNextChangeRef.current = true;
     setIsDirty(false);
     setSaveStatus("idle");
     setErrorType(null);

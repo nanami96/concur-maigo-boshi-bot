@@ -21,6 +21,46 @@ function createIssue(level, id, message, questionId, optionId) {
   return { level, id, message, questionId, optionId: optionId ?? null };
 }
 
+// rootQuestionIdから選択肢のnext.questionIdを辿り、経路上で同じ質問へ戻る
+// （＝そのquestionId自身が自分の子孫として再度現れる）直接的・間接的な循環を検出する。
+// 管理画面のUI（「次の質問へ進む」）は常に新しい質問を作るため、通常の編集操作だけでは
+// 循環は作れない。循環が起こり得るのは、config.json取り込み・Excel取り込み等の
+// データ変換由来のみだが、変換側の不具合や手動でのデータ編集に備え、
+// 公開ゲート（runConfigChecks経由）で確実に検出できるようにしておく。
+function findCycleQuestionId(flow) {
+  const path = new Set();
+
+  function visit(questionId) {
+    const question = flow.questions[questionId];
+
+    if (!questionId || !question) {
+      return null;
+    }
+
+    if (path.has(questionId)) {
+      return questionId;
+    }
+
+    path.add(questionId);
+
+    for (const optionId of question.optionIds) {
+      const option = flow.options[optionId];
+
+      if (option?.next?.type === "question") {
+        const cycleAt = visit(option.next.questionId);
+        if (cycleAt) {
+          return cycleAt;
+        }
+      }
+    }
+
+    path.delete(questionId);
+    return null;
+  }
+
+  return visit(flow.rootQuestionId);
+}
+
 export function checkFlow(flow, expenseTypes = []) {
   const errors = [];
   const warnings = [];
@@ -36,6 +76,18 @@ export function checkFlow(flow, expenseTypes = []) {
     );
 
     return { errors, warnings };
+  }
+
+  const cycleQuestionId = findCycleQuestionId(flow);
+  if (cycleQuestionId) {
+    errors.push(
+      createIssue(
+        "error",
+        `flow-cycle-${cycleQuestionId}`,
+        `${describeQuestion(flow.questions[cycleQuestionId])}を含む質問フローに循環（同じ質問へ戻ってしまう経路）が検出されました。`,
+        cycleQuestionId,
+      ),
+    );
   }
 
   const expenseTypeIds = new Set(expenseTypes.map((item) => item.id));
@@ -125,6 +177,18 @@ export function checkFlow(flow, expenseTypes = []) {
             );
           }
         });
+      }
+
+      if (option.next.type === "question" && !flow.questions[option.next.questionId]) {
+        errors.push(
+          createIssue(
+            "error",
+            `option-next-question-missing-${optionId}`,
+            `${describeQuestion(question)}の${describeOption(option)}が、存在しない次の質問を参照しています。`,
+            questionId,
+            optionId,
+          ),
+        );
       }
     });
   });

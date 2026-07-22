@@ -1,18 +1,71 @@
 import { describe, it, expect } from "vitest";
 import {
-  shouldMarkDirtyOnEditorChange,
+  computeDirtyTransition,
   computeStateAfterSaveResult,
   canAttemptSave,
   resolveSaveErrorMessage,
 } from "../src/admin/draftSaveState";
 
-describe("shouldMarkDirtyOnEditorChange", () => {
-  it("マウント直後の1回目（下書き/静的configを読み込んだだけ）はdirtyにしない", () => {
-    expect(shouldMarkDirtyOnEditorChange({ isFirstRun: true })).toBe(false);
+function makeEditorState(overrides = {}) {
+  return {
+    company: {},
+    policies: [],
+    expenseTypes: [],
+    flow: {},
+    ...overrides,
+  };
+}
+
+describe("computeDirtyTransition", () => {
+  it("editorStateがbaselineと参照として同一（何も変わっていない）ならdirty化しない", () => {
+    const editorState = makeEditorState();
+    const result = computeDirtyTransition({
+      editorState,
+      baseline: editorState,
+      skipNextChange: false,
+    });
+    expect(result.changed).toBe(false);
+    expect(result.shouldMarkDirty).toBe(false);
   });
 
-  it("2回目以降（実際の編集）はdirtyにする", () => {
-    expect(shouldMarkDirtyOnEditorChange({ isFirstRun: false })).toBe(true);
+  it("同じ依存関係でeffectが2回実行されても（React.StrictMode相当）、2回目もdirty化しない", () => {
+    // 1回目：baselineと一致（初回ロード時と同じ状態）
+    const editorState = makeEditorState();
+    const first = computeDirtyTransition({
+      editorState,
+      baseline: editorState,
+      skipNextChange: false,
+    });
+    // 2回目：StrictModeによる再実行を模して、1回目の結果（nextBaseline）を
+    // baselineとして同じeditorStateで再度呼ぶ。これがマウント直後に
+    // 誤ってdirty=trueになっていた不具合の再現ケース。
+    const second = computeDirtyTransition({
+      editorState,
+      baseline: first.nextBaseline,
+      skipNextChange: first.nextSkipNextChange,
+    });
+    expect(first.shouldMarkDirty).toBe(false);
+    expect(second.changed).toBe(false);
+    expect(second.shouldMarkDirty).toBe(false);
+  });
+
+  it("実際にflowの参照が変わった（編集された）場合はdirty化し、baselineを更新する", () => {
+    const baseline = makeEditorState();
+    const editorState = makeEditorState({ flow: { edited: true } });
+    const result = computeDirtyTransition({ editorState, baseline, skipNextChange: false });
+    expect(result.changed).toBe(true);
+    expect(result.shouldMarkDirty).toBe(true);
+    expect(result.nextBaseline.flow).toBe(editorState.flow);
+  });
+
+  it("skipNextChangeが立っている場合、変化を検知してもdirty化せずbaselineだけ更新する（保存前の状態に戻す直後）", () => {
+    const baseline = makeEditorState();
+    const editorState = makeEditorState({ flow: { reverted: true } });
+    const result = computeDirtyTransition({ editorState, baseline, skipNextChange: true });
+    expect(result.changed).toBe(true);
+    expect(result.shouldMarkDirty).toBe(false);
+    expect(result.nextBaseline.flow).toBe(editorState.flow);
+    expect(result.nextSkipNextChange).toBe(false);
   });
 });
 

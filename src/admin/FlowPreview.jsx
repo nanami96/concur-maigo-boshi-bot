@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import QuestionEngine from "../engine/QuestionEngine";
 import { buildConfigFromFlow } from "../flow/buildConfigFromFlow";
 import { computeAnswersToReachQuestion } from "../flow/computeAnswersToReachQuestion";
@@ -67,8 +67,18 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [messages, setMessages] = useState([]);
   const [result, setResult] = useState(null);
+  // このプレビュー実行中に既に表示した質問IDの集合。設定データに循環（同じ質問へ
+  // 戻ってしまう経路）があった場合に、質問が無限に繰り返されるのを防ぐための
+  // 最後の砦。根本原因はbuildFlowFromConfig（合流点の複製）・checkFlow（循環の検出、
+  // 公開ブロック）側で対処済みだが、Excel取り込み等の別経路や、まだ気づいていない
+  // データ不整合があっても、少なくともプレビュー画面が無限に進み続けることだけは
+  // 常に防ぐ。
+  const [flowError, setFlowError] = useState(null);
+  const visitedQuestionIdsRef = useRef(new Set());
 
   useEffect(() => {
+    setFlowError(null);
+
     if (startQuestionId && config.questions.some((question) => question.id === startQuestionId)) {
       const ancestorPath = computeAnswersToReachQuestion(flow, startQuestionId);
       const targetQuestion = config.questions.find((question) => question.id === startQuestionId);
@@ -88,13 +98,18 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
         };
       });
 
+      visitedQuestionIdsRef.current = new Set(
+        [...ancestorPath.map(({ questionId }) => questionId), targetQuestion.id].filter(Boolean),
+      );
       setCurrentQuestion(targetQuestion);
       setMessages(breadcrumbMessages);
       setResult(null);
       return;
     }
 
-    setCurrentQuestion(engine.getFirstQuestion());
+    const firstQuestion = engine.getFirstQuestion();
+    visitedQuestionIdsRef.current = new Set(firstQuestion ? [firstQuestion.id] : []);
+    setCurrentQuestion(firstQuestion);
     setMessages([]);
     setResult(null);
     // config が変わるたびに（= flowの編集内容が変わるたびに）プレビューを最初からやり直す。
@@ -116,23 +131,52 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
     ];
 
     if (nextQuestion) {
+      if (visitedQuestionIdsRef.current.has(nextQuestion.id)) {
+        // 根本原因（合流点の複製漏れ等）はbuildFlowFromConfig/checkFlow側で
+        // 対処済みのはずだが、万一すり抜けた場合でも無限に質問を繰り返さない
+        // ための最終防御。データを捏造せず、はっきり停止して知らせる。
+        setMessages(newMessages);
+        setFlowError(
+          "質問フローに循環が検出されました（同じ質問へ戻ってしまう経路があります）。設定チェックで内容をご確認ください。",
+        );
+        return;
+      }
+
+      visitedQuestionIdsRef.current.add(nextQuestion.id);
       setMessages(newMessages);
       setCurrentQuestion(nextQuestion);
       setResult(null);
       return;
     }
 
+    const nextResult = engine.getResult();
+
+    if (!nextResult) {
+      // 次の質問も判定結果も無い＝この回答の組み合わせに一致するルールが無い
+      // 行き止まり。以前はここで何もせず同じ質問を再表示し続けてしまっていた
+      // （合流点を含むflowの変換不備で発生し得る症状）。捏造した結果を返す
+      // ことはせず、行き止まりであることをはっきり表示する。
+      setMessages(newMessages);
+      setFlowError(
+        "この回答の組み合わせに一致する結果が見つかりませんでした。設定チェックで内容をご確認ください。",
+      );
+      return;
+    }
+
     setMessages(newMessages);
-    setResult(engine.getResult());
+    setResult(nextResult);
   }
 
   function handleRestart() {
     if (onClearStart) {
       onClearStart();
     }
-    setCurrentQuestion(engine.reset());
+    const firstQuestion = engine.reset();
+    visitedQuestionIdsRef.current = new Set(firstQuestion ? [firstQuestion.id] : []);
+    setCurrentQuestion(firstQuestion);
     setMessages([]);
     setResult(null);
+    setFlowError(null);
   }
 
   const resultNote =
@@ -169,7 +213,16 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
           ),
         )}
 
-        {!result && (
+        {flowError && (
+          <div className="messageRow bot">
+            <div className="avatar">Bot</div>
+            <div className="messageBubble">
+              <p className="flowIssue error">⚠ {flowError}</p>
+            </div>
+          </div>
+        )}
+
+        {!result && !flowError && (
           <div className="messageRow bot">
             <div className="avatar">Bot</div>
             <div className="messageBubble">

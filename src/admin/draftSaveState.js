@@ -2,12 +2,53 @@
 // Reactのstate/effectから切り離してあるので、Vitestで直接検証できる
 // （このプロジェクトの既存テスト方針：pure関数のみをテストし、jsdom/RTLは使わない）。
 
-// 編集内容(company/policies/expenseTypes/flow)のいずれかが変わった時に
-// dirty（未保存の変更あり）とみなしてよいかを判定する。
-// マウント直後の最初の1回（＝下書き/静的configを読み込んだだけ）は
-// dirtyにしない（読み込んだ直後に無意味な保存が走るのを防ぐため）。
-export function shouldMarkDirtyOnEditorChange({ isFirstRun }) {
-  return !isFirstRun;
+// editorState(company/policies/expenseTypes/flow)の現在値と、直前に確定させた
+// baseline（＝最後に「保存済み/読み込み済み」とみなした内容）を参照比較し、
+// dirty化すべきかどうかを判定する純粋関数。
+//
+// 以前は「マウント直後の1回目かどうか」を示すisFirstRunフラグ（useEffect内で
+// true→falseに一度だけ切り替える方式）で判定していたが、これは
+// React.StrictMode（開発時のみ、mount直後にuseEffectをもう一度実行して
+// 副作用の副作用を検出する仕組み）と相性が悪かった：1回目の実行でfalseに
+// なった直後、StrictModeによる2回目の実行を「もう初回ではない＝編集された」
+// と誤認し、実際には何も編集していないのにdirty=trueになってしまっていた
+// （特定の会社のデータに依存しない構造的な不具合で、会社を開いた直後に必ず再現する）。
+//
+// baseline比較方式であれば、2回目の実行時点でもeditorStateとbaselineの
+// 参照は完全に一致したままなので（何も変更されていないため）、
+// 「実行された回数」に関係なく正しくdirty=falseのままになる。
+//
+// skipNextChange: 「保存前の状態に戻す」等、外部から丸ごとeditorStateを
+// 差し替えた直後の変化を1回だけdirty化せず、baselineの更新だけに留めるための
+// フラグ。呼び出し側（useDraftSave）が、状態の差し替えを行うタイミングで
+// true にしてから渡す。
+export function computeDirtyTransition({ editorState, baseline, skipNextChange }) {
+  const changed =
+    editorState.company !== baseline.company ||
+    editorState.policies !== baseline.policies ||
+    editorState.expenseTypes !== baseline.expenseTypes ||
+    editorState.flow !== baseline.flow;
+
+  if (!changed) {
+    return {
+      changed: false,
+      shouldMarkDirty: false,
+      nextBaseline: baseline,
+      nextSkipNextChange: skipNextChange,
+    };
+  }
+
+  return {
+    changed: true,
+    shouldMarkDirty: !skipNextChange,
+    nextBaseline: {
+      company: editorState.company,
+      policies: editorState.policies,
+      expenseTypes: editorState.expenseTypes,
+      flow: editorState.flow,
+    },
+    nextSkipNextChange: false,
+  };
 }
 
 // 保存処理（saveDraft）の結果を受けて、次のsave状態を計算する。

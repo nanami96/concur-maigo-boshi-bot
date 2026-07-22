@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { availableCompanies, getConfig } from "@configSource";
 import { buildFlowFromConfig } from "../flow/buildFlowFromConfig";
+import { normalizeFlow } from "../flow/normalizeFlow";
 import { useWorkspaceEditor } from "./useWorkspaceEditor";
 import { useDraftSave } from "./useDraftSave";
 import { usePublish } from "./usePublish";
@@ -295,6 +296,28 @@ function AdminWorkspace({
   );
 }
 
+// initialState.flowに対して常にnormalizeFlowを通してから使う。
+//
+// buildFlowFromConfigは静的config.json→flow変換時にoption.idの欠損・重複をその場で
+// 修復するが、これは新規変換時にしか効かない。draft_configs（Supabase）から読み込んだ
+// flowはbuildFlowFromConfigを経由しないため、過去に（修正前のロジック等で）option.idが
+// 欠損・重複したまま保存されてしまったflowは、変換ロジックを直しただけでは自動的に
+// 直らない。そのため、静的config由来・draft由来を問わず、useWorkspaceEditorへ渡す
+// 直前のこの1箇所で必ずnormalizeFlowを通し、発生源に関わらず安全な状態を保証する。
+function normalizeInitialState(initialState) {
+  if (!initialState) {
+    return { initialState: null, flowIssues: [] };
+  }
+
+  const { flow, issues } = normalizeFlow(initialState.flow);
+
+  if (issues.length > 0) {
+    console.warn("この会社の質問フローに不整合が見つかったため、自動的に修復しました:", issues);
+  }
+
+  return { initialState: { ...initialState, flow }, flowIssues: issues };
+}
+
 // 既存会社（config.jsonがある会社）の編集。config.json→flowへの変換は
 // 既存のbuildFlowFromConfigをそのまま使う。
 //
@@ -305,6 +328,13 @@ function AdminWorkspace({
 // （読み込み中に一旦静的configで先にマウントしてしまうと、後から下書きに
 // 差し替える際にUndo履歴が絡んで複雑になるため、最初から確定した状態で
 // マウントする方針にしている）。
+//
+// 「下書きも静的configも無い」場合（例：Supabaseへ会社を新規登録した直後で、
+// まだ誰も設定を作っていない会社）は、従来は行き止まりの案内文だけを表示していたが、
+// ＋新しい会社を作成のときと同じInitialSetupScreen（一から作成／Excelインポート）へ
+// 安全に誘導する。ただしこちらは「既に登録済みの会社（companyId）」への初期設定なので、
+// InitialSetupScreenが内部で生成するcompany_idは使わず、常に既存のcompanyIdへ
+// 上書きしてから使う（保存先の会社コードは既に確定しているため）。
 function CompanyEditor({ companyId, onPersistenceChange }) {
   const config = getConfig(companyId);
 
@@ -320,11 +350,18 @@ function CompanyEditor({ companyId, onPersistenceChange }) {
     };
   }, [config]);
 
-  const [resolved, setResolved] = useState({ status: "loading", initialState: null, initialUpdatedAt: null });
+  const [resolved, setResolved] = useState({
+    status: "loading",
+    initialState: null,
+    initialUpdatedAt: null,
+    flowIssues: [],
+  });
+  const [manualSetup, setManualSetup] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    setResolved({ status: "loading", initialState: null, initialUpdatedAt: null });
+    setResolved({ status: "loading", initialState: null, initialUpdatedAt: null, flowIssues: [] });
+    setManualSetup(null);
 
     async function load() {
       const { id: companyDbId, error: companyError } = await getCompanyDbId(companyId);
@@ -333,7 +370,11 @@ function CompanyEditor({ companyId, onPersistenceChange }) {
       }
 
       if (companyError || !companyDbId) {
-        setResolved({ status: "done", initialState: staticInitialState, initialUpdatedAt: null });
+        setResolved({
+          status: "done",
+          ...normalizeInitialState(staticInitialState),
+          initialUpdatedAt: null,
+        });
         return;
       }
 
@@ -347,7 +388,7 @@ function CompanyEditor({ companyId, onPersistenceChange }) {
         staticConfig: staticInitialState,
       });
 
-      setResolved({ status: "done", initialState, initialUpdatedAt });
+      setResolved({ status: "done", ...normalizeInitialState(initialState), initialUpdatedAt });
     }
 
     load();
@@ -361,17 +402,51 @@ function CompanyEditor({ companyId, onPersistenceChange }) {
     return <p className="flowEmptyState">読み込み中…</p>;
   }
 
+  if (manualSetup) {
+    return (
+      <AdminWorkspace
+        initialState={manualSetup.initialState}
+        initialSection={manualSetup.initialSection}
+        initialSettingsTab={manualSetup.initialSettingsTab}
+        companyCode={companyId}
+        onPersistenceChange={onPersistenceChange}
+      />
+    );
+  }
+
   if (!resolved.initialState) {
-    return <p className="flowEmptyState">この会社の設定データが見つかりません。</p>;
+    return (
+      <InitialSetupScreen
+        onSetupComplete={(bundle, options = {}) => {
+          setManualSetup({
+            initialState: {
+              company: { ...bundle.company, company_id: companyId },
+              policies: bundle.policies || [],
+              expenseTypes: bundle.expenseTypes || [],
+              flow: bundle.flow,
+            },
+            initialSection: options.initialSection,
+            initialSettingsTab: options.initialSettingsTab,
+          });
+        }}
+      />
+    );
   }
 
   return (
-    <AdminWorkspace
-      initialState={resolved.initialState}
-      companyCode={companyId}
-      initialUpdatedAt={resolved.initialUpdatedAt}
-      onPersistenceChange={onPersistenceChange}
-    />
+    <>
+      {resolved.flowIssues.length > 0 && (
+        <p className="flowConfigWarningBanner" role="alert">
+          ⚠ この会社の質問フローの一部データに不整合が見つかったため、自動的に修復しました。「質問フロー」タブで内容をご確認のうえ、必要な箇所を設定し直して保存してください。
+        </p>
+      )}
+      <AdminWorkspace
+        initialState={resolved.initialState}
+        companyCode={companyId}
+        initialUpdatedAt={resolved.initialUpdatedAt}
+        onPersistenceChange={onPersistenceChange}
+      />
+    </>
   );
 }
 

@@ -103,8 +103,24 @@ export default function OptionRow({ questionId, optionId, index, optionCount }) 
   const { editor, issuesByOption, requestConfirm, expenseTypes } = useFlowEditorContext();
   const option = editor.flow.options[optionId];
   const issues = issuesByOption[optionId] || [];
-  const next = option.next || { type: "unset" };
   const [isEditing, setIsEditing] = useState(false);
+
+  // 本来はCompanyEditor側のnormalizeFlowで、optionIdは必ずeditor.flow.optionsに
+  // 実在するキーになっているはずだが、それでもなお解決できない場合に備えた
+  // 最後の防波堤。ここで黙って握りつぶす・データを捏造することはせず、
+  // 「設定データが壊れている」ことが利用者に分かる形で表示し、React全体の
+  // クラッシュ（Error Boundary発火）を防ぐだけにとどめる。
+  if (!option) {
+    return (
+      <li className="flowOptionRow flowOptionRowError" id={`fo-${optionId}`}>
+        <p className="flowIssue error">
+          ⚠ この選択肢のデータが見つかりません（設定データが壊れている可能性があります）。
+        </p>
+      </li>
+    );
+  }
+
+  const next = option.next || { type: "unset" };
   const hasError = issues.some((issue) => issue.level === "error");
 
   const handleDelete = () => {
