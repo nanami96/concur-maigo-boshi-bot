@@ -79,6 +79,10 @@ web_modules/
 .env.production.local
 .env.local
 
+# service_roleキー等、極めて強い権限を持つ秘密情報専用（scripts/配下の
+# 管理用スクリプトからのみ読む想定。フロントエンド/Viteからは絶対に読み込まない）。
+.env.admin.local
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache

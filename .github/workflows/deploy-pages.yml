@@ -45,6 +45,14 @@ jobs:
         run: npm run build
         env:
           VITE_PUBLIC_DEMO: "true"
+          # Supabase Project URL / anon(publishable) keyのみ。ブラウザに公開される
+          # ことを前提とした鍵であり、実際のアクセス制御はRLS・RPC権限側で行う
+          # （src/lib/supabaseClient.js参照）。service_roleキーは絶対にここへ
+          # 追加しないこと。値が未設定の場合はisSupabaseConfigured=falseとなり、
+          # 従来通りローカル開発モード相当（静的configのみ）でビルドされる
+          # （後続Phaseまでこれらのシークレットを登録していなくてもビルドは壊れない）。
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

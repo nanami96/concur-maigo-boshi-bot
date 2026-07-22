@@ -358,7 +358,7 @@
       <div class="cover-meta">
         <div><span>会社名</span><strong>サンプル会社</strong></div>
         <div><span>会社ID</span><strong>sample-company</strong></div>
-        <div><span>生成日時</span><strong>2026/07/11 3:19</strong></div>
+        <div><span>生成日時</span><strong>2026/07/22 12:03</strong></div>
       </div>
     </header>
 
@@ -366,9 +366,9 @@
       <div class="section-heading"><h2>サマリー</h2><span>Review Overview</span></div>
       
     <div class="summary-grid">
-      <div class="summary-card"><span>質問</span><strong>3</strong></div>
-      <div class="summary-card"><span>判定ルール</span><strong>8</strong></div>
-      <div class="summary-card"><span>経費タイプ</span><strong>8</strong></div>
+      <div class="summary-card"><span>質問</span><strong>16</strong></div>
+      <div class="summary-card"><span>判定ルール</span><strong>79</strong></div>
+      <div class="summary-card"><span>経費タイプ</span><strong>79</strong></div>
       <div class="summary-card risk"><span>要確認</span><strong>0</strong></div>
     </div>
   
@@ -420,6 +420,13 @@
         <h3>改善候補</h3>
         <ul>
           
+                <li>
+                  <span class="severity-badge low">
+                    low
+                  </span>
+                  <span>Rule数が多いため、条件の統合や分割方針の見直しを検討してください。</span>
+                </li>
+              
         </ul>
       </div>
     </div>
@@ -442,16 +449,6 @@
                 <td>サンプル会社</td>
               </tr>
             
-              <tr>
-                <th>default_policy_id</th>
-                <td>normal_expense</td>
-              </tr>
-            
-              <tr>
-                <th>language</th>
-                <td>ja</td>
-              </tr>
-            
       </tbody>
     </table>
   
@@ -467,63 +464,212 @@
       <tbody>
         
               <tr>
-                <td><span class="code">q-category</span></td>
-                <td>今日は何を申請しますか？</td>
+                <td><span class="code">Q001</span></td>
+                <td>今回申請する費用の大分類を選択してください。</td>
                 <td>
                   <ul class="compact-list">
                     
                           <li>
-                            <strong>電車・バス</strong>
-                            <span class="muted">(電車・バス)</span>
+                            <strong>通常の交通費</strong>
+                            <span class="muted">(O001)</span>
                             <span class="arrow">-></span>
-                            <span class="code">q-business-trip</span>
+                            <span class="code">Q002</span>
+                          </li>
+                        
+                          <li>
+                            <strong>飲食費</strong>
+                            <span class="muted">(O002)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q003</span>
+                          </li>
+                        
+                          <li>
+                            <strong>物品購入</strong>
+                            <span class="muted">(O003)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q004</span>
+                          </li>
+                        
+                          <li>
+                            <strong>ソフトウェア・通信費</strong>
+                            <span class="muted">(O004)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q005</span>
+                          </li>
+                        
+                          <li>
+                            <strong>配送・印刷・購読費</strong>
+                            <span class="muted">(O005)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q006</span>
+                          </li>
+                        
+                          <li>
+                            <strong>研修・資格・会費</strong>
+                            <span class="muted">(O006)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q007</span>
+                          </li>
+                        
+                          <li>
+                            <strong>専門サービス・手数料・採用・販促</strong>
+                            <span class="muted">(O007)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q008</span>
+                          </li>
+                        
+                          <li>
+                            <strong>施設・維持管理・社内運営・その他</strong>
+                            <span class="muted">(O008)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q010</span>
+                          </li>
+                        
+                          <li>
+                            <strong>出張関連</strong>
+                            <span class="muted">(O009)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q012</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">Q002</span></td>
+                <td>通常の交通費の種類を選択してください。</td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            <strong>電車・近隣交通費</strong>
+                            <span class="muted">(O010)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
                           </li>
                         
                           <li>
                             <strong>タクシー</strong>
-                            <span class="muted">(タクシー)</span>
+                            <span class="muted">(O011)</span>
                             <span class="arrow">-></span>
                             <span class="result-label">結果</span>
                           </li>
                         
                           <li>
-                            <strong>ホテル</strong>
-                            <span class="muted">(ホテル)</span>
+                            <strong>駐車場代</strong>
+                            <span class="muted">(O012)</span>
                             <span class="arrow">-></span>
-                            <span class="code">q-business-trip</span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">Q003</span></td>
+                <td>飲食費の種類を選択してください。</td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            <strong>会食費</strong>
+                            <span class="muted">(O013)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
                           </li>
                         
                           <li>
-                            <strong>会食</strong>
-                            <span class="muted">(会食)</span>
+                            <strong>接待交際費</strong>
+                            <span class="muted">(O014)</span>
                             <span class="arrow">-></span>
-                            <span class="code">q-receipt</span>
+                            <span class="result-label">結果</span>
                           </li>
                         
                           <li>
-                            <strong>接待</strong>
-                            <span class="muted">(接待)</span>
+                            <strong>社内会議飲食費</strong>
+                            <span class="muted">(O015)</span>
                             <span class="arrow">-></span>
-                            <span class="code">q-receipt</span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>飲料・軽食費</strong>
+                            <span class="muted">(O016)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">Q004</span></td>
+                <td>購入した物品の種類を選択してください。</td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            <strong>贈答品費</strong>
+                            <span class="muted">(O017)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>慶弔費</strong>
+                            <span class="muted">(O018)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>事務用品費</strong>
+                            <span class="muted">(O019)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>消耗品費</strong>
+                            <span class="muted">(O020)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
                           </li>
                         
                           <li>
                             <strong>備品購入</strong>
-                            <span class="muted">(備品購入)</span>
+                            <span class="muted">(O021)</span>
                             <span class="arrow">-></span>
-                            <span class="code">q-receipt</span>
+                            <span class="result-label">結果</span>
                           </li>
                         
                           <li>
-                            <strong>研修</strong>
-                            <span class="muted">(研修)</span>
+                            <strong>少額資産購入</strong>
+                            <span class="muted">(O022)</span>
                             <span class="arrow">-></span>
-                            <span class="code">q-receipt</span>
+                            <span class="result-label">結果</span>
                           </li>
                         
                           <li>
-                            <strong>通信費</strong>
-                            <span class="muted">(通信費)</span>
+                            <strong>固定資産購入</strong>
+                            <span class="muted">(O023)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>制服・作業着費</strong>
+                            <span class="muted">(O024)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>安全衛生用品費</strong>
+                            <span class="muted">(O025)</span>
                             <span class="arrow">-></span>
                             <span class="result-label">結果</span>
                           </li>
@@ -533,14 +679,49 @@
               </tr>
             
               <tr>
-                <td><span class="code">q-business-trip</span></td>
-                <td>出張に関係ですか？</td>
+                <td><span class="code">Q005</span></td>
+                <td>ソフトウェア・通信費の種類を選択してください。</td>
                 <td>
                   <ul class="compact-list">
                     
                           <li>
-                            <strong>はい</strong>
-                            <span class="muted">(yes)</span>
+                            <strong>ソフトウェア購入</strong>
+                            <span class="muted">(O026)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>ソフトウェア利用料</strong>
+                            <span class="muted">(O027)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>クラウドサービス利用料</strong>
+                            <span class="muted">(O028)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>携帯電話料金</strong>
+                            <span class="muted">(O029)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>インターネット利用料</strong>
+                            <span class="muted">(O030)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>固定電話料金</strong>
+                            <span class="muted">(O031)</span>
                             <span class="arrow">-></span>
                             <span class="result-label">結果</span>
                           </li>
@@ -550,14 +731,548 @@
               </tr>
             
               <tr>
-                <td><span class="code">q-receipt</span></td>
-                <td>領収書ありですか？</td>
+                <td><span class="code">Q006</span></td>
+                <td>配送・印刷・購読費の種類を選択してください。</td>
                 <td>
                   <ul class="compact-list">
                     
                           <li>
-                            <strong>はい</strong>
-                            <span class="muted">(yes)</span>
+                            <strong>郵便料金</strong>
+                            <span class="muted">(O032)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>宅配便・配送費</strong>
+                            <span class="muted">(O033)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>印刷・製本費</strong>
+                            <span class="muted">(O034)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>書籍購入費</strong>
+                            <span class="muted">(O035)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>新聞購読料</strong>
+                            <span class="muted">(O036)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>専門誌・情報サービス購読料</strong>
+                            <span class="muted">(O037)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">Q007</span></td>
+                <td>研修・資格・会費の種類を選択してください。</td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            <strong>研修費</strong>
+                            <span class="muted">(O038)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>セミナー参加費</strong>
+                            <span class="muted">(O039)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>カンファレンス参加費</strong>
+                            <span class="muted">(O040)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>資格試験受験料</strong>
+                            <span class="muted">(O041)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>会費・年会費</strong>
+                            <span class="muted">(O042)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">Q008</span></td>
+                <td>専門サービスの種類を選択してください。</td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            <strong>翻訳・通訳費</strong>
+                            <span class="muted">(O043)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>業務委託費</strong>
+                            <span class="muted">(O044)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>コンサルティング費</strong>
+                            <span class="muted">(O045)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>弁護士・司法書士費用</strong>
+                            <span class="muted">(O046)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>税理士・会計士費用</strong>
+                            <span class="muted">(O047)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>手数料・採用・販促</strong>
+                            <span class="muted">(O048)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q009</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">Q009</span></td>
+                <td>手数料・採用・販促費の種類を選択してください。</td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            <strong>振込・銀行手数料</strong>
+                            <span class="muted">(O049)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>カード決済手数料</strong>
+                            <span class="muted">(O050)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>採用関連費</strong>
+                            <span class="muted">(O051)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>広告宣伝費</strong>
+                            <span class="muted">(O052)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>販売促進費</strong>
+                            <span class="muted">(O053)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">Q010</span></td>
+                <td>施設・維持管理費の種類を選択してください。</td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            <strong>修理・修繕費</strong>
+                            <span class="muted">(O054)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>保守・メンテナンス費</strong>
+                            <span class="muted">(O055)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>清掃費</strong>
+                            <span class="muted">(O056)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>会場・施設利用料</strong>
+                            <span class="muted">(O057)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>機器レンタル料</strong>
+                            <span class="muted">(O058)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>水道光熱費</strong>
+                            <span class="muted">(O059)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>保険料</strong>
+                            <span class="muted">(O060)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>租税公課</strong>
+                            <span class="muted">(O061)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>福利厚生・社内運営・その他</strong>
+                            <span class="muted">(O062)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q011</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">Q011</span></td>
+                <td>福利厚生・社内運営・その他経費の種類を選択してください。</td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            <strong>健康診断費</strong>
+                            <span class="muted">(O063)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>福利厚生費</strong>
+                            <span class="muted">(O064)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>社内イベント費</strong>
+                            <span class="muted">(O065)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>雑費</strong>
+                            <span class="muted">(O066)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>その他（通常経費）</strong>
+                            <span class="muted">(O067)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">Q012</span></td>
+                <td>出張経費の種類を選択してください。</td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            <strong>鉄道・道路交通</strong>
+                            <span class="muted">(O068)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q013</span>
+                          </li>
+                        
+                          <li>
+                            <strong>航空・船舶・海外現地交通</strong>
+                            <span class="muted">(O069)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q014</span>
+                          </li>
+                        
+                          <li>
+                            <strong>宿泊・食事・手当</strong>
+                            <span class="muted">(O070)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q015</span>
+                          </li>
+                        
+                          <li>
+                            <strong>渡航準備・その他</strong>
+                            <span class="muted">(O071)</span>
+                            <span class="arrow">-></span>
+                            <span class="code">Q016</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">Q013</span></td>
+                <td>鉄道・道路交通の種類を選択してください。</td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            <strong>新幹線</strong>
+                            <span class="muted">(O072)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>特急列車</strong>
+                            <span class="muted">(O073)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>空港アクセス交通費</strong>
+                            <span class="muted">(O074)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>高速バス</strong>
+                            <span class="muted">(O075)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>レンタカー</strong>
+                            <span class="muted">(O076)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>ガソリン代</strong>
+                            <span class="muted">(O077)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>高速道路料金</strong>
+                            <span class="muted">(O078)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">Q014</span></td>
+                <td>航空・船舶・海外現地交通の種類を選択してください。</td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            <strong>国内航空券</strong>
+                            <span class="muted">(O079)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>海外航空券</strong>
+                            <span class="muted">(O080)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>フェリー・船舶運賃</strong>
+                            <span class="muted">(O081)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>海外現地交通費</strong>
+                            <span class="muted">(O082)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>空港使用料・諸税</strong>
+                            <span class="muted">(O083)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">Q015</span></td>
+                <td>宿泊・食事・手当の種類を選択してください。</td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            <strong>国内宿泊費</strong>
+                            <span class="muted">(O084)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>海外宿泊費</strong>
+                            <span class="muted">(O085)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>出張中食事代</strong>
+                            <span class="muted">(O086)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>日当</strong>
+                            <span class="muted">(O087)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>出張手当</strong>
+                            <span class="muted">(O088)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">Q016</span></td>
+                <td>渡航準備・その他出張経費の種類を選択してください。</td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            <strong>手荷物・荷物配送費</strong>
+                            <span class="muted">(O089)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>ビザ取得費</strong>
+                            <span class="muted">(O090)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>旅券取得関連費</strong>
+                            <span class="muted">(O091)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>海外旅行保険料</strong>
+                            <span class="muted">(O092)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>出張キャンセル料</strong>
+                            <span class="muted">(O093)</span>
+                            <span class="arrow">-></span>
+                            <span class="result-label">結果</span>
+                          </li>
+                        
+                          <li>
+                            <strong>その他（出張経費）</strong>
+                            <span class="muted">(O094)</span>
                             <span class="arrow">-></span>
                             <span class="result-label">結果</span>
                           </li>
@@ -581,161 +1296,1777 @@
       <tbody>
         
               <tr>
-                <td><span class="code">r001</span></td>
+                <td><span class="code">r001-g1</span></td>
                 <td>
                   <ul class="compact-list">
                     
                           <li>
-                            今日は何を申請しますか？
-                            <span class="muted">(q-category: 電車・バス)</span>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O001)</span>
                           </li>
                         
                           <li>
-                            出張に関係ですか？
-                            <span class="muted">(q-business-trip: yes)</span>
+                            通常の交通費の種類を選択してください。
+                            <span class="muted">(Q002: O010)</span>
                           </li>
                         
                   </ul>
                 </td>
                 <td>電車・近隣交通費</td>
-                <td>電車・バスは「電車・近隣交通費」を選択してください。</td>
+                <td>「電車・近隣交通費」を選択してください。</td>
               </tr>
             
               <tr>
-                <td><span class="code">r002</span></td>
+                <td><span class="code">r002-g1</span></td>
                 <td>
                   <ul class="compact-list">
                     
                           <li>
-                            今日は何を申請しますか？
-                            <span class="muted">(q-category: タクシー)</span>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O001)</span>
+                          </li>
+                        
+                          <li>
+                            通常の交通費の種類を選択してください。
+                            <span class="muted">(Q002: O011)</span>
                           </li>
                         
                   </ul>
                 </td>
                 <td>タクシー</td>
-                <td>タクシーは「タクシー」を選択してください。</td>
+                <td>「タクシー」を選択してください。</td>
               </tr>
             
               <tr>
-                <td><span class="code">r003</span></td>
+                <td><span class="code">r003-g1</span></td>
                 <td>
                   <ul class="compact-list">
                     
                           <li>
-                            今日は何を申請しますか？
-                            <span class="muted">(q-category: ホテル)</span>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O001)</span>
                           </li>
                         
                           <li>
-                            出張に関係ですか？
-                            <span class="muted">(q-business-trip: yes)</span>
+                            通常の交通費の種類を選択してください。
+                            <span class="muted">(Q002: O012)</span>
                           </li>
                         
                   </ul>
                 </td>
-                <td>宿泊費</td>
-                <td>宿泊費を選択してください。</td>
+                <td>駐車場代</td>
+                <td>「駐車場代」を選択してください。</td>
               </tr>
             
               <tr>
-                <td><span class="code">r004</span></td>
+                <td><span class="code">r004-g1</span></td>
                 <td>
                   <ul class="compact-list">
                     
                           <li>
-                            今日は何を申請しますか？
-                            <span class="muted">(q-category: 会食)</span>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O002)</span>
                           </li>
                         
                           <li>
-                            領収書ありですか？
-                            <span class="muted">(q-receipt: yes)</span>
+                            飲食費の種類を選択してください。
+                            <span class="muted">(Q003: O013)</span>
                           </li>
                         
                   </ul>
                 </td>
                 <td>会食費</td>
-                <td>会食は「会食費」を選択してください。</td>
+                <td>「会食費」を選択してください。</td>
               </tr>
             
               <tr>
-                <td><span class="code">r005</span></td>
+                <td><span class="code">r005-g1</span></td>
                 <td>
                   <ul class="compact-list">
                     
                           <li>
-                            今日は何を申請しますか？
-                            <span class="muted">(q-category: 接待)</span>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O002)</span>
                           </li>
                         
                           <li>
-                            領収書ありですか？
-                            <span class="muted">(q-receipt: yes)</span>
+                            飲食費の種類を選択してください。
+                            <span class="muted">(Q003: O014)</span>
                           </li>
                         
                   </ul>
                 </td>
                 <td>接待交際費</td>
-                <td>接待は「接待交際費」を選択してください。</td>
+                <td>「接待交際費」を選択してください。</td>
               </tr>
             
               <tr>
-                <td><span class="code">r006</span></td>
+                <td><span class="code">r006-g1</span></td>
                 <td>
                   <ul class="compact-list">
                     
                           <li>
-                            今日は何を申請しますか？
-                            <span class="muted">(q-category: 備品購入)</span>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O002)</span>
                           </li>
                         
                           <li>
-                            領収書ありですか？
-                            <span class="muted">(q-receipt: yes)</span>
+                            飲食費の種類を選択してください。
+                            <span class="muted">(Q003: O015)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>社内会議飲食費</td>
+                <td>「社内会議飲食費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r007-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O002)</span>
+                          </li>
+                        
+                          <li>
+                            飲食費の種類を選択してください。
+                            <span class="muted">(Q003: O016)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>飲料・軽食費</td>
+                <td>「飲料・軽食費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r008-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O003)</span>
+                          </li>
+                        
+                          <li>
+                            購入した物品の種類を選択してください。
+                            <span class="muted">(Q004: O017)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>贈答品費</td>
+                <td>「贈答品費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r009-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O003)</span>
+                          </li>
+                        
+                          <li>
+                            購入した物品の種類を選択してください。
+                            <span class="muted">(Q004: O018)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>慶弔費</td>
+                <td>「慶弔費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r010-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O003)</span>
+                          </li>
+                        
+                          <li>
+                            購入した物品の種類を選択してください。
+                            <span class="muted">(Q004: O019)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>事務用品費</td>
+                <td>「事務用品費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r011-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O003)</span>
+                          </li>
+                        
+                          <li>
+                            購入した物品の種類を選択してください。
+                            <span class="muted">(Q004: O020)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>消耗品費</td>
+                <td>「消耗品費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r012-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O003)</span>
+                          </li>
+                        
+                          <li>
+                            購入した物品の種類を選択してください。
+                            <span class="muted">(Q004: O021)</span>
                           </li>
                         
                   </ul>
                 </td>
                 <td>備品購入</td>
-                <td>備品購入は「備品購入」を選択してください。</td>
+                <td>「備品購入」を選択してください。</td>
               </tr>
             
               <tr>
-                <td><span class="code">r007</span></td>
+                <td><span class="code">r013-g1</span></td>
                 <td>
                   <ul class="compact-list">
                     
                           <li>
-                            今日は何を申請しますか？
-                            <span class="muted">(q-category: 研修)</span>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O003)</span>
                           </li>
                         
                           <li>
-                            領収書ありですか？
-                            <span class="muted">(q-receipt: yes)</span>
+                            購入した物品の種類を選択してください。
+                            <span class="muted">(Q004: O022)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>少額資産購入</td>
+                <td>「少額資産購入」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r014-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O003)</span>
+                          </li>
+                        
+                          <li>
+                            購入した物品の種類を選択してください。
+                            <span class="muted">(Q004: O023)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>固定資産購入</td>
+                <td>「固定資産購入」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r015-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O004)</span>
+                          </li>
+                        
+                          <li>
+                            ソフトウェア・通信費の種類を選択してください。
+                            <span class="muted">(Q005: O026)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>ソフトウェア購入</td>
+                <td>「ソフトウェア購入」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r016-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O004)</span>
+                          </li>
+                        
+                          <li>
+                            ソフトウェア・通信費の種類を選択してください。
+                            <span class="muted">(Q005: O027)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>ソフトウェア利用料</td>
+                <td>「ソフトウェア利用料」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r017-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O004)</span>
+                          </li>
+                        
+                          <li>
+                            ソフトウェア・通信費の種類を選択してください。
+                            <span class="muted">(Q005: O028)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>クラウドサービス利用料</td>
+                <td>「クラウドサービス利用料」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r018-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O004)</span>
+                          </li>
+                        
+                          <li>
+                            ソフトウェア・通信費の種類を選択してください。
+                            <span class="muted">(Q005: O029)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>携帯電話料金</td>
+                <td>「携帯電話料金」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r019-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O004)</span>
+                          </li>
+                        
+                          <li>
+                            ソフトウェア・通信費の種類を選択してください。
+                            <span class="muted">(Q005: O030)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>インターネット利用料</td>
+                <td>「インターネット利用料」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r020-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O004)</span>
+                          </li>
+                        
+                          <li>
+                            ソフトウェア・通信費の種類を選択してください。
+                            <span class="muted">(Q005: O031)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>固定電話料金</td>
+                <td>「固定電話料金」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r021-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O005)</span>
+                          </li>
+                        
+                          <li>
+                            配送・印刷・購読費の種類を選択してください。
+                            <span class="muted">(Q006: O032)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>郵便料金</td>
+                <td>「郵便料金」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r022-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O005)</span>
+                          </li>
+                        
+                          <li>
+                            配送・印刷・購読費の種類を選択してください。
+                            <span class="muted">(Q006: O033)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>宅配便・配送費</td>
+                <td>「宅配便・配送費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r023-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O005)</span>
+                          </li>
+                        
+                          <li>
+                            配送・印刷・購読費の種類を選択してください。
+                            <span class="muted">(Q006: O034)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>印刷・製本費</td>
+                <td>「印刷・製本費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r024-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O005)</span>
+                          </li>
+                        
+                          <li>
+                            配送・印刷・購読費の種類を選択してください。
+                            <span class="muted">(Q006: O035)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>書籍購入費</td>
+                <td>「書籍購入費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r025-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O005)</span>
+                          </li>
+                        
+                          <li>
+                            配送・印刷・購読費の種類を選択してください。
+                            <span class="muted">(Q006: O036)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>新聞購読料</td>
+                <td>「新聞購読料」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r026-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O005)</span>
+                          </li>
+                        
+                          <li>
+                            配送・印刷・購読費の種類を選択してください。
+                            <span class="muted">(Q006: O037)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>専門誌・情報サービス購読料</td>
+                <td>「専門誌・情報サービス購読料」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r027-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O006)</span>
+                          </li>
+                        
+                          <li>
+                            研修・資格・会費の種類を選択してください。
+                            <span class="muted">(Q007: O038)</span>
                           </li>
                         
                   </ul>
                 </td>
                 <td>研修費</td>
-                <td>研修・セミナーは「研修費」を選択してください。</td>
+                <td>「研修費」を選択してください。</td>
               </tr>
             
               <tr>
-                <td><span class="code">r008</span></td>
+                <td><span class="code">r028-g1</span></td>
                 <td>
                   <ul class="compact-list">
                     
                           <li>
-                            今日は何を申請しますか？
-                            <span class="muted">(q-category: 通信費)</span>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O006)</span>
+                          </li>
+                        
+                          <li>
+                            研修・資格・会費の種類を選択してください。
+                            <span class="muted">(Q007: O039)</span>
                           </li>
                         
                   </ul>
                 </td>
-                <td>通信費</td>
-                <td>通信費は「通信費」を選択してください。</td>
+                <td>セミナー参加費</td>
+                <td>「セミナー参加費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r029-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O006)</span>
+                          </li>
+                        
+                          <li>
+                            研修・資格・会費の種類を選択してください。
+                            <span class="muted">(Q007: O040)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>カンファレンス参加費</td>
+                <td>「カンファレンス参加費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r030-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O006)</span>
+                          </li>
+                        
+                          <li>
+                            研修・資格・会費の種類を選択してください。
+                            <span class="muted">(Q007: O041)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>資格試験受験料</td>
+                <td>「資格試験受験料」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r031-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O006)</span>
+                          </li>
+                        
+                          <li>
+                            研修・資格・会費の種類を選択してください。
+                            <span class="muted">(Q007: O042)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>会費・年会費</td>
+                <td>「会費・年会費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r032-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O007)</span>
+                          </li>
+                        
+                          <li>
+                            手数料・採用・販促費の種類を選択してください。
+                            <span class="muted">(Q009: O051)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>採用関連費</td>
+                <td>「採用関連費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r033-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O007)</span>
+                          </li>
+                        
+                          <li>
+                            手数料・採用・販促費の種類を選択してください。
+                            <span class="muted">(Q009: O052)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>広告宣伝費</td>
+                <td>「広告宣伝費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r034-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O007)</span>
+                          </li>
+                        
+                          <li>
+                            手数料・採用・販促費の種類を選択してください。
+                            <span class="muted">(Q009: O053)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>販売促進費</td>
+                <td>「販売促進費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r035-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O007)</span>
+                          </li>
+                        
+                          <li>
+                            専門サービスの種類を選択してください。
+                            <span class="muted">(Q008: O043)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>翻訳・通訳費</td>
+                <td>「翻訳・通訳費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r036-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O007)</span>
+                          </li>
+                        
+                          <li>
+                            専門サービスの種類を選択してください。
+                            <span class="muted">(Q008: O044)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>業務委託費</td>
+                <td>「業務委託費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r037-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O007)</span>
+                          </li>
+                        
+                          <li>
+                            専門サービスの種類を選択してください。
+                            <span class="muted">(Q008: O045)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>コンサルティング費</td>
+                <td>「コンサルティング費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r038-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O007)</span>
+                          </li>
+                        
+                          <li>
+                            専門サービスの種類を選択してください。
+                            <span class="muted">(Q008: O046)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>弁護士・司法書士費用</td>
+                <td>「弁護士・司法書士費用」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r039-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O007)</span>
+                          </li>
+                        
+                          <li>
+                            専門サービスの種類を選択してください。
+                            <span class="muted">(Q008: O047)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>税理士・会計士費用</td>
+                <td>「税理士・会計士費用」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r040-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O007)</span>
+                          </li>
+                        
+                          <li>
+                            手数料・採用・販促費の種類を選択してください。
+                            <span class="muted">(Q009: O049)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>振込・銀行手数料</td>
+                <td>「振込・銀行手数料」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r041-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O007)</span>
+                          </li>
+                        
+                          <li>
+                            手数料・採用・販促費の種類を選択してください。
+                            <span class="muted">(Q009: O050)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>カード決済手数料</td>
+                <td>「カード決済手数料」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r042-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O008)</span>
+                          </li>
+                        
+                          <li>
+                            施設・維持管理費の種類を選択してください。
+                            <span class="muted">(Q010: O054)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>修理・修繕費</td>
+                <td>「修理・修繕費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r043-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O008)</span>
+                          </li>
+                        
+                          <li>
+                            施設・維持管理費の種類を選択してください。
+                            <span class="muted">(Q010: O055)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>保守・メンテナンス費</td>
+                <td>「保守・メンテナンス費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r044-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O008)</span>
+                          </li>
+                        
+                          <li>
+                            施設・維持管理費の種類を選択してください。
+                            <span class="muted">(Q010: O056)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>清掃費</td>
+                <td>「清掃費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r045-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O003)</span>
+                          </li>
+                        
+                          <li>
+                            購入した物品の種類を選択してください。
+                            <span class="muted">(Q004: O024)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>制服・作業着費</td>
+                <td>「制服・作業着費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r046-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O003)</span>
+                          </li>
+                        
+                          <li>
+                            購入した物品の種類を選択してください。
+                            <span class="muted">(Q004: O025)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>安全衛生用品費</td>
+                <td>「安全衛生用品費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r047-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O008)</span>
+                          </li>
+                        
+                          <li>
+                            福利厚生・社内運営・その他経費の種類を選択してください。
+                            <span class="muted">(Q011: O063)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>健康診断費</td>
+                <td>「健康診断費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r048-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O008)</span>
+                          </li>
+                        
+                          <li>
+                            福利厚生・社内運営・その他経費の種類を選択してください。
+                            <span class="muted">(Q011: O064)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>福利厚生費</td>
+                <td>「福利厚生費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r049-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O008)</span>
+                          </li>
+                        
+                          <li>
+                            福利厚生・社内運営・その他経費の種類を選択してください。
+                            <span class="muted">(Q011: O065)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>社内イベント費</td>
+                <td>「社内イベント費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r050-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O008)</span>
+                          </li>
+                        
+                          <li>
+                            施設・維持管理費の種類を選択してください。
+                            <span class="muted">(Q010: O057)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>会場・施設利用料</td>
+                <td>「会場・施設利用料」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r051-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O008)</span>
+                          </li>
+                        
+                          <li>
+                            施設・維持管理費の種類を選択してください。
+                            <span class="muted">(Q010: O058)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>機器レンタル料</td>
+                <td>「機器レンタル料」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r052-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O008)</span>
+                          </li>
+                        
+                          <li>
+                            施設・維持管理費の種類を選択してください。
+                            <span class="muted">(Q010: O059)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>水道光熱費</td>
+                <td>「水道光熱費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r053-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O008)</span>
+                          </li>
+                        
+                          <li>
+                            施設・維持管理費の種類を選択してください。
+                            <span class="muted">(Q010: O060)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>保険料</td>
+                <td>「保険料」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r054-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O008)</span>
+                          </li>
+                        
+                          <li>
+                            施設・維持管理費の種類を選択してください。
+                            <span class="muted">(Q010: O061)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>租税公課</td>
+                <td>「租税公課」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r055-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O008)</span>
+                          </li>
+                        
+                          <li>
+                            福利厚生・社内運営・その他経費の種類を選択してください。
+                            <span class="muted">(Q011: O066)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>雑費</td>
+                <td>「雑費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r056-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O008)</span>
+                          </li>
+                        
+                          <li>
+                            福利厚生・社内運営・その他経費の種類を選択してください。
+                            <span class="muted">(Q011: O067)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>その他（通常経費）</td>
+                <td>「その他（通常経費）」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r057-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O068)</span>
+                          </li>
+                        
+                          <li>
+                            鉄道・道路交通の種類を選択してください。
+                            <span class="muted">(Q013: O072)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>新幹線</td>
+                <td>「新幹線」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r058-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O068)</span>
+                          </li>
+                        
+                          <li>
+                            鉄道・道路交通の種類を選択してください。
+                            <span class="muted">(Q013: O073)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>特急列車</td>
+                <td>「特急列車」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r059-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O069)</span>
+                          </li>
+                        
+                          <li>
+                            航空・船舶・海外現地交通の種類を選択してください。
+                            <span class="muted">(Q014: O079)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>国内航空券</td>
+                <td>「国内航空券」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r060-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O069)</span>
+                          </li>
+                        
+                          <li>
+                            航空・船舶・海外現地交通の種類を選択してください。
+                            <span class="muted">(Q014: O080)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>海外航空券</td>
+                <td>「海外航空券」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r061-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O068)</span>
+                          </li>
+                        
+                          <li>
+                            鉄道・道路交通の種類を選択してください。
+                            <span class="muted">(Q013: O074)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>空港アクセス交通費</td>
+                <td>「空港アクセス交通費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r062-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O068)</span>
+                          </li>
+                        
+                          <li>
+                            鉄道・道路交通の種類を選択してください。
+                            <span class="muted">(Q013: O075)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>高速バス</td>
+                <td>「高速バス」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r063-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O068)</span>
+                          </li>
+                        
+                          <li>
+                            鉄道・道路交通の種類を選択してください。
+                            <span class="muted">(Q013: O076)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>レンタカー</td>
+                <td>「レンタカー」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r064-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O068)</span>
+                          </li>
+                        
+                          <li>
+                            鉄道・道路交通の種類を選択してください。
+                            <span class="muted">(Q013: O077)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>ガソリン代</td>
+                <td>「ガソリン代」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r065-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O068)</span>
+                          </li>
+                        
+                          <li>
+                            鉄道・道路交通の種類を選択してください。
+                            <span class="muted">(Q013: O078)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>高速道路料金</td>
+                <td>「高速道路料金」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r066-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O069)</span>
+                          </li>
+                        
+                          <li>
+                            航空・船舶・海外現地交通の種類を選択してください。
+                            <span class="muted">(Q014: O081)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>フェリー・船舶運賃</td>
+                <td>「フェリー・船舶運賃」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r067-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O069)</span>
+                          </li>
+                        
+                          <li>
+                            航空・船舶・海外現地交通の種類を選択してください。
+                            <span class="muted">(Q014: O082)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>海外現地交通費</td>
+                <td>「海外現地交通費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r068-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O070)</span>
+                          </li>
+                        
+                          <li>
+                            宿泊・食事・手当の種類を選択してください。
+                            <span class="muted">(Q015: O084)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>国内宿泊費</td>
+                <td>「国内宿泊費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r069-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O070)</span>
+                          </li>
+                        
+                          <li>
+                            宿泊・食事・手当の種類を選択してください。
+                            <span class="muted">(Q015: O085)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>海外宿泊費</td>
+                <td>「海外宿泊費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r070-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O070)</span>
+                          </li>
+                        
+                          <li>
+                            宿泊・食事・手当の種類を選択してください。
+                            <span class="muted">(Q015: O086)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>出張中食事代</td>
+                <td>「出張中食事代」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r071-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O070)</span>
+                          </li>
+                        
+                          <li>
+                            宿泊・食事・手当の種類を選択してください。
+                            <span class="muted">(Q015: O087)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>日当</td>
+                <td>「日当」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r072-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O070)</span>
+                          </li>
+                        
+                          <li>
+                            宿泊・食事・手当の種類を選択してください。
+                            <span class="muted">(Q015: O088)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>出張手当</td>
+                <td>「出張手当」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r073-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O071)</span>
+                          </li>
+                        
+                          <li>
+                            渡航準備・その他出張経費の種類を選択してください。
+                            <span class="muted">(Q016: O089)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>手荷物・荷物配送費</td>
+                <td>「手荷物・荷物配送費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r074-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O071)</span>
+                          </li>
+                        
+                          <li>
+                            渡航準備・その他出張経費の種類を選択してください。
+                            <span class="muted">(Q016: O090)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>ビザ取得費</td>
+                <td>「ビザ取得費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r075-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O071)</span>
+                          </li>
+                        
+                          <li>
+                            渡航準備・その他出張経費の種類を選択してください。
+                            <span class="muted">(Q016: O091)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>旅券取得関連費</td>
+                <td>「旅券取得関連費」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r076-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O071)</span>
+                          </li>
+                        
+                          <li>
+                            渡航準備・その他出張経費の種類を選択してください。
+                            <span class="muted">(Q016: O092)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>海外旅行保険料</td>
+                <td>「海外旅行保険料」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r077-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O071)</span>
+                          </li>
+                        
+                          <li>
+                            渡航準備・その他出張経費の種類を選択してください。
+                            <span class="muted">(Q016: O093)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>出張キャンセル料</td>
+                <td>「出張キャンセル料」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r078-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O069)</span>
+                          </li>
+                        
+                          <li>
+                            航空・船舶・海外現地交通の種類を選択してください。
+                            <span class="muted">(Q014: O083)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>空港使用料・諸税</td>
+                <td>「空港使用料・諸税」を選択してください。</td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">r079-g1</span></td>
+                <td>
+                  <ul class="compact-list">
+                    
+                          <li>
+                            今回申請する費用の大分類を選択してください。
+                            <span class="muted">(Q001: O009)</span>
+                          </li>
+                        
+                          <li>
+                            出張経費の種類を選択してください。
+                            <span class="muted">(Q012: O071)</span>
+                          </li>
+                        
+                          <li>
+                            渡航準備・その他出張経費の種類を選択してください。
+                            <span class="muted">(Q016: O094)</span>
+                          </li>
+                        
+                  </ul>
+                </td>
+                <td>その他（出張経費）</td>
+                <td>「その他（出張経費）」を選択してください。</td>
               </tr>
             
       </tbody>
@@ -775,8 +3106,8 @@
               </tr>
             
               <tr>
-                <td><span class="code">hotel</span></td>
-                <td>宿泊費</td>
+                <td><span class="code">parking</span></td>
+                <td>駐車場代</td>
                 <td>必要</td>
                 <td>
                   <span class="status active">
@@ -786,7 +3117,7 @@
               </tr>
             
               <tr>
-                <td><span class="code">dining</span></td>
+                <td><span class="code">business_meal</span></td>
                 <td>会食費</td>
                 <td>必要</td>
                 <td>
@@ -808,8 +3139,228 @@
               </tr>
             
               <tr>
+                <td><span class="code">internal_meeting_meal</span></td>
+                <td>社内会議飲食費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">refreshments</span></td>
+                <td>飲料・軽食費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">gift</span></td>
+                <td>贈答品費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">condolence_celebration</span></td>
+                <td>慶弔費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">office_supplies</span></td>
+                <td>事務用品費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">consumables</span></td>
+                <td>消耗品費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
                 <td><span class="code">equipment</span></td>
                 <td>備品購入</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">small_asset</span></td>
+                <td>少額資産購入</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">fixed_asset</span></td>
+                <td>固定資産購入</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">software</span></td>
+                <td>ソフトウェア購入</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">software_subscription</span></td>
+                <td>ソフトウェア利用料</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">cloud_service</span></td>
+                <td>クラウドサービス利用料</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">mobile_phone</span></td>
+                <td>携帯電話料金</td>
+                <td>不要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">internet</span></td>
+                <td>インターネット利用料</td>
+                <td>不要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">telephone</span></td>
+                <td>固定電話料金</td>
+                <td>不要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">postage</span></td>
+                <td>郵便料金</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">courier</span></td>
+                <td>宅配便・配送費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">printing</span></td>
+                <td>印刷・製本費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">books</span></td>
+                <td>書籍購入費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">newspaper</span></td>
+                <td>新聞購読料</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">subscription</span></td>
+                <td>専門誌・情報サービス購読料</td>
                 <td>必要</td>
                 <td>
                   <span class="status active">
@@ -830,9 +3381,570 @@
               </tr>
             
               <tr>
-                <td><span class="code">communication</span></td>
-                <td>通信費</td>
+                <td><span class="code">seminar</span></td>
+                <td>セミナー参加費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">conference_fee</span></td>
+                <td>カンファレンス参加費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">qualification_exam</span></td>
+                <td>資格試験受験料</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">membership</span></td>
+                <td>会費・年会費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">recruitment</span></td>
+                <td>採用関連費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">advertising</span></td>
+                <td>広告宣伝費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">sales_promotion</span></td>
+                <td>販売促進費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">translation</span></td>
+                <td>翻訳・通訳費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">outsourcing</span></td>
+                <td>業務委託費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">consulting</span></td>
+                <td>コンサルティング費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">legal_fee</span></td>
+                <td>弁護士・司法書士費用</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">accounting_fee</span></td>
+                <td>税理士・会計士費用</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">bank_fee</span></td>
+                <td>振込・銀行手数料</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">card_fee</span></td>
+                <td>カード決済手数料</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">repair</span></td>
+                <td>修理・修繕費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">maintenance</span></td>
+                <td>保守・メンテナンス費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">cleaning</span></td>
+                <td>清掃費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">uniform</span></td>
+                <td>制服・作業着費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">safety_equipment</span></td>
+                <td>安全衛生用品費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">medical_checkup</span></td>
+                <td>健康診断費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">employee_welfare</span></td>
+                <td>福利厚生費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">company_event</span></td>
+                <td>社内イベント費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">rent</span></td>
+                <td>会場・施設利用料</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">rental_equipment</span></td>
+                <td>機器レンタル料</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">utilities</span></td>
+                <td>水道光熱費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">insurance</span></td>
+                <td>保険料</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">tax_and_dues</span></td>
+                <td>租税公課</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">miscellaneous</span></td>
+                <td>雑費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">other_normal</span></td>
+                <td>その他（通常経費）</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">bullet_train</span></td>
+                <td>新幹線</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">limited_express</span></td>
+                <td>特急列車</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">airfare_domestic</span></td>
+                <td>国内航空券</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">airfare_international</span></td>
+                <td>海外航空券</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">airport_access</span></td>
+                <td>空港アクセス交通費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">highway_bus</span></td>
+                <td>高速バス</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">rental_car</span></td>
+                <td>レンタカー</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">gasoline</span></td>
+                <td>ガソリン代</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">expressway</span></td>
+                <td>高速道路料金</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">ferry</span></td>
+                <td>フェリー・船舶運賃</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">local_transport_overseas</span></td>
+                <td>海外現地交通費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">hotel_domestic</span></td>
+                <td>国内宿泊費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">hotel_overseas</span></td>
+                <td>海外宿泊費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">travel_meal</span></td>
+                <td>出張中食事代</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">daily_allowance</span></td>
+                <td>日当</td>
                 <td>不要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">trip_allowance</span></td>
+                <td>出張手当</td>
+                <td>不要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">baggage_delivery</span></td>
+                <td>手荷物・荷物配送費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">visa</span></td>
+                <td>ビザ取得費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">passport</span></td>
+                <td>旅券取得関連費</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">travel_insurance</span></td>
+                <td>海外旅行保険料</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">cancellation_fee</span></td>
+                <td>出張キャンセル料</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">airport_fee</span></td>
+                <td>空港使用料・諸税</td>
+                <td>必要</td>
+                <td>
+                  <span class="status active">
+                    有効
+                  </span>
+                </td>
+              </tr>
+            
+              <tr>
+                <td><span class="code">other_trip</span></td>
+                <td>その他（出張経費）</td>
+                <td>必要</td>
                 <td>
                   <span class="status active">
                     有効
@@ -875,55 +3987,443 @@
     <ol class="flow-list">
       
             <li class="question" style="--depth: 0">
-              q-category: 今日は何を申請しますか？
+              Q001: 今回申請する費用の大分類を選択してください。
             </li>
           
             <li class="option" style="--depth: 1">
-              電車・バス (電車・バス) -&gt; q-business-trip
+              通常の交通費 (O001) -&gt; Q002
             </li>
           
             <li class="question" style="--depth: 2">
-              q-business-trip: 出張に関係ですか？
+              Q002: 通常の交通費の種類を選択してください。
             </li>
           
             <li class="result" style="--depth: 3">
-              はい (yes) -&gt; r001: 電車・近隣交通費, r003: 宿泊費
+              電車・近隣交通費 (O010) -&gt; r001-g1: 電車・近隣交通費
             </li>
           
-            <li class="result" style="--depth: 1">
-              タクシー (タクシー) -&gt; r002: タクシー
+            <li class="result" style="--depth: 3">
+              タクシー (O011) -&gt; r002-g1: タクシー
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              駐車場代 (O012) -&gt; r003-g1: 駐車場代
             </li>
           
             <li class="option" style="--depth: 1">
-              ホテル (ホテル) -&gt; q-business-trip
-            </li>
-          
-            <li class="option" style="--depth: 1">
-              会食 (会食) -&gt; q-receipt
+              飲食費 (O002) -&gt; Q003
             </li>
           
             <li class="question" style="--depth: 2">
-              q-receipt: 領収書ありですか？
+              Q003: 飲食費の種類を選択してください。
             </li>
           
             <li class="result" style="--depth: 3">
-              はい (yes) -&gt; r004: 会食費, r005: 接待交際費, r006: 備品購入, r007: 研修費
+              会食費 (O013) -&gt; r004-g1: 会食費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              接待交際費 (O014) -&gt; r005-g1: 接待交際費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              社内会議飲食費 (O015) -&gt; r006-g1: 社内会議飲食費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              飲料・軽食費 (O016) -&gt; r007-g1: 飲料・軽食費
             </li>
           
             <li class="option" style="--depth: 1">
-              接待 (接待) -&gt; q-receipt
+              物品購入 (O003) -&gt; Q004
+            </li>
+          
+            <li class="question" style="--depth: 2">
+              Q004: 購入した物品の種類を選択してください。
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              贈答品費 (O017) -&gt; r008-g1: 贈答品費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              慶弔費 (O018) -&gt; r009-g1: 慶弔費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              事務用品費 (O019) -&gt; r010-g1: 事務用品費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              消耗品費 (O020) -&gt; r011-g1: 消耗品費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              備品購入 (O021) -&gt; r012-g1: 備品購入
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              少額資産購入 (O022) -&gt; r013-g1: 少額資産購入
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              固定資産購入 (O023) -&gt; r014-g1: 固定資産購入
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              制服・作業着費 (O024) -&gt; r045-g1: 制服・作業着費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              安全衛生用品費 (O025) -&gt; r046-g1: 安全衛生用品費
             </li>
           
             <li class="option" style="--depth: 1">
-              備品購入 (備品購入) -&gt; q-receipt
+              ソフトウェア・通信費 (O004) -&gt; Q005
+            </li>
+          
+            <li class="question" style="--depth: 2">
+              Q005: ソフトウェア・通信費の種類を選択してください。
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              ソフトウェア購入 (O026) -&gt; r015-g1: ソフトウェア購入
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              ソフトウェア利用料 (O027) -&gt; r016-g1: ソフトウェア利用料
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              クラウドサービス利用料 (O028) -&gt; r017-g1: クラウドサービス利用料
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              携帯電話料金 (O029) -&gt; r018-g1: 携帯電話料金
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              インターネット利用料 (O030) -&gt; r019-g1: インターネット利用料
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              固定電話料金 (O031) -&gt; r020-g1: 固定電話料金
             </li>
           
             <li class="option" style="--depth: 1">
-              研修 (研修) -&gt; q-receipt
+              配送・印刷・購読費 (O005) -&gt; Q006
             </li>
           
-            <li class="result" style="--depth: 1">
-              通信費 (通信費) -&gt; r008: 通信費
+            <li class="question" style="--depth: 2">
+              Q006: 配送・印刷・購読費の種類を選択してください。
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              郵便料金 (O032) -&gt; r021-g1: 郵便料金
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              宅配便・配送費 (O033) -&gt; r022-g1: 宅配便・配送費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              印刷・製本費 (O034) -&gt; r023-g1: 印刷・製本費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              書籍購入費 (O035) -&gt; r024-g1: 書籍購入費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              新聞購読料 (O036) -&gt; r025-g1: 新聞購読料
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              専門誌・情報サービス購読料 (O037) -&gt; r026-g1: 専門誌・情報サービス購読料
+            </li>
+          
+            <li class="option" style="--depth: 1">
+              研修・資格・会費 (O006) -&gt; Q007
+            </li>
+          
+            <li class="question" style="--depth: 2">
+              Q007: 研修・資格・会費の種類を選択してください。
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              研修費 (O038) -&gt; r027-g1: 研修費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              セミナー参加費 (O039) -&gt; r028-g1: セミナー参加費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              カンファレンス参加費 (O040) -&gt; r029-g1: カンファレンス参加費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              資格試験受験料 (O041) -&gt; r030-g1: 資格試験受験料
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              会費・年会費 (O042) -&gt; r031-g1: 会費・年会費
+            </li>
+          
+            <li class="option" style="--depth: 1">
+              専門サービス・手数料・採用・販促 (O007) -&gt; Q008
+            </li>
+          
+            <li class="question" style="--depth: 2">
+              Q008: 専門サービスの種類を選択してください。
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              翻訳・通訳費 (O043) -&gt; r035-g1: 翻訳・通訳費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              業務委託費 (O044) -&gt; r036-g1: 業務委託費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              コンサルティング費 (O045) -&gt; r037-g1: コンサルティング費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              弁護士・司法書士費用 (O046) -&gt; r038-g1: 弁護士・司法書士費用
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              税理士・会計士費用 (O047) -&gt; r039-g1: 税理士・会計士費用
+            </li>
+          
+            <li class="option" style="--depth: 3">
+              手数料・採用・販促 (O048) -&gt; Q009
+            </li>
+          
+            <li class="question" style="--depth: 4">
+              Q009: 手数料・採用・販促費の種類を選択してください。
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              振込・銀行手数料 (O049) -&gt; r040-g1: 振込・銀行手数料
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              カード決済手数料 (O050) -&gt; r041-g1: カード決済手数料
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              採用関連費 (O051) -&gt; r032-g1: 採用関連費
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              広告宣伝費 (O052) -&gt; r033-g1: 広告宣伝費
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              販売促進費 (O053) -&gt; r034-g1: 販売促進費
+            </li>
+          
+            <li class="option" style="--depth: 1">
+              施設・維持管理・社内運営・その他 (O008) -&gt; Q010
+            </li>
+          
+            <li class="question" style="--depth: 2">
+              Q010: 施設・維持管理費の種類を選択してください。
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              修理・修繕費 (O054) -&gt; r042-g1: 修理・修繕費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              保守・メンテナンス費 (O055) -&gt; r043-g1: 保守・メンテナンス費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              清掃費 (O056) -&gt; r044-g1: 清掃費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              会場・施設利用料 (O057) -&gt; r050-g1: 会場・施設利用料
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              機器レンタル料 (O058) -&gt; r051-g1: 機器レンタル料
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              水道光熱費 (O059) -&gt; r052-g1: 水道光熱費
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              保険料 (O060) -&gt; r053-g1: 保険料
+            </li>
+          
+            <li class="result" style="--depth: 3">
+              租税公課 (O061) -&gt; r054-g1: 租税公課
+            </li>
+          
+            <li class="option" style="--depth: 3">
+              福利厚生・社内運営・その他 (O062) -&gt; Q011
+            </li>
+          
+            <li class="question" style="--depth: 4">
+              Q011: 福利厚生・社内運営・その他経費の種類を選択してください。
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              健康診断費 (O063) -&gt; r047-g1: 健康診断費
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              福利厚生費 (O064) -&gt; r048-g1: 福利厚生費
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              社内イベント費 (O065) -&gt; r049-g1: 社内イベント費
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              雑費 (O066) -&gt; r055-g1: 雑費
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              その他（通常経費） (O067) -&gt; r056-g1: その他（通常経費）
+            </li>
+          
+            <li class="option" style="--depth: 1">
+              出張関連 (O009) -&gt; Q012
+            </li>
+          
+            <li class="question" style="--depth: 2">
+              Q012: 出張経費の種類を選択してください。
+            </li>
+          
+            <li class="option" style="--depth: 3">
+              鉄道・道路交通 (O068) -&gt; Q013
+            </li>
+          
+            <li class="question" style="--depth: 4">
+              Q013: 鉄道・道路交通の種類を選択してください。
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              新幹線 (O072) -&gt; r057-g1: 新幹線
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              特急列車 (O073) -&gt; r058-g1: 特急列車
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              空港アクセス交通費 (O074) -&gt; r061-g1: 空港アクセス交通費
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              高速バス (O075) -&gt; r062-g1: 高速バス
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              レンタカー (O076) -&gt; r063-g1: レンタカー
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              ガソリン代 (O077) -&gt; r064-g1: ガソリン代
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              高速道路料金 (O078) -&gt; r065-g1: 高速道路料金
+            </li>
+          
+            <li class="option" style="--depth: 3">
+              航空・船舶・海外現地交通 (O069) -&gt; Q014
+            </li>
+          
+            <li class="question" style="--depth: 4">
+              Q014: 航空・船舶・海外現地交通の種類を選択してください。
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              国内航空券 (O079) -&gt; r059-g1: 国内航空券
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              海外航空券 (O080) -&gt; r060-g1: 海外航空券
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              フェリー・船舶運賃 (O081) -&gt; r066-g1: フェリー・船舶運賃
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              海外現地交通費 (O082) -&gt; r067-g1: 海外現地交通費
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              空港使用料・諸税 (O083) -&gt; r078-g1: 空港使用料・諸税
+            </li>
+          
+            <li class="option" style="--depth: 3">
+              宿泊・食事・手当 (O070) -&gt; Q015
+            </li>
+          
+            <li class="question" style="--depth: 4">
+              Q015: 宿泊・食事・手当の種類を選択してください。
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              国内宿泊費 (O084) -&gt; r068-g1: 国内宿泊費
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              海外宿泊費 (O085) -&gt; r069-g1: 海外宿泊費
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              出張中食事代 (O086) -&gt; r070-g1: 出張中食事代
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              日当 (O087) -&gt; r071-g1: 日当
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              出張手当 (O088) -&gt; r072-g1: 出張手当
+            </li>
+          
+            <li class="option" style="--depth: 3">
+              渡航準備・その他 (O071) -&gt; Q016
+            </li>
+          
+            <li class="question" style="--depth: 4">
+              Q016: 渡航準備・その他出張経費の種類を選択してください。
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              手荷物・荷物配送費 (O089) -&gt; r073-g1: 手荷物・荷物配送費
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              ビザ取得費 (O090) -&gt; r074-g1: ビザ取得費
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              旅券取得関連費 (O091) -&gt; r075-g1: 旅券取得関連費
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              海外旅行保険料 (O092) -&gt; r076-g1: 海外旅行保険料
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              出張キャンセル料 (O093) -&gt; r077-g1: 出張キャンセル料
+            </li>
+          
+            <li class="result" style="--depth: 5">
+              その他（出張経費） (O094) -&gt; r079-g1: その他（出張経費）
             </li>
           
     </ol>

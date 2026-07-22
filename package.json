@@ -9,6 +9,7 @@
     "export:report": "node scripts/export-report.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.8",
     "@vitejs/plugin-react": "latest",
     "react": "latest",
     "react-dom": "latest",

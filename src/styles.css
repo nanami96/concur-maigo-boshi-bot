@@ -157,6 +157,11 @@ button {
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
 }
 
+.botStatusPanel {
+  text-align: center;
+  color: #5b6575;
+}
+
 .overviewPanel {
   display: grid;
   gap: 16px;
@@ -904,6 +909,11 @@ button {
   box-shadow: none;
 }
 
+.resultAdviceBubble p,
+.resultWarningCard p {
+  white-space: pre-line;
+}
+
 .resultAdviceBubble::before,
 .resultAdviceBubble::after {
   content: none;
@@ -1319,5 +1329,1409 @@ button {
 
   .choiceButton {
     min-height: 58px;
+  }
+}
+
+/* ==========================================================================
+   管理画面（質問フロー編集）
+   既存クラスとの衝突を避けるため flow/admin 系のプレフィックスに揃えている。
+   ========================================================================== */
+
+.adminShell {
+  max-width: 900px;
+}
+
+.adminTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 20px 0 0;
+  border-bottom: 1px solid #d7deea;
+}
+
+.adminTabButton {
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  margin-bottom: -1px;
+  padding: 10px 16px;
+  cursor: pointer;
+  color: #5a6b85;
+  font: inherit;
+}
+
+.adminTabButton:hover {
+  color: #1f2c44;
+}
+
+.adminTabButton.selected {
+  color: #1f4fd8;
+  border-bottom-color: #1f4fd8;
+  font-weight: 600;
+}
+
+.adminTabPanel {
+  background: #fff;
+  border-radius: 0 0 16px 16px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(22, 32, 51, 0.08);
+  overflow-x: auto;
+}
+
+.flowEmptyState {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.flowCreateFirstQuestionButton,
+.resultAddCandidateButton,
+.resultCandidateRemoveButton,
+.flowPreviewStartButton,
+.checkJumpButton {
+  border: 1px solid #c7d2e0;
+  background: #f4f7fc;
+  border-radius: 10px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: #1f2c44;
+  font-size: 0.9rem;
+}
+
+/* 「＋ 選択肢を追加」はフロー閲覧時に視線が止まらないよう、枠なしのテキストリンク風にする。 */
+.flowAddOptionButton {
+  border: none;
+  background: transparent;
+  padding: 4px 4px;
+  cursor: pointer;
+  color: #1f4fd8;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.flowAddOptionButton:hover {
+  color: #15359c;
+}
+
+.flowOutlineToolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.flowGhostButton {
+  border: 1px solid #c7d2e0;
+  background: #fff;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  color: #33415c;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.flowGhostButton:hover {
+  background: #f4f7fc;
+}
+
+.flowQuestionCard {
+  padding: 6px 0;
+}
+
+.flowQuestionMetaRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.flowQuestionTextRow {
+  padding-left: 28px;
+}
+
+.flowCaretButton {
+  flex-shrink: 0;
+  width: 22px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #5a6b85;
+  font-size: 0.8rem;
+}
+
+/* 「質問」「選択肢」「次の質問」「結果」等の補助ラベル共通スタイル。
+   本文（質問文・選択肢名・経費タイプ名）より必ず控えめにする。 */
+.flowKicker {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #8792a6;
+  background: #eef2f7;
+  padding: 1px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.flowOptionsHeading {
+  margin: 6px 0 2px 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #8792a6;
+  letter-spacing: 0.02em;
+}
+
+.flowQuestionTextButton {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: #162033;
+  text-align: left;
+  cursor: pointer;
+}
+
+.flowQuestionTextButton:hover {
+  background: #eef2f7;
+}
+
+.flowQuestionTextButton.hasError {
+  color: #a13d3d;
+}
+
+.flowQuestionTextInput {
+  width: 100%;
+  font-size: 1.02rem;
+  font-weight: 600;
+  padding: 6px 8px;
+  border: 1px solid #c7d2e0;
+  border-radius: 8px;
+}
+
+.flowQuestionActions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.flowOptionList {
+  list-style: none;
+  margin: 4px 0 8px 10px;
+  padding: 0 0 2px 16px;
+  border-left: 2px solid #dbe3f0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.flowOptionRow {
+  padding: 3px 0;
+}
+
+.flowOptionSummary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.flowOptionLabelButton {
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: #162033;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.flowOptionLabelButton:hover {
+  background: #eef2f7;
+}
+
+.flowOptionLabelButton.hasError {
+  color: #a13d3d;
+}
+
+.flowNextSummaryLine {
+  margin: 0 0 2px 28px;
+}
+
+.flowNextSummary {
+  color: #5a6b85;
+  font-size: 0.88rem;
+}
+
+.flowNextSummary strong {
+  color: #1f2c44;
+  font-weight: 600;
+}
+
+.flowNextSummary.warning {
+  color: #a13d3d;
+}
+
+.flowNextArrow {
+  color: #b7c1d1;
+  margin-right: 4px;
+}
+
+.flowResultBadge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #5a6b85;
+  background: #eef2f7;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+
+.flowNextQuestionLabel {
+  margin: 0 0 2px 4px;
+  font-size: 0.78rem;
+  color: #8792a6;
+}
+
+.flowOptionDetail {
+  margin: 4px 0 10px 28px;
+  padding: 12px 14px;
+  background: #f4f7fc;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.flowFieldLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #33415c;
+}
+
+.flowOptionLabelInput {
+  padding: 6px 10px;
+  border: 1px solid #c7d2e0;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.flowCloseDetailButton {
+  align-self: flex-end;
+}
+
+.optionMenu {
+  position: relative;
+  margin-left: auto;
+}
+
+.optionMenuTrigger {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: #5a6b85;
+}
+
+.optionMenuTrigger:hover {
+  background: #eef2f7;
+}
+
+.optionMenuList {
+  /* position/top/right はOptionMenu.jsxがトリガーの実座標から計算し、
+     インラインstyleで指定する（position: fixed）。祖先のスクロール領域や
+     テーブルの最終行に関係なく、常に画面内に収まるようにするため。 */
+  background: #fff;
+  border: 1px solid #d7deea;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(22, 32, 51, 0.15);
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  min-width: 140px;
+  z-index: 1000;
+}
+
+.optionMenuItem {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #1f2c44;
+}
+
+.optionMenuItem:hover {
+  background: #f4f7fc;
+}
+
+.optionMenuItem:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.optionMenuItem.danger {
+  color: #a13d3d;
+}
+
+.nextTypeSwitch {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nextTypeOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #c7d2e0;
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.nextTypeOption input {
+  margin: 0;
+}
+
+.nextTypeOption.selected {
+  border-color: #1f4fd8;
+  background: #e8edfc;
+  color: #1f4fd8;
+  font-weight: 600;
+}
+
+.flowChildQuestion {
+  margin-top: 2px;
+}
+
+.flowCollapsedHint,
+.flowEmptyOptionsHint {
+  color: #8792a6;
+  font-size: 0.85rem;
+  margin: 2px 0 8px 28px;
+}
+
+.flowIssueList {
+  list-style: none;
+  margin: 2px 0 4px 28px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flowIssue {
+  font-size: 0.85rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.flowIssue.error {
+  background: #fdecec;
+  color: #a13d3d;
+}
+
+.flowIssue.warning {
+  background: #fff6e0;
+  color: #8a6400;
+}
+
+.flowJumpHighlight {
+  animation: flowJumpHighlight 1.5s ease-out;
+}
+
+@keyframes flowJumpHighlight {
+  0% {
+    box-shadow: 0 0 0 4px rgba(31, 79, 216, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(31, 79, 216, 0);
+  }
+}
+
+.resultForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.resultCandidateForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed #c7d2e0;
+}
+
+.resultCandidateForm:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.resultFieldLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: #33415c;
+}
+
+.resultFieldLabel select,
+.resultFieldInput {
+  padding: 6px 10px;
+  border: 1px solid #c7d2e0;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.resultFieldLabel select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M1 3l4 4 4-4' stroke='%23475569' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 10px;
+}
+
+textarea.resultFieldInput {
+  resize: vertical;
+  min-height: 2.6em;
+  line-height: 1.5;
+}
+
+.undoToast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #1f2c44;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+
+.undoToast button {
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: transparent;
+  color: #fff;
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.undoToastDismiss {
+  margin-left: auto;
+  border: none !important;
+}
+
+.confirmOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(22, 32, 51, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.confirmDialog {
+  background: #fff;
+  border-radius: 14px;
+  padding: 20px;
+  max-width: 420px;
+  width: calc(100% - 32px);
+  box-shadow: 0 10px 30px rgba(22, 32, 51, 0.3);
+}
+
+.confirmMessage {
+  margin: 8px 0;
+}
+
+.confirmImpact {
+  font-weight: 600;
+  color: #a13d3d;
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.confirmCancelButton {
+  border: 1px solid #c7d2e0;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.confirmOkButton {
+  border: none;
+  background: #a13d3d;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.flowPreviewHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.flowPreviewBreadcrumb {
+  color: #5a6b85;
+  font-size: 0.9rem;
+}
+
+/* ==========================================================================
+   初期設定Excelインポート
+   ========================================================================== */
+
+.initialSetupScreen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(22, 32, 51, 0.08);
+}
+
+.initialSetupChoices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.initialSetupChoiceCard {
+  text-align: left;
+  border: 1px solid #c7d2e0;
+  border-radius: 14px;
+  padding: 20px;
+  background: #fbfcfe;
+  cursor: pointer;
+}
+
+.initialSetupChoiceCard:hover {
+  border-color: #1f4fd8;
+  background: #f4f7fc;
+}
+
+.initialSetupChoiceCard h3 {
+  margin: 0 0 8px;
+}
+
+.initialSetupChoiceCard p {
+  margin: 0;
+  color: #5a6b85;
+  font-size: 0.9rem;
+}
+
+.excelImportPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.importDropZone {
+  border: 2px dashed #c7d2e0;
+  border-radius: 14px;
+  padding: 36px 20px;
+  text-align: center;
+  color: #5a6b85;
+}
+
+.importDropZone.dragging {
+  border-color: #1f4fd8;
+  background: #f4f7fc;
+}
+
+.importDropZoneOr {
+  font-size: 0.85rem;
+  margin: 6px 0;
+}
+
+.importStatusMessage {
+  color: #33415c;
+}
+
+.importStatusMessage.error {
+  color: #a13d3d;
+}
+
+.importFileName {
+  color: #5a6b85;
+  font-size: 0.9rem;
+}
+
+.importPreview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.importPreviewNotice {
+  color: #5a6b85;
+  font-size: 0.9rem;
+}
+
+.importSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.importSummaryItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #f4f7fc;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.importSummaryItem span {
+  font-size: 0.78rem;
+  color: #5a6b85;
+}
+
+.importSummaryItem strong {
+  font-size: 1.1rem;
+  color: #1f2c44;
+}
+
+.importExpenseTypeList {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 6px;
+}
+
+.importInactiveBadge {
+  margin-left: 6px;
+  font-size: 0.72rem;
+  color: #8a6400;
+  background: #fff6e0;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.importPreviewActions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.importConfirmButton {
+  border: none;
+  background: #1f4fd8;
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.importConfirmButton:disabled {
+  background: #c7d2e0;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   下書き保存バー（Phase 2）
+   ========================================================================== */
+
+.draftSaveBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #eef1f6;
+  font-size: 0.9rem;
+}
+
+.draftSaveBarDisabled {
+  background: #fff6e0;
+  color: #8a6400;
+}
+
+.draftSaveStatus {
+  color: #33415c;
+}
+
+.draftSaveStatusDirty {
+  color: #8a6400;
+  font-weight: 600;
+}
+
+.draftSaveStatusSaving {
+  color: #33415c;
+}
+
+.draftSaveStatusClean {
+  color: #1e7a34;
+}
+
+.draftSaveStatusError {
+  color: #a13d3d;
+  font-weight: 600;
+}
+
+.draftSaveButton {
+  border: none;
+  background: #1f4fd8;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 18px;
+  cursor: pointer;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.draftSaveButton:disabled {
+  background: #c7d2e0;
+  cursor: not-allowed;
+}
+
+.draftSaveBar {
+  flex-wrap: wrap;
+}
+
+.draftSaveBar > .settingsErrorText {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.draftSaveBarActions {
+  display: flex;
+  gap: 10px;
+}
+
+.draftRevertButton {
+  border: 1px solid #c7d2e0;
+  background: #fff;
+  color: #33415c;
+  border-radius: 8px;
+  padding: 8px 18px;
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.draftRevertButton:hover:not(:disabled) {
+  background: #f4f7fc;
+}
+
+.draftRevertButton:disabled {
+  color: #a7b0c0;
+  border-color: #dde3ec;
+  cursor: not-allowed;
+}
+
+.unsavedChangesActions {
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   公開（Phase 3）
+   ========================================================================== */
+/* 「下書きを保存」（draftSaveBar・青系）と紛れないよう、緑系にして
+   視覚的に「利用者向けの正式版にする」操作であることを分けている。 */
+
+.publishPanel {
+  margin: 10px 0 0;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #e9f7ee;
+}
+
+.publishStatusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.publishStatusText {
+  color: #1e7a34;
+  font-size: 0.9rem;
+}
+
+.publishButton {
+  border: none;
+  background: #1e7a34;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 18px;
+  cursor: pointer;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.publishButton:disabled {
+  background: #c7d2e0;
+  cursor: not-allowed;
+}
+
+.publishBlockedNotice {
+  margin: 8px 0 0;
+  color: #a13d3d;
+  font-size: 0.85rem;
+}
+
+.publishHistory {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: #33415c;
+}
+
+.publishHistory summary {
+  cursor: pointer;
+}
+
+.publishHistory ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.publishWarningSummary {
+  background: #fff6e0;
+  color: #8a6400;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 12px 0;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.publishWarningSummary ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+/* ==========================================================================
+   設定（基本設定・ポリシー・経費タイプ）
+   ========================================================================== */
+
+.adminSectionTabs {
+  display: flex;
+  gap: 8px;
+  margin: 20px 0 0;
+}
+
+.adminSectionButton {
+  border: 1px solid #c7d2e0;
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 20px;
+  cursor: pointer;
+  color: #33415c;
+  font-weight: 500;
+}
+
+.adminSectionButton:hover {
+  background: #f4f7fc;
+}
+
+.adminSectionButton.selected {
+  background: #1f2c44;
+  border-color: #1f2c44;
+  color: #fff;
+}
+
+.settingsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settingsTextInput {
+  padding: 8px 10px;
+  border: 1px solid #c7d2e0;
+  border-radius: 8px;
+  font: inherit;
+  width: 100%;
+}
+
+.settingsCompanyNameField {
+  max-width: 360px;
+}
+
+.settingsAdvancedDetails {
+  color: #5a6b85;
+  font-size: 0.9rem;
+}
+
+.settingsHint {
+  color: #5a6b85;
+  font-size: 0.85rem;
+  margin: 4px 0;
+}
+
+.settingsErrorText {
+  color: #a13d3d;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.settingsNextStepHint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1f4fd8;
+  font-size: 0.9rem;
+}
+
+.settingsCardList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settingsCard {
+  border: 1px solid #d7deea;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #fbfcfe;
+}
+
+.settingsCardSummary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.settingsCardTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settingsCardMeta {
+  color: #5a6b85;
+  font-size: 0.85rem;
+  margin: 0;
+  flex: 1;
+}
+
+.settingsStatusBadge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.settingsStatusBadge.active {
+  background: #e6f4ea;
+  color: #1e7a34;
+}
+
+.settingsStatusBadge.inactive {
+  background: #f1f2f4;
+  color: #6b7280;
+}
+
+.settingsCardDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #d7deea;
+}
+
+.settingsAddForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settingsAddFormActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.settingsFilterBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+/* select共通スタイル。テキスト入力(.settingsTextInput)と見た目を揃え、
+   ブラウザ標準の矢印はappearance:noneで消して自前の矢印を描画する。
+   フィルターバー（コンパクト・自動幅）にも入力フォーム（フル幅）にも使う。 */
+.settingsSelectWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.flowFieldLabel .settingsSelectWrap {
+  width: 100%;
+}
+
+.settingsSelectInput {
+  width: 100%;
+  padding: 8px 30px 8px 10px;
+  border: 1px solid #c7d2e0;
+  border-radius: 8px;
+  font: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  background: #fff;
+  cursor: pointer;
+}
+
+.settingsFilterBar .settingsSelectInput {
+  padding: 6px 30px 6px 10px;
+}
+
+.settingsSelectWrap::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid #5a6b85;
+  border-bottom: 2px solid #5a6b85;
+  pointer-events: none;
+  transform: translateY(-65%) rotate(45deg);
+}
+
+.settingsSearchInput {
+  padding: 6px 10px;
+  border: 1px solid #c7d2e0;
+  border-radius: 8px;
+  font: inherit;
+  min-width: 200px;
+  flex: 1;
+}
+
+.settingsTableWrap {
+  overflow-x: auto;
+}
+
+.settingsTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.settingsTable th {
+  text-align: left;
+  font-size: 0.78rem;
+  color: #5a6b85;
+  padding: 8px 10px;
+  border-bottom: 1px solid #d7deea;
+  position: sticky;
+  top: 0;
+  background: #fff;
+}
+
+.settingsTable td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.settingsTableMenuCell {
+  width: 40px;
+  text-align: right;
+}
+
+.settingsEditingRow td {
+  background: #f4f7fc;
+}
+
+/* ==========================================================================
+   認証（AuthGate / LoginScreen）
+   ========================================================================== */
+
+.authLocalModeBanner {
+  background: #fff6e0;
+  color: #8a6400;
+  text-align: center;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+}
+
+.authScreen {
+  max-width: 420px;
+  margin: 60px auto;
+  background: #fff;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(22, 32, 51, 0.08);
+  text-align: center;
+}
+
+.authForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+  margin-top: 16px;
+}
+
+.authSentMessage {
+  margin-top: 16px;
+  color: #1e7a34;
+}
+
+.authModeSwitchLink {
+  display: block;
+  margin: 16px auto 0;
+  background: none;
+  border: none;
+  color: #1f4fd8;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.authModeSwitchLink:hover {
+  color: #15359a;
+}
+
+.authSignedInBar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 16px;
+}
+
+.authSignOutButton {
+  background: none;
+  border: 1px solid #c7ccd6;
+  border-radius: 8px;
+  color: #4a5265;
+  font-size: 0.8rem;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.authSignOutButton:hover {
+  background: #f2f4f8;
+}
+
+@media (prefers-color-scheme: dark) {
+  .adminTabPanel,
+  .confirmDialog,
+  .optionMenuList,
+  .initialSetupScreen,
+  .authScreen {
+    background: #182234;
+    color: #eef2f7;
+  }
+
+  .draftSaveBar {
+    background: #1f2c44;
+  }
+
+  .draftSaveBarDisabled {
+    background: #3a2f05;
+    color: #f3d98a;
+  }
+
+  .draftSaveStatus {
+    color: #eef2f7;
+  }
+
+  .draftRevertButton {
+    border-color: #3a4457;
+    color: #eef2f7;
+  }
+
+  .draftRevertButton:hover:not(:disabled) {
+    background: #22304a;
+  }
+
+  .publishPanel {
+    background: #163322;
+  }
+
+  .publishStatusText {
+    color: #7fd99a;
+  }
+
+  .publishHistory {
+    color: #eef2f7;
+  }
+
+  .authLocalModeBanner {
+    background: #3a2f05;
+    color: #f3d98a;
+  }
+
+  .authSignOutButton {
+    border-color: #3a4457;
+    color: #eef2f7;
+  }
+
+  .authSignOutButton:hover {
+    background: #22304a;
+  }
+
+  .initialSetupChoiceCard {
+    background: #101827;
+    border-color: #33415c;
+  }
+
+  .importSummaryItem {
+    background: #101827;
+  }
+
+  .adminSectionButton {
+    background: #182234;
+    color: #9fb0c8;
+    border-color: #33415c;
+  }
+
+  .adminSectionButton.selected {
+    background: #7fa1ff;
+    border-color: #7fa1ff;
+    color: #101827;
+  }
+
+  .settingsCard {
+    background: #101827;
+    border-color: #33415c;
+  }
+
+  .settingsCardDetail {
+    border-top-color: #33415c;
+  }
+
+  .settingsTextInput,
+  .settingsSelectInput,
+  .settingsSearchInput {
+    background: #101827;
+    color: #eef2f7;
+    border-color: #33415c;
+  }
+
+  .settingsSelectWrap::after {
+    border-color: #9fb0c8;
+  }
+
+  .settingsTable th {
+    background: #182234;
+    color: #9fb0c8;
+    border-bottom-color: #33415c;
+  }
+
+  .settingsTable td {
+    border-bottom-color: #223049;
+  }
+
+  .settingsEditingRow td {
+    background: #182234;
+  }
+
+  .settingsStatusBadge.inactive {
+    background: #2a2f38;
+    color: #9fb0c8;
+  }
+
+  .importDropZone {
+    border-color: #33415c;
+  }
+
+  .adminTabs {
+    border-bottom-color: #33415c;
+  }
+
+  .adminTabButton {
+    color: #9fb0c8;
+  }
+
+  .adminTabButton.selected {
+    color: #7fa1ff;
+    border-bottom-color: #7fa1ff;
+  }
+
+  .flowQuestionTextButton:hover,
+  .flowOptionLabelButton:hover,
+  .flowGhostButton:hover,
+  .optionMenuTrigger:hover,
+  .optionMenuItem:hover {
+    background: #223049;
+  }
+
+  .flowOptionList {
+    border-left-color: #33415c;
+  }
+
+  .flowOptionDetail {
+    background: #101827;
+  }
+
+  .flowKicker,
+  .flowResultBadge {
+    background: #223049;
+    color: #9fb0c8;
+  }
+
+  .flowOptionsHeading,
+  .flowNextQuestionLabel,
+  .flowNextArrow {
+    color: #9fb0c8;
+  }
+
+  .flowGhostButton,
+  .optionMenuItem {
+    color: #eef2f7;
+  }
+
+  .flowQuestionTextInput,
+  .flowOptionLabelInput,
+  .resultFieldLabel select,
+  .resultFieldInput,
+  .nextTypeOption {
+    background: #101827;
+    color: #eef2f7;
+    border-color: #33415c;
+  }
+
+  /* 上のbackgroundショートハンドがbackground-imageもリセットしてしまうため、
+     矢印用のSVG（色違い）とbackground-color以降を再指定する。 */
+  .resultFieldLabel select {
+    background-color: #101827;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M1 3l4 4 4-4' stroke='%23eef2f7' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 10px;
   }
 }

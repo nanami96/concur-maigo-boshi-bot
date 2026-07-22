@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   availableCompanies,
-  getConfig,
   isPublicDemo,
 } from "@configSource";
 import QuestionEngine from "./engine/QuestionEngine";
-import RuleOverview from "./RuleOverview";
+import { useResolvedBotConfig } from "./useResolvedBotConfig";
+import { resolveInitialCompanyId } from "./resolveInitialCompanyId";
 
 function getReceiptStatus(receiptRequired) {
   if (receiptRequired === true) {
@@ -119,28 +119,40 @@ function CandidateList({ candidates, policies, onSelect }) {
 
 export default function App() {
   const defaultCompanyId = availableCompanies[0]?.id || "sample-company";
-  const [companyId, setCompanyId] = useState(defaultCompanyId);
-  const config = getConfig(companyId) || getConfig(defaultCompanyId);
-  const showRuleOverview = !isPublicDemo;
-
-  const engine = useMemo(() => new QuestionEngine(config), [config]);
-  const [currentQuestion, setCurrentQuestion] = useState(() =>
-    engine.getFirstQuestion(),
+  const [companyId, setCompanyId] = useState(() =>
+    resolveInitialCompanyId({
+      search: typeof window !== "undefined" ? window.location.search : "",
+      availableCompanies,
+      defaultCompanyId,
+    }),
   );
+  // 「今回どの設定を使うか」（Supabaseの公開設定 / 静的config.json / 未公開）は
+  // useResolvedBotConfigが非同期に解決する。QuestionEngine・質問UI・結果UIは
+  // resolved.configが確定してから初めて動き出すため、それ自体は設定の出所
+  // （静的ファイルかSupabaseか）を一切意識しない。
+  const resolved = useResolvedBotConfig(companyId);
+  const config = resolved.status === "ready" ? resolved.config : null;
+
+  const engine = useMemo(() => (config ? new QuestionEngine(config) : null), [config]);
+  const [currentQuestion, setCurrentQuestion] = useState(() => engine?.getFirstQuestion() ?? null);
 
   const [selectedAnswer, setSelectedAnswer] = useState("");
   const [result, setResult] = useState(null);
   const [messages, setMessages] = useState([]);
   const [history, setHistory] = useState([]);
-  const selectedOption = currentQuestion.options.find(
+  const selectedOption = currentQuestion?.options.find(
     (option) => option.value === selectedAnswer,
   );
   const resultNote =
     result?.rule?.warningMessage?.trim() || result?.expenseType?.note?.trim();
   const receiptStatus = getReceiptStatus(result?.expenseType?.receiptRequired);
-  const policyName = getPolicyName(config.policies, result?.expenseType?.policyId);
+  const policyName = getPolicyName(config?.policies, result?.expenseType?.policyId);
 
   function handleSelect(answer) {
+    if (!engine || !currentQuestion) {
+      return;
+    }
+
     const selected = currentQuestion.options.find(
       (option) => option.value === answer,
     );
@@ -186,6 +198,10 @@ export default function App() {
   }
 
   function goBack() {
+    if (!engine) {
+      return;
+    }
+
     const previous = history[history.length - 1];
 
     if (!previous) {
@@ -202,6 +218,10 @@ export default function App() {
   }
 
   function resetAnswers() {
+    if (!engine) {
+      return;
+    }
+
     const firstQuestion = engine.reset();
 
     setSelectedAnswer("");
@@ -221,7 +241,14 @@ export default function App() {
     setHistory([]);
   }
   useEffect(() => {
+    if (!engine) {
+      return;
+    }
     setCurrentQuestion(engine.getFirstQuestion());
+    setSelectedAnswer("");
+    setResult(null);
+    setMessages([]);
+    setHistory([]);
   }, [engine]);
   return (
     <main className="appShell">
@@ -234,6 +261,11 @@ export default function App() {
           </p>
         </div>
         <div className="headerActions">
+          {!isPublicDemo && (
+            <a className="resetButton" href="#admin">
+              管理画面（検証中）
+            </a>
+          )}
           {!isPublicDemo && (
             <label className="companySelector">
               <span className="companySelectorLabel">会社</span>
@@ -256,16 +288,40 @@ export default function App() {
             className="resetButton"
             type="button"
             onClick={goBack}
-            disabled={history.length === 0}
+            disabled={!currentQuestion || history.length === 0}
           >
             戻る
           </button>
-          <button className="resetButton" type="button" onClick={resetAnswers}>
+          <button
+            className="resetButton"
+            type="button"
+            onClick={resetAnswers}
+            disabled={!currentQuestion}
+          >
             最初から
           </button>
         </div>
       </header>
 
+      {resolved.status === "loading" && (
+        <section className="chatPanel botStatusPanel" aria-label="Concur迷子防止Botの質問">
+          <p>設定を読み込んでいます…</p>
+        </section>
+      )}
+
+      {resolved.status === "unavailable" && (
+        <section className="chatPanel botStatusPanel" aria-label="Concur迷子防止Botの質問">
+          <p>この会社の設定はまだ公開されていません。</p>
+        </section>
+      )}
+
+      {resolved.status === "error" && (
+        <section className="chatPanel botStatusPanel" aria-label="Concur迷子防止Botの質問">
+          <p>現在、設定を読み込めません。しばらくしてから再度お試しください。</p>
+        </section>
+      )}
+
+      {resolved.status === "ready" && currentQuestion && (
       <section className="chatPanel" aria-label="Concur迷子防止Botの質問">
         {messages.map((message, index) => (
           <ChatMessage key={index} speaker={message.speaker}>
@@ -365,9 +421,6 @@ export default function App() {
           </ChatMessage>
         )}
       </section>
-
-      {showRuleOverview && (
-        <RuleOverview companyId={companyId} config={config} />
       )}
     </main>
   );
