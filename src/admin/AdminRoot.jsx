@@ -13,6 +13,7 @@ import {
   resolveInitialWorkspaceState,
   mapDraftRowToWorkspaceState,
 } from "../data/draftConfigRepository";
+import { fetchIsPlatformAdmin, fetchPlatformCompanies } from "../data/membershipRepository";
 import DraftSaveBar from "./DraftSaveBar";
 import PublishPanel from "./PublishPanel";
 import UnsavedChangesDialog from "./UnsavedChangesDialog";
@@ -24,12 +25,15 @@ import CompanySettings from "./CompanySettings";
 import PolicySettings from "./PolicySettings";
 import ExpenseTypeSettings from "./ExpenseTypeSettings";
 import InitialSetupScreen from "./InitialSetupScreen";
+import UserManagementPanel from "./UserManagementPanel";
+import CreatePlatformCompanyScreen from "./CreatePlatformCompanyScreen";
 
 const NEW_COMPANY_ID = "__new__";
 
 const SECTIONS = [
   { id: "settings", label: "設定" },
   { id: "flow", label: "質問フロー" },
+  { id: "users", label: "ユーザー管理" },
 ];
 
 const SETTINGS_TABS = [
@@ -55,6 +59,8 @@ function AdminWorkspace({
   initialSection,
   initialSettingsTab,
   companyCode,
+  companyDbId,
+  isPlatformAdmin,
   initialUpdatedAt,
   onPersistenceChange,
 }) {
@@ -292,6 +298,15 @@ function AdminWorkspace({
           </div>
         </>
       )}
+
+      {section === "users" && (
+        <div className="adminTabPanel adminTabPanelStandalone">
+          <UserManagementPanel
+            companyDbId={isPlatformAdmin ? companyDbId : null}
+            isPlatformAdmin={Boolean(isPlatformAdmin)}
+          />
+        </div>
+      )}
     </>
   );
 }
@@ -335,7 +350,7 @@ function normalizeInitialState(initialState) {
 // 安全に誘導する。ただしこちらは「既に登録済みの会社（companyId）」への初期設定なので、
 // InitialSetupScreenが内部で生成するcompany_idは使わず、常に既存のcompanyIdへ
 // 上書きしてから使う（保存先の会社コードは既に確定しているため）。
-function CompanyEditor({ companyId, onPersistenceChange }) {
+function CompanyEditor({ companyId, isPlatformAdmin, onPersistenceChange }) {
   const config = getConfig(companyId);
 
   const staticInitialState = useMemo(() => {
@@ -355,12 +370,19 @@ function CompanyEditor({ companyId, onPersistenceChange }) {
     initialState: null,
     initialUpdatedAt: null,
     flowIssues: [],
+    companyDbId: null,
   });
   const [manualSetup, setManualSetup] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    setResolved({ status: "loading", initialState: null, initialUpdatedAt: null, flowIssues: [] });
+    setResolved({
+      status: "loading",
+      initialState: null,
+      initialUpdatedAt: null,
+      flowIssues: [],
+      companyDbId: null,
+    });
     setManualSetup(null);
 
     async function load() {
@@ -374,6 +396,7 @@ function CompanyEditor({ companyId, onPersistenceChange }) {
           status: "done",
           ...normalizeInitialState(staticInitialState),
           initialUpdatedAt: null,
+          companyDbId: null,
         });
         return;
       }
@@ -388,7 +411,12 @@ function CompanyEditor({ companyId, onPersistenceChange }) {
         staticConfig: staticInitialState,
       });
 
-      setResolved({ status: "done", ...normalizeInitialState(initialState), initialUpdatedAt });
+      setResolved({
+        status: "done",
+        ...normalizeInitialState(initialState),
+        initialUpdatedAt,
+        companyDbId,
+      });
     }
 
     load();
@@ -409,6 +437,8 @@ function CompanyEditor({ companyId, onPersistenceChange }) {
         initialSection={manualSetup.initialSection}
         initialSettingsTab={manualSetup.initialSettingsTab}
         companyCode={companyId}
+        companyDbId={resolved.companyDbId}
+        isPlatformAdmin={isPlatformAdmin}
         onPersistenceChange={onPersistenceChange}
       />
     );
@@ -443,6 +473,8 @@ function CompanyEditor({ companyId, onPersistenceChange }) {
       <AdminWorkspace
         initialState={resolved.initialState}
         companyCode={companyId}
+        companyDbId={resolved.companyDbId}
+        isPlatformAdmin={isPlatformAdmin}
         initialUpdatedAt={resolved.initialUpdatedAt}
         onPersistenceChange={onPersistenceChange}
       />
@@ -451,15 +483,50 @@ function CompanyEditor({ companyId, onPersistenceChange }) {
 }
 
 export default function AdminRoot() {
-  // 管理画面の会社一覧は「静的configの一覧」ではなく「ログイン中の管理者が
-  // 実際に所属している会社（company_membersに行がある会社）」を使う。
-  // Supabase未設定（ローカルの非ログイン運用）時のみ、従来通りconfigSource側の
-  // 静的一覧にフォールバックする。
+  // このユーザーがplatform_admin（サービス運営者、全社を横断管理できる）かどうか。
+  // Supabase未設定（ローカル開発）時は常にfalse固定とし、ローカル開発の挙動
+  // （静的configの一覧をそのまま使う、Phase 7以前と同じ体験）を一切変えない。
+  // Supabase設定時はis_platform_admin() RPCの結果が届くまでnull（未確定）。
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(() =>
+    isSupabaseConfigured ? null : false,
+  );
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
+    let cancelled = false;
+
+    fetchIsPlatformAdmin().then(({ isPlatformAdmin: value, error }) => {
+      if (cancelled) {
+        return;
+      }
+      if (error) {
+        console.error("platform_admin判定の取得に失敗しました", error);
+        setIsPlatformAdmin(false);
+        return;
+      }
+      setIsPlatformAdmin(value);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 管理画面の会社一覧は、以下の優先順位でソースを切り替える：
+  //   ・Supabase未設定（ローカル開発） … 従来通りconfigSource側の静的一覧
+  //   ・platform_admin                … list_platform_companies()（全社）
+  //   ・通常admin                     … fetchMyCompanies()（自分が所属する1社のみ）
+  // isPlatformAdminがまだ未確定（null）の間は、どちらのソースを使うべきか
+  // 決まらないため、company一覧の取得自体を保留する（後述のuseEffectの
+  // 依存配列にisPlatformAdminを含めている）。
   //
-  // company一覧の取得は非同期（Supabase設定時）なので、companyIdの初期値は
-  // 「一覧が既に同期的に確定している場合（Supabase未設定時）だけ」その場で決め、
-  // それ以外（Supabase設定時）はnull（未決定）から始めて、一覧が届いた最初の
-  // 1回だけ自動選択する（後述のuseEffect）。
+  // company一覧の取得は非同期なので、companyIdの初期値は「一覧が既に同期的に
+  // 確定している場合（Supabase未設定時）だけ」その場で決め、それ以外
+  // （Supabase設定時）はnull（未決定）から始めて、一覧が届いた最初の1回だけ
+  // 自動選択する（後述のuseEffect）。
   const [myCompaniesState, setMyCompaniesState] = useState(() =>
     isSupabaseConfigured
       ? { status: "loading", companies: [] }
@@ -469,6 +536,7 @@ export default function AdminRoot() {
     isSupabaseConfigured ? null : availableCompanies[0]?.id ?? null,
   );
   const [customSetup, setCustomSetup] = useState(null);
+  const [showCreateCompanyScreen, setShowCreateCompanyScreen] = useState(false);
 
   // 現在表示中のAdminWorkspaceの「未保存の変更があるか」「今すぐ保存する関数」を
   // 参照だけしておくためのref。AdminWorkspace側のuseDraftSaveが変化するたびに
@@ -485,19 +553,20 @@ export default function AdminRoot() {
   }, []);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) {
+    if (!isSupabaseConfigured || isPlatformAdmin === null) {
       return;
     }
 
     let cancelled = false;
+    const fetchCompanies = isPlatformAdmin ? fetchPlatformCompanies : fetchMyCompanies;
 
-    fetchMyCompanies().then(({ companies, error }) => {
+    fetchCompanies().then(({ companies, error }) => {
       if (cancelled) {
         return;
       }
 
       if (error) {
-        console.error("所属会社一覧の取得に失敗しました", error);
+        console.error("会社一覧の取得に失敗しました", error);
         setMyCompaniesState({ status: "error", companies: [] });
         return;
       }
@@ -508,7 +577,7 @@ export default function AdminRoot() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isPlatformAdmin]);
 
   // 所属会社一覧が確定した最初の1回だけ、初期表示する会社を自動選択する
   // （companyIdがまだnull＝未決定の間だけ動く。以降にこの一覧が更新されても
@@ -546,11 +615,43 @@ export default function AdminRoot() {
     });
   };
 
+  // 「＋新しい会社を作成」の挙動はSupabase未設定（ローカル開発）かplatform_adminかで
+  // 完全に分かれる：
+  //   ・Supabase未設定（ローカル開発） … 従来通り、その場限りのローカルセットアップ
+  //     （customSetup, NEW_COMPANY_ID）。DBには一切書き込まない。
+  //   ・platform_admin                … CreatePlatformCompanyScreenを開き、
+  //     create_platform_company() RPCで実際にDBへ会社を作成する。
+  // 通常admin（isPlatformAdmin === false）はそもそもshowCreateNewCompanyがfalseで
+  // このボタン自体が表示されないため、ここに到達しない。
   const handleStartNewCompany = () => {
     guardedNavigate(() => {
+      if (isSupabaseConfigured && isPlatformAdmin) {
+        setShowCreateCompanyScreen(true);
+        return;
+      }
       setCustomSetup(null);
       setCompanyId(NEW_COMPANY_ID);
     });
+  };
+
+  // platform_adminが新しい会社を作成し終えた直後：作成画面を閉じ、会社一覧を
+  // 再取得したうえで、作成した会社を管理対象として選択する。新しい会社にはまだ
+  // 下書きが無いため、CompanyEditorは自然にInitialSetupScreenを表示する
+  // （既存のロジックをそのまま再利用。新規作成専用の特別処理はしない）。
+  const handlePlatformCompanyCreated = (createdCompany) => {
+    setShowCreateCompanyScreen(false);
+    setCompanyId(createdCompany.companyCode);
+    fetchPlatformCompanies().then(({ companies, error }) => {
+      if (error) {
+        console.error("会社一覧の再取得に失敗しました", error);
+        return;
+      }
+      setMyCompaniesState({ status: "ready", companies });
+    });
+  };
+
+  const handleCancelCreateCompany = () => {
+    setShowCreateCompanyScreen(false);
   };
 
   const handleCancelNavigation = () => {
@@ -599,6 +700,19 @@ export default function AdminRoot() {
   const myCompanies = myCompaniesState.companies;
   const hasNoCompanies = myCompaniesState.status === "ready" && myCompanies.length === 0;
 
+  // Phase 7（1ユーザー1社をDBのunique制約で保証）以降、実際のSupabase運用では
+  // 1人のadminが複数社へ所属することは無くなった。そのため、会社セレクタ・
+  // 「＋新しい会社を作成」は実運用のadminにとって選ぶ余地・使いどころの無いUIになる
+  // （fetchMyCompaniesは常に0〜1件しか返らない）。
+  // ローカル開発（Supabase未設定）では、configSource.local.jsの静的一覧を使った
+  // 複数会社の切り替え・新規セットアップの検証が引き続き必要なため、
+  // isSupabaseConfiguredの時だけ非表示にする（ローカル開発の挙動は変更しない）。
+  // platform_adminは会社数に関わらず常にセレクタ・新規作成ボタンの両方を表示する
+  // （全社を横断管理する権限があるため）。通常adminは従来通り、実運用では
+  // 常に0〜1件しか返らないfetchMyCompaniesの結果に応じて自動的に隠れる。
+  const showCompanySelector = !isSupabaseConfigured || isPlatformAdmin || myCompanies.length > 1;
+  const showCreateNewCompany = !isSupabaseConfigured || isPlatformAdmin;
+
   return (
     <main className="appShell adminShell">
       <header className="appHeader">
@@ -610,38 +724,47 @@ export default function AdminRoot() {
           </p>
         </div>
         <div className="headerActions">
-          <label className="companySelector">
-            <span className="companySelectorLabel">会社</span>
-            <span className="companySelectWrap">
-              <select
-                aria-label="会社を選択"
-                value={isNewCompanyMode || companyId === null ? "" : companyId}
-                onChange={handleCompanyChange}
-                disabled={isCompanyListLoading}
-              >
-                {(isNewCompanyMode || companyId === null) && (
-                  <option value="">
-                    {isNewCompanyMode ? "（新規セットアップ中）" : isCompanyListLoading ? "読み込み中…" : "－"}
-                  </option>
-                )}
-                {myCompanies.map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {company.label}
-                  </option>
-                ))}
-              </select>
-            </span>
-          </label>
-          <button type="button" className="resetButton" onClick={handleStartNewCompany}>
-            ＋ 新しい会社を作成
-          </button>
+          {showCompanySelector && (
+            <label className="companySelector">
+              <span className="companySelectorLabel">会社</span>
+              <span className="companySelectWrap">
+                <select
+                  aria-label="会社を選択"
+                  value={isNewCompanyMode || companyId === null ? "" : companyId}
+                  onChange={handleCompanyChange}
+                  disabled={isCompanyListLoading}
+                >
+                  {(isNewCompanyMode || companyId === null) && (
+                    <option value="">
+                      {isNewCompanyMode ? "（新規セットアップ中）" : isCompanyListLoading ? "読み込み中…" : "－"}
+                    </option>
+                  )}
+                  {myCompanies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.label}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            </label>
+          )}
+          {showCreateNewCompany && (
+            <button type="button" className="resetButton" onClick={handleStartNewCompany}>
+              ＋ 新しい会社を作成
+            </button>
+          )}
           <a className="resetButton" href="#">
             利用者画面へ戻る
           </a>
         </div>
       </header>
 
-      {isNewCompanyMode ? (
+      {showCreateCompanyScreen ? (
+        <CreatePlatformCompanyScreen
+          onCreated={handlePlatformCompanyCreated}
+          onCancel={handleCancelCreateCompany}
+        />
+      ) : isNewCompanyMode ? (
         customSetup ? (
           <AdminWorkspace
             key="new-company-workspace"
@@ -667,7 +790,12 @@ export default function AdminRoot() {
       ) : companyId === null ? (
         <p className="flowEmptyState">読み込み中…</p>
       ) : (
-        <CompanyEditor key={companyId} companyId={companyId} onPersistenceChange={handlePersistenceChange} />
+        <CompanyEditor
+          key={companyId}
+          companyId={companyId}
+          isPlatformAdmin={isPlatformAdmin}
+          onPersistenceChange={handlePersistenceChange}
+        />
       )}
 
       {pendingNavigation && (

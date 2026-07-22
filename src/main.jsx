@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App.jsx';
+import AppAuthGate from './AppAuthGate.jsx';
 import AdminRoot from './admin/AdminRoot.jsx';
 import AuthGate from './admin/AuthGate.jsx';
-import { hasPendingAuthCallback } from './admin/authCallback.js';
+import { resolveRootTree } from './admin/authCallback.js';
 import './styles.css';
 
 // #admin のときだけ管理画面を表示する。既存の利用者向けBot画面（App）は無条件で従来どおり。
@@ -12,17 +12,19 @@ import './styles.css';
 // 設定済みの場合はログイン済みユーザーだけがAdminRootへ到達できるようにする。
 // 利用者向けBot画面（App）はAuthGateを経由しないため、認証は一切要求されない。
 //
-// Magic Linkをクリックして戻ってきた直後は、URLに#adminが付いていない
-// （LoginScreen.jsxのbuildRedirectUrlが#adminを含まないクリーンなURLへ
-// 戻す設計にしているため）。そのままだと通常のBot画面が表示されてしまうため、
-// hasPendingAuthCallbackでURL中にSupabaseの認証コールバック情報
-// （?code=... や #access_token=...）が無いかも合わせて確認し、あれば
-// 管理画面ツリー（AuthGate）を先に表示してログイン処理を完了させる。
-// 完了後の#adminへの遷移はAuthGate側が担当する。
+// 実際の振り分けロジックはresolveRootTree（src/admin/authCallback.js）に切り出してある
+// （window.locationから切り離した純粋関数としてテストできるようにするため）。
+// 重要：認証コールバック（?code=...等）が来ているからといって、常に管理画面ツリーへ
+// ルーティングしてはいけない。一般ユーザーのアカウント作成（確認メール）でも
+// 全く同じ形の?code=...が付いて戻ってくるため、以前はこれを区別できず、
+// 一般ユーザーが確認メールのリンクをクリックしただけで管理画面ツリー（AuthGate）が
+// マウントされ、「管理者権限がありません」画面を経由してしまう不具合があった。
+// resolveRootTreeはLoginScreen.jsxのMagic Linkだけに付与しているauthFlow=admin
+// マーカーの有無で区別し、それが無い認証コールバック（＝一般ユーザーのsignUp確認メール）は
+// 通常のAppAuthGateツリーへ進ませる（自動的な会社参加処理はAuthenticatedBotScreen側が担当する）。
 function shouldShowAdminTree() {
   return (
-    window.location.hash.startsWith('#admin') ||
-    hasPendingAuthCallback({ search: window.location.search, hash: window.location.hash })
+    resolveRootTree({ hash: window.location.hash, search: window.location.search }) === 'admin'
   );
 }
 
@@ -40,7 +42,7 @@ function RootSwitch() {
       <AdminRoot />
     </AuthGate>
   ) : (
-    <App />
+    <AppAuthGate />
   );
 }
 

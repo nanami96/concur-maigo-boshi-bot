@@ -17,21 +17,27 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
 // authオプションはデフォルト任せにせず明示する（@supabase/supabase-js v2の
 // ブラウザSPA向け推奨設定）。
-// - flowType: "pkce"        … Magic Linkのトークンをハッシュフラグメントではなく
-//                              ?code= というクエリ文字列で受け渡す方式。このアプリは
+// - flowType: "pkce"         … Magic Link・確認メールのトークンをハッシュフラグメントでは
+//                              なく ?code= というクエリ文字列で受け渡す方式。このアプリは
 //                              #admin という独自のハッシュルーティングを持っているため、
 //                              ハッシュ側にトークンを載せるimplicit flowだと衝突しやすい。
 //                              PKCEならクエリ文字列側で完結するため#adminと衝突しない。
-// - detectSessionInUrl: true … ページ読み込み時にURL中の認証情報（上記のcode等）を
-//                              自動検出してセッションを確立し、処理後はURLから
-//                              該当パラメータを取り除く（history.replaceState）。
-// - persistSession: true     … リロード後もログイン状態を維持する（localStorage）。
-// - autoRefreshToken: true   … アクセストークンの自動更新。
+// - detectSessionInUrl: false … あえて自動検出には任せず、認証コールバック（?code=等）の
+//                              処理はAuthGate.jsx/AppAuthGate.jsxがexchangeAuthCallback()
+//                              （src/admin/authCallback.js）を介して明示的に行う。
+//                              理由：detectSessionInUrl:trueの自動処理は失敗しても
+//                              呼び出し元へエラーを一切伝播しないため、実Supabase環境で
+//                              「確認メールのリンクをクリックしてもセッションが確立され
+//                              ない」不具合が起きた際に原因を特定・制御できなかった。
+//                              明示的に呼ぶことで、成功/失敗を確実に検知し、失敗時は
+//                              適切なフォールバックUI（再ログイン導線）を出せるようにする。
+// - persistSession: true      … リロード後もログイン状態を維持する（localStorage）。
+// - autoRefreshToken: true    … アクセストークンの自動更新。
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         flowType: "pkce",
-        detectSessionInUrl: true,
+        detectSessionInUrl: false,
         persistSession: true,
         autoRefreshToken: true,
       },
