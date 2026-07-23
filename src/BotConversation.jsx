@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import QuestionEngine from "./engine/QuestionEngine";
+import { renderTextWithLinks } from "./lib/linkifyText";
 
 // 質問フローのチャットUI本体。「どの会社の設定を、どうやって取得したか」は
 // 一切知らず、確定済みのconfig（config.json互換形式）とstatus（読み込み状態）を
@@ -103,9 +104,9 @@ function CandidateList({ candidates, policies, onSelect }) {
               </span>
             </div>
             {candidate.rule.message && (
-              <p className="candidateMessage">{candidate.rule.message}</p>
+              <p className="candidateMessage">{renderTextWithLinks(candidate.rule.message)}</p>
             )}
-            {note && <p className="candidateNote">{note}</p>}
+            {note && <p className="candidateNote">{renderTextWithLinks(note)}</p>}
             <button
               className="candidateSelectButton"
               type="button"
@@ -339,7 +340,7 @@ export default function BotConversation({ config, status, headerActions }) {
                   </span>
                   入力のポイント
                 </h3>
-                <p>{result.rule.message}</p>
+                <p>{renderTextWithLinks(result.rule.message)}</p>
               </div>
 
               <div className="receiptSummary">
@@ -369,7 +370,7 @@ export default function BotConversation({ config, status, headerActions }) {
                     </span>
                     注意事項
                   </h3>
-                  <p>{resultNote}</p>
+                  <p>{renderTextWithLinks(resultNote)}</p>
                 </div>
               )}
             </div>

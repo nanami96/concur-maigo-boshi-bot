@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import QuestionEngine from "../engine/QuestionEngine";
 import { buildConfigFromFlow } from "../flow/buildConfigFromFlow";
 import { computeAnswersToReachQuestion } from "../flow/computeAnswersToReachQuestion";
+import { renderTextWithLinks } from "../lib/linkifyText";
 
 // 既存App.jsxのチャットUIと同じCSSクラス（styles.css）を再利用し、
 // 見た目の一貫性を保ちながらApp.jsx自体は一切変更しない。
@@ -253,7 +254,7 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
                   <div className="candidateCard" key={candidate.rule.id}>
                     <h4 className="candidateName">{candidate.expenseType?.name}</h4>
                     {candidate.rule.message && (
-                      <p className="candidateMessage">{candidate.rule.message}</p>
+                      <p className="candidateMessage">{renderTextWithLinks(candidate.rule.message)}</p>
                     )}
                   </div>
                 ))}
@@ -296,7 +297,7 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
                       </span>
                       入力のポイント
                     </h3>
-                    <p>{result.rule.message}</p>
+                    <p>{renderTextWithLinks(result.rule.message)}</p>
                   </div>
                 )}
 
@@ -312,7 +313,7 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
                       <WarningIcon />
                       注意事項
                     </h3>
-                    <p>{resultNote}</p>
+                    <p>{renderTextWithLinks(resultNote)}</p>
                   </div>
                 )}
               </div>

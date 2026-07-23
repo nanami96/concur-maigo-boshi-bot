@@ -948,6 +948,7 @@ button {
   font-size: 16px;
   font-weight: 500;
   line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .receiptSummary {
@@ -1129,10 +1130,18 @@ button {
   color: #283548;
   font-size: 14px;
   line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .candidateNote {
   color: #92400e;
+}
+
+.candidateMessage a,
+.candidateNote a,
+.resultAdviceBubble a,
+.resultWarningCard a {
+  color: #1f4fd8;
 }
 
 .candidateSelectButton {
