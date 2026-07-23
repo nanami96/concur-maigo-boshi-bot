@@ -78,6 +78,7 @@ export default function ResetPasswordScreen({ onDone }) {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
+              name="new-password"
               autoComplete="new-password"
             />
           </label>
@@ -90,6 +91,7 @@ export default function ResetPasswordScreen({ onDone }) {
               value={passwordConfirm}
               onChange={(event) => setPasswordConfirm(event.target.value)}
               required
+              name="confirm-new-password"
               autoComplete="new-password"
             />
           </label>

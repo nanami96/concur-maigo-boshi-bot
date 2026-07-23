@@ -42,7 +42,7 @@ export default function InviteCodeEntryScreen({ onNext, onSwitchToLogin }) {
     <main className="appShell adminShell">
       <div className="authScreen">
         <h1>会社へ参加</h1>
-        <p className="authScreenLead">会社の担当者から案内された招待コードを入力してください。</p>
+        <p className="authScreenLead">会社から案内された招待コードを入力してください。</p>
 
         <form onSubmit={handleSubmit} className="authForm">
           <label className="flowFieldLabel">

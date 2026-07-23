@@ -177,6 +177,13 @@ export default function LoginScreen({
 
         {mode === "password" && (
           <>
+            {/* autoComplete="username"（type="email"と併用可）は、ログインID自体が
+                メールアドレスであっても、既存アカウントでのログインフォームの
+                識別子欄には"email"ではなく"username"を使うのがブラウザ・
+                パスワードマネージャー（Safari/iCloudキーチェーン・Chrome等）の
+                実装上の標準的な組み合わせのため。直後のcurrent-password欄と
+                同じ<form>内にあることで、この2つが1組の資格情報として
+                認識されやすくなる。 */}
             <form onSubmit={handlePasswordSubmit} className="authForm">
               <label className="flowFieldLabel">
                 メールアドレス
@@ -187,7 +194,8 @@ export default function LoginScreen({
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="you@example.com"
                   required
-                  autoComplete="email"
+                  name="username"
+                  autoComplete="username"
                 />
               </label>
 
@@ -199,6 +207,7 @@ export default function LoginScreen({
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   required
+                  name="current-password"
                   autoComplete="current-password"
                 />
               </label>
@@ -254,6 +263,7 @@ export default function LoginScreen({
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="you@example.com"
                     required
+                    name="email"
                     autoComplete="email"
                   />
                 </label>
@@ -303,6 +313,7 @@ export default function LoginScreen({
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="you@example.com"
                     required
+                    name="email"
                     autoComplete="email"
                   />
                 </label>

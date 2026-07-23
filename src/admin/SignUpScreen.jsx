@@ -104,6 +104,7 @@ export default function SignUpScreen({ onSwitchToLogin, onSignedUp, title = "ア
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
               required
+              name="email"
               autoComplete="email"
             />
           </label>
@@ -116,6 +117,7 @@ export default function SignUpScreen({ onSwitchToLogin, onSignedUp, title = "ア
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
+              name="new-password"
               autoComplete="new-password"
             />
           </label>
@@ -128,6 +130,7 @@ export default function SignUpScreen({ onSwitchToLogin, onSignedUp, title = "ア
               value={passwordConfirm}
               onChange={(event) => setPasswordConfirm(event.target.value)}
               required
+              name="confirm-new-password"
               autoComplete="new-password"
             />
           </label>
