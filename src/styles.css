@@ -3025,11 +3025,14 @@ textarea.resultFieldInput {
    離れても解除されず、そのまま赤系の配色が張り付いて見えてしまう
    （PCではマウスを離せばすぐ元の配色に戻るため気にならない）。
    .mobileSignOutButtonは768px以下でしか表示されない＝表示される場面は
-   常にタッチ操作前提のため、通常時と同じ配色に固定し、タップ後に
-   赤く張り付いて見える状態を防ぐ。PC側の.authSignOutButton:hover自体は
-   変更していない。 */
+   常にタッチ操作前提のため、赤系の配色は使わない。
+   ただし配色を通常時と完全に同じにするとタップしても見た目が一切変化せず
+   反応が無いように見えてしまったため、.resetButton:hover（「戻る」
+   「最初から」のタップ時と同じ、ごく薄いグレーへの変化）と同じ配色に揃え、
+   同じデザイン系統のボタンとして自然なタップ時の反応を残す。
+   PC側の.authSignOutButton:hover自体は変更していない。 */
 .mobileSignOutButton:hover {
   border-color: #cbd5e1;
-  background: #ffffff;
+  background: #f8fafc;
   color: #243047;
 }
