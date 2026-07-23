@@ -3036,3 +3036,22 @@ textarea.resultFieldInput {
   background: #f8fafc;
   color: #243047;
 }
+
+/* PCで「ログアウト処理中」に見える赤系の配色は、実は専用の状態やクラスが
+   あるわけではなく、.authSignOutButton:hoverそのもの（クリックした瞬間、
+   マウスカーソルがまだボタン上に乗っているために:hoverが効いて見えるだけ）
+   だった（signingOut/loading等のstateはコード上どこにも存在しない）。
+   タッチ端末には「マウスが乗ったままの状態」に相当するものが無いため、
+   同じ体験を再現するには押されている間だけ有効な:active（タップ開始で
+   即座に効き、指を離せば即座に解除される。上の:hoverと違って「押しっぱなし」
+   にならない限り貼り付かない）を使うのが適切。
+   .authSignOutButton:hoverと全く同じ色（background:#fef2f2;
+   border-color:#f3b4b4; color:#b91c1c;）をそのまま再利用し、新しい色は
+   作らない。:hoverと:activeは詳細度が同じ（どちらも疑似クラス1つ分）なので、
+   両方が同時に一致した場合は後に書かれた方が勝つ。この:activeルールを
+   上の:hoverルールより後ろに置いているのはそのため。 */
+.mobileSignOutButton:active {
+  border-color: #f3b4b4;
+  background: #fef2f2;
+  color: #b91c1c;
+}
