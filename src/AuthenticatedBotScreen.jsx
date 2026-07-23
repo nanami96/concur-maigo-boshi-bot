@@ -127,7 +127,7 @@ function NoMembershipGate({ onJoined }) {
 // 他社一覧はこの画面のどこにも存在しない
 // （list_public_companies/?companyのロジックはApp.jsx側にしか無く、
 // この画面からは一切importしていない）。
-export default function AuthenticatedBotScreen() {
+export default function AuthenticatedBotScreen({ onSignOut }) {
   const [state, setState] = useState({ status: "loading", membership: null });
 
   const load = useCallback(async () => {
@@ -182,8 +182,13 @@ export default function AuthenticatedBotScreen() {
 
   const isAdmin = state.membership.role === "admin";
 
+  // 管理画面（#admin）はAdminViewportGateにより1024px未満ではPC利用案内へ
+  // 差し替わり編集UIを表示しないため、その導線であるこのリンク自体も
+  // スマホ幅では意味を持たない。adminLinkButtonクラスでCSS側から
+  // 1024px未満のみ非表示にする（styles.css参照。role='admin'かどうかの
+  // 判定自体はここでは変更していない）。
   const headerActions = isAdmin ? (
-    <a className="resetButton" href="#admin">
+    <a className="resetButton adminLinkButton" href="#admin">
       管理画面へ
     </a>
   ) : null;
@@ -197,7 +202,7 @@ export default function AuthenticatedBotScreen() {
         </section>
         {isAdmin && (
           <p className="flowEmptyState">
-            <a className="resetButton" href="#admin">
+            <a className="resetButton adminLinkButton" href="#admin">
               管理画面へ
             </a>
           </p>
@@ -211,6 +216,7 @@ export default function AuthenticatedBotScreen() {
       config={state.membership.configSnapshot}
       status="ready"
       headerActions={headerActions}
+      onSignOut={onSignOut}
     />
   );
 }

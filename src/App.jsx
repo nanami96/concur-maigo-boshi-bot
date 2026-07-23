@@ -52,7 +52,7 @@ export default function App() {
   const headerActions = (
     <>
       {!isPublicDemo && (
-        <a className="resetButton" href="#admin">
+        <a className="resetButton adminLinkButton" href="#admin">
           管理画面
         </a>
       )}

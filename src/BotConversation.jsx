@@ -121,7 +121,7 @@ function CandidateList({ candidates, policies, onSelect }) {
   );
 }
 
-export default function BotConversation({ config, status, headerActions }) {
+export default function BotConversation({ config, status, headerActions, onSignOut }) {
   const engine = useMemo(() => (config ? new QuestionEngine(config) : null), [config]);
   const [currentQuestion, setCurrentQuestion] = useState(() => engine?.getFirstQuestion() ?? null);
 
@@ -232,7 +232,26 @@ export default function BotConversation({ config, status, headerActions }) {
     <main className="appShell">
       <header className="appHeader">
         <div>
-          <p className="eyebrow">SAP Concur 経費タイプ選択ナビ</p>
+          {/* eyebrowRow・mobileSignOutButtonは、PC専用の.authSignedInBar（画面最上部の
+              独立した全幅ログアウトバー、AppAuthGate.jsx参照）がスマホでは
+              「ログアウトだけが上部に浮き、タイトルが下に押し下げられる」原因になって
+              いたための対応。スマホ幅ではPC用の.authSignedInBarをCSS側で非表示にし
+              （styles.cssの.authSignedInBar:has(+ .appShell .chatPanel)参照）、
+              代わりにこのeyebrowRow内に同じ操作（onSignOut）のボタンを表示することで、
+              サービス名と同じ行にログアウトが自然に収まるようにする。PC幅では
+              mobileSignOutButtonをCSSで隠すため、従来通り.authSignedInBarだけが表示される。 */}
+          <div className="eyebrowRow">
+            <p className="eyebrow">SAP Concur 経費タイプ選択ナビ</p>
+            {onSignOut && (
+              <button
+                type="button"
+                className="authSignOutButton mobileSignOutButton"
+                onClick={onSignOut}
+              >
+                ログアウト
+              </button>
+            )}
+          </div>
           <h1>Concur迷子防止Bot</h1>
           <p>
             質問に答えるだけで、申請に使う経費タイプと入力のコツを確認できます。

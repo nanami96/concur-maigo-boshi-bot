@@ -61,6 +61,27 @@ button {
   font-weight: 700;
 }
 
+/* flex-wrapは保険。320px幅では.appHeaderの左右padding分だけ利用可能幅が
+   減るため、eyebrowテキストとモバイル版ログアウトボタンの横並びがぎりぎりに
+   なる場合がある。万一収まりきらない場合でも、重なるのではなく折り返す
+   （ログアウトボタンが次の行の左端に来る）ようにして、常に「重ならない」ことを
+   優先する。PCでは.mobileSignOutButtonがdisplay:noneのため子要素が1つのみとなり、
+   flex-wrapの有無で見た目は変わらない。 */
+.eyebrowRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* PCでは.authSignedInBar（画面最上部の独立したバー）側にログアウトボタンを
+   表示するため、このeyebrowRow内の複製ボタンは既定では隠す。
+   スマホ幅でのみ表示に切り替える（下の@media (max-width: 768px)参照）。 */
+.mobileSignOutButton {
+  display: none;
+}
+
 .headerActions {
   display: flex;
   flex: 0 1 auto;
@@ -105,6 +126,7 @@ button {
   appearance: none;
   -webkit-appearance: none;
   font: inherit;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -247,6 +269,7 @@ button {
   color: #172033;
   padding: 11px 12px;
   font: inherit;
+  font-size: 16px;
 }
 
 .configSearch input:focus {
@@ -1160,41 +1183,82 @@ button {
   background: #dbeafe;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .appShell {
     width: min(100% - 20px, 680px);
     padding: 20px 0;
   }
 
+  /* .appShellは横paddingを持たず、幅（100% - 20px）だけで左右に約10pxの
+     余白を作っている。一方.chatPanelは同じ10pxに加えて自身のpadding:14px
+     （下記参照）を持つため、チャットカードは画面端から実質24px内側に
+     表示される。.appHeaderには元々横paddingが無く10pxしか無かったため、
+     タイトル・eyebrow・説明文だけがチャットカードより画面端に近く、
+     窮屈に見えていた。.chatPanelと同じ14pxを.appHeaderにも与えることで、
+     二重padding（appShell側を増やす等）を避けつつ、チャットカードと
+     同じ実質24px相当の余白に揃える。 */
   .appHeader {
     display: grid;
     gap: 14px;
+    padding: 0 14px;
+  }
+
+  /* タイトル一式（見出し・eyebrow・説明文）はPC想定のサイズのままだと
+     スマホ幅に対して大きすぎるため、1段階ずつ縮小する。 */
+  .appHeader h1 {
+    font-size: 22px;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+  }
+
+  .appHeader p {
+    font-size: 14px;
   }
 
   .headerActions {
     justify-content: flex-start;
   }
 
+  /* .companySelectorはApp.jsx（Supabase未設定時・公開デモ時に表示される、
+     一般利用者向けBot画面の会社セレクタ）でも使われている共有クラスのため、
+     管理画面（#admin）をPC専用にした後もこのモバイル調整は維持する。 */
   .companySelector {
     flex: 1 1 220px;
+    width: 100%;
   }
 
   .companySelectWrap {
     flex: 1 1 auto;
     min-width: 0;
+    max-width: none;
   }
 
   .companySelector select {
     flex: 1 1 auto;
     min-width: 0;
+    max-width: none;
   }
 
+  /* 管理画面へ・戻る・最初からのボタン文字も少し縮小する
+     （タップ領域はmin-heightで確保しているため、font-sizeだけ下げても
+     押しやすさは変わらない）。 */
   .resetButton {
     margin-top: 0;
+    font-size: 14px;
   }
 
   .chatPanel {
     padding: 14px;
+  }
+
+  /* PCでは「100vwからチラー120pxを引いた幅」で概ね収まっていたが、この計算式は
+     appShell・chatPanel・messageRowの余白がモバイルでは大きく変わるため、
+     そのまま使うと画面が狭いほど余白が相対的に太くなり不自然に窄まる。
+     モバイルでは吹き出し・chatPanel内で使える幅いっぱいまで広げる。 */
+  .recommendationCard {
+    width: 100%;
   }
 
   .resultHero {
@@ -1218,8 +1282,13 @@ button {
     font-size: clamp(26px, 8vw, 32px);
   }
 
+  /* 元は margin: 0 12px; だったため、基本ルールのmargin-bottom:20pxが
+     0pxに上書きされてしまい、.resultAdviceBubble自身のborder（下辺）と
+     直後の.receiptSummaryのborder-top（区切り線）の間に余白が無くなり、
+     2本の線がほぼ密着して二重線のように見えていた。左右の余白は
+     PCよりやや詰めつつ、下側の余白は保持して2つのborderを分離する。 */
   .resultAdviceBubble {
-    margin: 0 12px;
+    margin: 0 12px 16px;
     padding: 14px;
     border-radius: 8px;
   }
@@ -1249,16 +1318,22 @@ button {
     padding: 16px;
   }
 
+  /* PCではreceiptIcon(28px) > receiptLabel(20px)という大小関係だが、
+     この2つのモバイル値はreceiptIconが34px（PCより拡大）・receiptLabelが
+     18px（PCより縮小）と、PCと逆転した比率になっていた。これが「領収書の
+     文字だけ他の要素（h1:22px・質問文:18px等）に比べて目立って大きい／
+     アイコンとのバランスが悪い」印象の一因だったため、アイコンは
+     PCに近いサイズへ、ラベルはさらに1段階小さくして是正する。 */
   .receiptIcon {
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
-    flex-basis: 34px;
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    flex-basis: 26px;
   }
 
   .receiptLabel {
     margin-right: 12px;
-    font-size: 18px;
+    font-size: 16px;
   }
 
   .receiptStatusBadge {
@@ -1318,9 +1393,16 @@ button {
     width: 12px;
   }
 
-  .messageRow,
+  /* .avatarのmin-width（Bot=48px・あなた=58px）より列幅が狭いと、アバターが
+     列からはみ出してgapを食いつぶし、Botラベルと吹き出しが密着して見える
+     原因になっていた（36px列にmin-width 48/58pxのアバターを収めようとしていた）。
+     アバターの実幅に合わせて列幅を広げ、gapで指定した間隔が実際に見えるようにする。 */
+  .messageRow {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
   .messageRow.user {
-    grid-template-columns: 36px minmax(0, 1fr);
+    grid-template-columns: 58px minmax(0, 1fr);
   }
 
   .messageRow.user .avatar {
@@ -1336,8 +1418,26 @@ button {
     grid-template-columns: 1fr;
   }
 
+  /* Bot質問文・選択肢の文字もPC想定のサイズだとスマホでは大きすぎるため縮小する。
+     選択肢はmin-heightを維持しタップ領域は変えず、文字サイズだけ下げる。 */
+  .messageBubble h2 {
+    font-size: 18px;
+  }
+
   .choiceButton {
     min-height: 58px;
+    font-size: 15px;
+  }
+}
+
+/* 管理画面（#admin）はAdminViewportGate（adminViewportGate.js）により
+   1024px未満では「管理画面はPCでご利用ください」に差し替わり、編集UIには
+   到達できない。そのため一般利用者Bot画面上の「管理画面へ」導線も、同じ
+   1024px境界で非表示にする（表示制御のみ。role='admin'判定自体は
+   AuthenticatedBotScreen.jsx／App.jsx側のまま変更していない）。 */
+@media (max-width: 1023px) {
+  .adminLinkButton {
+    display: none;
   }
 }
 
@@ -1422,6 +1522,12 @@ button {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* .settingsTableWrapと同じ考え方：メールアドレス等で幅を取りやすい表なので、
+   画面全体ではなく表だけを横スクロール可能にしておく（狭い画面でのはみ出し防止）。 */
+.userManagementTableWrap {
+  overflow-x: auto;
 }
 
 .userManagementTable {
@@ -1682,6 +1788,7 @@ button {
   border: 1px solid #c7d2e0;
   border-radius: 8px;
   font: inherit;
+  font-size: 16px;
 }
 
 .flowCloseDetailButton {
@@ -1861,6 +1968,7 @@ button {
   border: 1px solid #c7d2e0;
   border-radius: 8px;
   font: inherit;
+  font-size: 16px;
 }
 
 .resultFieldLabel select {
@@ -2343,6 +2451,7 @@ textarea.resultFieldInput {
   border: 1px solid #c7d2e0;
   border-radius: 8px;
   font: inherit;
+  font-size: 16px;
   width: 100%;
 }
 
@@ -2471,6 +2580,7 @@ textarea.resultFieldInput {
   border: 1px solid #c7d2e0;
   border-radius: 8px;
   font: inherit;
+  font-size: 16px;
   appearance: none;
   -webkit-appearance: none;
   background: #fff;
@@ -2499,6 +2609,7 @@ textarea.resultFieldInput {
   border: 1px solid #c7d2e0;
   border-radius: 8px;
   font: inherit;
+  font-size: 16px;
   min-width: 200px;
   flex: 1;
 }
@@ -2561,7 +2672,10 @@ textarea.resultFieldInput {
 
 /* 会社へ参加（InviteCodeEntryScreen）の説明文用。標準の1remだと.authScreenの
    内幅（420px - 左右padding）よりわずかに広くなり、不自然な位置で2行に
-   折り返されてしまうため、1行に収まる大きさへ少しだけ縮小する。 */
+   折り返されてしまうため、1行に収まる大きさへ少しだけ縮小する。
+   ただしこれは.authScreenが420px近い幅を確保できるPC〜タブレット幅が前提で、
+   スマホでは.authScreen自体が420pxより狭くなるため、white-space: nowrapのままだと
+   画面全体が横スクロールしてしまう（下の@media内で上書きする）。 */
 .authScreenLead {
   font-size: 0.9rem;
   white-space: nowrap;
@@ -2617,6 +2731,62 @@ textarea.resultFieldInput {
   background: #fef2f2;
   border-color: #f3b4b4;
   color: #b91c1c;
+}
+
+/* ==========================================================================
+   モバイル追加調整（認証画面・ログイン中ヘッダー）
+   本ファイル冒頭寄りにある@media (max-width: 768px)からは、ここより後方で
+   定義されている.authScreen・.authSignedInBar等を上書きできない（CSSは
+   同じ詳細度なら後に書かれた宣言が勝つため、本体の定義より前にある@media側の
+   上書きは効かない）。そのため、その上書きはこの、対象クラスの定義より
+   後ろにある2つ目の@media (max-width: 768px)にまとめている。
+   管理画面（#admin）はPC専用（AdminViewportGate参照）としたため、
+   .adminSectionTabs・質問フロー編集系クラスのモバイル調整はここには置かない。 */
+@media (max-width: 768px) {
+  /* 認証系画面（ログイン・アカウント作成・招待コード・パスワードリセット等）は
+     すべてこの.authScreenカードを共有しているため、ここを直すだけで全画面に効く。
+     PCサイズ向けの余白（上下60px・全周32px）はスマホでは広すぎるため縮小する。 */
+  .authScreen {
+    margin: 24px auto;
+    padding: 20px;
+  }
+
+  /* .authScreen自体がPC想定の420pxより狭くなるスマホでは、1行固定
+     （white-space: nowrap）にすると文章がコンテナからはみ出し、画面全体が
+     横スクロールしてしまう。スマホでは素直に折り返す方を優先する。 */
+  .authScreenLead {
+    white-space: normal;
+  }
+
+  /* ログイン中（一般利用者）は、この.authSignedInBar（ログアウトボタンだけの
+     全幅バー）がAppAuthGate.jsxで<main class="appShell">の直前に兄弟要素として
+     描画される。padding調整だけでは、単独の全幅バー＋その下の空白という
+     構造自体は変わらず、「ログアウトが上部に浮き、タイトルが下に押し下げられる」
+     見た目を解消しきれなかった（前回の修正）。
+     読み込み中・エラー・招待コード入力等、タイトルが無い画面ではこのバーのままで
+     問題ないためpaddingの引き締めは残しつつ、Bot本体（BotConversation.jsx、
+     .chatPanelを含む画面）に限っては、このバー自体をスマホ幅で非表示にし、
+     代わりにBotConversation.jsx側のeyebrowRow内に同じ操作の複製ボタン
+     （.mobileSignOutButton）を表示することで、サービス名と同じ行に
+     ログアウトが自然に収まるようにする（:has()で「直後のappShellが
+     .chatPanelを含むかどうか」を判定し、Bot本体表示中だけこのバーを消す）。 */
+  .authSignedInBar {
+    padding: 8px 16px 0;
+  }
+
+  .authSignedInBar + .appShell {
+    padding-top: 8px;
+  }
+
+  .authSignedInBar:has(+ .appShell .chatPanel) {
+    display: none;
+  }
+
+  .mobileSignOutButton {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
 }
 
 @media (prefers-color-scheme: dark) {

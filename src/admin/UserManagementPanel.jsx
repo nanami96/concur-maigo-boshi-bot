@@ -171,50 +171,52 @@ export default function UserManagementPanel({ companyDbId = null, isPlatformAdmi
 
       {errorMessage && <p className="settingsErrorText">{errorMessage}</p>}
 
-      <table className="userManagementTable">
-        <thead>
-          <tr>
-            <th>メールアドレス</th>
-            <th>権限</th>
-            <th>登録日</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {state.members.map((member) => {
-            const isLastAdmin = member.role === "admin" && adminCount <= 1;
-            const isPending = pendingMemberId === member.memberId;
-            const nextRole = member.role === "admin" ? "user" : "admin";
+      <div className="userManagementTableWrap">
+        <table className="userManagementTable">
+          <thead>
+            <tr>
+              <th>メールアドレス</th>
+              <th>権限</th>
+              <th>登録日</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.members.map((member) => {
+              const isLastAdmin = member.role === "admin" && adminCount <= 1;
+              const isPending = pendingMemberId === member.memberId;
+              const nextRole = member.role === "admin" ? "user" : "admin";
 
-            return (
-              <tr key={member.memberId}>
-                <td>{member.email}</td>
-                <td>{ROLE_LABELS[member.role] || member.role}</td>
-                <td>{formatTimestamp(member.createdAt)}</td>
-                <td>
-                  <button
-                    type="button"
-                    className="flowGhostButton"
-                    disabled={isPending || (member.role === "admin" && isLastAdmin)}
-                    title={
-                      member.role === "admin" && isLastAdmin
-                        ? "この会社には最低1人の管理者が必要です"
-                        : undefined
-                    }
-                    onClick={() => handleRoleChange(member, nextRole)}
-                  >
-                    {isPending
-                      ? "更新中…"
-                      : member.role === "admin"
-                        ? "一般ユーザーにする"
-                        : "管理者にする"}
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+              return (
+                <tr key={member.memberId}>
+                  <td>{member.email}</td>
+                  <td>{ROLE_LABELS[member.role] || member.role}</td>
+                  <td>{formatTimestamp(member.createdAt)}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="flowGhostButton"
+                      disabled={isPending || (member.role === "admin" && isLastAdmin)}
+                      title={
+                        member.role === "admin" && isLastAdmin
+                          ? "この会社には最低1人の管理者が必要です"
+                          : undefined
+                      }
+                      onClick={() => handleRoleChange(member, nextRole)}
+                    >
+                      {isPending
+                        ? "更新中…"
+                        : member.role === "admin"
+                          ? "一般ユーザーにする"
+                          : "管理者にする"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
       {inviteCodeSection}
     </div>

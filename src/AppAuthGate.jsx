@@ -123,18 +123,21 @@ export default function AppAuthGate() {
     );
   }
 
+  // .authSignedInBar（画面最上部の独立した全幅バー）は、スマホ幅では
+  // BotConversation.jsx内のeyebrowRowにある同機能のボタン（mobileSignOutButton）に
+  // 表示を譲る（styles.cssの.authSignedInBar:has(+ .appShell .chatPanel)で
+  // 非表示にする）。そのため、同じsignOut処理をAuthenticatedBotScreenへも渡し、
+  // どちらのボタンからログアウトしても同じ挙動になるようにする。
+  const signOut = () => supabase.auth.signOut();
+
   return (
     <>
       <div className="authSignedInBar" role="status">
-        <button
-          type="button"
-          className="authSignOutButton"
-          onClick={() => supabase.auth.signOut()}
-        >
+        <button type="button" className="authSignOutButton" onClick={signOut}>
           ログアウト
         </button>
       </div>
-      <AuthenticatedBotScreen />
+      <AuthenticatedBotScreen onSignOut={signOut} />
     </>
   );
 }
