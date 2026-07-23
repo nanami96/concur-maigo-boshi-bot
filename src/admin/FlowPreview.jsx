@@ -3,6 +3,7 @@ import QuestionEngine from "../engine/QuestionEngine";
 import { buildConfigFromFlow } from "../flow/buildConfigFromFlow";
 import { computeAnswersToReachQuestion } from "../flow/computeAnswersToReachQuestion";
 import { renderTextWithLinks } from "../lib/linkifyText";
+import { shouldShowPolicySection } from "../lib/policyVisibility";
 
 // 既存App.jsxのチャットUIと同じCSSクラス（styles.css）を再利用し、
 // 見た目の一貫性を保ちながらApp.jsx自体は一切変更しない。
@@ -186,6 +187,10 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
       : null;
   const receiptStatus = getReceiptStatus(result?.expenseType?.receiptRequired);
   const policyName = getPolicyName(baseData.policies, result?.expenseType?.policyId);
+  // 本番Bot（BotConversation.jsx）と同じ条件で表示/非表示を判定する
+  // （policyVisibility.js参照。プレビューは本番の見え方を確認するための
+  // 画面のため、判定条件を本番と揃えることが重要）。
+  const showPolicySection = Boolean(policyName) && shouldShowPolicySection(baseData.policies);
 
   return (
     <div className="flowPreviewPanel">
@@ -276,7 +281,7 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
                   <div className="resultExpenseType">
                     <h2>{result.expenseType?.name}</h2>
                   </div>
-                  {policyName && (
+                  {showPolicySection && (
                     <div className="resultPolicySection">
                       <p className="resultHeroLabel">
                         <TagIcon />

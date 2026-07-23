@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import QuestionEngine from "./engine/QuestionEngine";
 import { renderTextWithLinks } from "./lib/linkifyText";
+import { shouldShowPolicySection } from "./lib/policyVisibility";
 
 // 質問フローのチャットUI本体。「どの会社の設定を、どうやって取得したか」は
 // 一切知らず、確定済みのconfig（config.json互換形式）とstatus（読み込み状態）を
@@ -133,6 +134,10 @@ export default function BotConversation({ config, status, headerActions, onSignO
     result?.rule?.warningMessage?.trim() || result?.expenseType?.note?.trim();
   const receiptStatus = getReceiptStatus(result?.expenseType?.receiptRequired);
   const policyName = getPolicyName(config?.policies, result?.expenseType?.policyId);
+  // 結果自体にポリシー名が無い場合はそもそも表示しようがなく、また会社の
+  // 有効ポリシーが1件以下の場合は選び分ける意味が無いため表示しない
+  // （policyVisibility.js参照）。
+  const showPolicySection = Boolean(policyName) && shouldShowPolicySection(config?.policies);
 
   function handleSelect(answer) {
     if (!engine || !currentQuestion) {
@@ -339,7 +344,7 @@ export default function BotConversation({ config, status, headerActions, onSignO
                 <div className="resultExpenseType">
                   <h2>{result.expenseType.name}</h2>
                 </div>
-                {policyName && (
+                {showPolicySection && (
                   <div className="resultPolicySection">
                     <p className="resultHeroLabel">
                       <TagIcon />
