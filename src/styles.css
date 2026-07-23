@@ -3018,3 +3018,18 @@ textarea.resultFieldInput {
   color: #243047;
   box-shadow: none;
 }
+
+/* .authSignOutButton:hover（上部、ライト/ダーク両方）は赤系の「危険操作」色
+   （background:#fef2f2; border-color:#f3b4b4; color:#b91c1c;等）になるが、
+   iOS Safari等のタッチ端末では:hoverがタップ時に発生し、マウスのように
+   離れても解除されず、そのまま赤系の配色が張り付いて見えてしまう
+   （PCではマウスを離せばすぐ元の配色に戻るため気にならない）。
+   .mobileSignOutButtonは768px以下でしか表示されない＝表示される場面は
+   常にタッチ操作前提のため、通常時と同じ配色に固定し、タップ後に
+   赤く張り付いて見える状態を防ぐ。PC側の.authSignOutButton:hover自体は
+   変更していない。 */
+.mobileSignOutButton:hover {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #243047;
+}
