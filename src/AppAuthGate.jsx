@@ -89,6 +89,25 @@ export default function AppAuthGate() {
     };
   }, []);
 
+  // ログイン画面（特にパスワード入力欄）はスマホの仮想キーボード表示に伴い、
+  // ブラウザが入力欄を画面内に収めようとページを下方向へスクロールしていることが
+  // ある。ログイン成功でauthStatusが"signedIn"に変わりログイン画面から
+  // AuthenticatedBotScreen（Bot本体）へDOMごと入れ替わっても、これはブラウザの
+  // scroll位置そのものには影響しないため、このスクロール位置がそのまま残り、
+  // Bot画面のタイトルより下（「戻る」「最初から」や最初の質問付近）が
+  // 見えている状態から表示されてしまっていた（ページ遷移を伴わないSPAのため、
+  // ブラウザ標準のスクロール位置リセットも働かない）。
+  // authStatusが"signedIn"になった直後（＝ログイン成功時・リロードによる
+  // セッション復元時・再ログイン時のいずれも該当）だけ、ページ最上部へ
+  // 明示的に戻す。BotConversation側で質問に回答して会話を進めている間は
+  // authStatusは変化しない（ログイン状態が変わるわけではない）ため、
+  // 回答のたびにここが再実行されて会話中のスクロール位置を乱すことはない。
+  useEffect(() => {
+    if (authStatus === "signedIn") {
+      window.scrollTo(0, 0);
+    }
+  }, [authStatus]);
+
   const view = resolveAuthGateView({ isSupabaseConfigured, authStatus });
 
   if (view === "local") {

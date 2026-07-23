@@ -2790,13 +2790,33 @@ textarea.resultFieldInput {
 }
 
 @media (prefers-color-scheme: dark) {
+  /* .authScreenは元々このダーク配色（管理画面向け）の対象に含まれていたが、
+     ログイン・アカウント作成・招待コード入力・パスワード再設定等、
+     一般利用者も使う認証画面はBot本体（appShell・chatPanel等）と同じく
+     常にライトテーマで統一する方針のため、ここから除外する。
+     .flowFieldLabel（例:「招待コード」ラベル、color:#33415c）はこのブロックに
+     ダークモード対応が無く常に同じ色のままのため、.authScreenの背景だけが
+     ダークになると「暗い背景に暗いラベル文字」で読めなくなっていた
+     （実機で確認された不具合の根本原因）。.authScreenをこのリストから外す
+     ことで、背景・既定文字色ともに常にライトのまま維持され、この問題も
+     あわせて解消する。 */
   .adminTabPanel,
   .confirmDialog,
   .optionMenuList,
-  .initialSetupScreen,
-  .authScreen {
+  .initialSetupScreen {
     background: #182234;
     color: #eef2f7;
+  }
+
+  /* .settingsTextInputは管理画面の設定フォームと認証画面の入力欄
+     （メールアドレス・パスワード・招待コード等）の両方で使われている共有クラス。
+     管理画面側のダーク対応（上記参照）は維持しつつ、.authScreen内の入力欄だけは
+     ライトのまま維持する（背景がライトになった.authScreenの中で、入力欄だけ
+     ダーク背景のまま浮いてしまうのを防ぐ）。 */
+  .authScreen .settingsTextInput {
+    background: #ffffff;
+    color: #172033;
+    border-color: #c7d2e0;
   }
 
   .draftSaveBar {
@@ -2977,4 +2997,24 @@ textarea.resultFieldInput {
     background-position: right 14px center;
     background-size: 10px;
   }
+}
+
+/* .mobileSignOutButton（一般利用者Bot画面のスマホ版ヘッダーに表示するログアウト
+   ボタン）は.authSignOutButtonの見た目を流用しているが、.authSignOutButtonには
+   上のprefers-color-scheme: darkブロックでborder-color等の上書きがある
+   （管理画面の画面最上部バー向け）。この上書きは同じクラスを共有する一般利用者
+   画面のログアウトボタンにも及んでしまい、OSがダークモードの実機では「戻る」
+   「最初から」（.resetButton。ダークモード対応が無く常にライトのまま）だけ
+   縁が明るいグレーのまま、ログアウトだけ縁が濃い色になり、デザインが
+   浮いて見える原因になっていた。
+   .resetButtonと同じ配色（枠線・背景・文字色）に明示的に揃えることで、
+   OSのカラースキームによらず常に同じSecondaryボタンの見た目にする。
+   ここはprefers-color-scheme: darkブロックより後ろに置くことで、同じ詳細度
+   （.authSignOutButtonとの兼ね合い）でも確実にこちらが勝つようにしている。
+   高さ・paddingはヘッダー内に収まる現状のコンパクトなサイズのまま変更しない。 */
+.mobileSignOutButton {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #243047;
+  box-shadow: none;
 }
