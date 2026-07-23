@@ -719,9 +719,7 @@ export default function AdminRoot() {
         <div>
           <p className="eyebrow">Concur迷子防止Bot</p>
           <h1>管理画面</h1>
-          <p>
-            基本設定・ポリシー・経費タイプ・質問・選択肢・分岐・結果をここで編集できます。
-          </p>
+          <p>会社ごとの設定や質問フローを編集できます。</p>
         </div>
         <div className="headerActions">
           {showCompanySelector && (
