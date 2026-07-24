@@ -802,10 +802,12 @@ button {
 .messageBubble h2 {
   margin: 7px 0 7px;
   font-size: 20px;
+  overflow-wrap: anywhere;
 }
 
 .messageBubble p {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .choiceGrid {
