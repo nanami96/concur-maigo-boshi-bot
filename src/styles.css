@@ -1223,6 +1223,35 @@ button {
   color: #5a6b85;
 }
 
+/* 前回（min-width:0のみ）で直らなかった理由：
+   min-width:0はFlex/Gridの「レイアウトアルゴリズムが箱に許す最小サイズ」を
+   0にするだけで、iOS Safari（WebKit）がinput[type="date"]をネイティブ
+   ウィジェットとして描画する際の内部の最小幅には効かない。-webkit-appearance
+   がauto（既定）のままだと、WebKitは年/月/日の内部表示
+   （::-webkit-date-and-time-value）とカレンダーアイコン
+   （::-webkit-calendar-picker-indicator）を含むネイティブ外観そのものに
+   レイアウト上のmin-width:0とは独立した「これより縮めない」という下限を
+   持たせており、この下限がグリッド列幅・親カード幅を超えるとレイアウト上の
+   箱がどれだけ縮んでも実際の描画（ペイント）はそれより縮まずはみ出す。
+   appearance:none / -webkit-appearance:none でこのネイティブ外観を解除する
+   ことで、通常のCSSボックスモデル（width・max-width・padding）が実際の
+   描画サイズにもそのまま反映されるようになる。タップして開くカレンダー
+   ピッカー自体の機能は失われない（値表示・アイコンは引き続き表示される）。
+   type="date"だけに限定しており、支払先（text）・金額（number）の見た目・
+   挙動には影響しない。 */
+.receiptOcrInput[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  max-width: 100%;
+}
+
+/* value表示部分（yyyy/mm/dd等）自身にもWebKit既定のmin-width相当の振る舞いが
+   残るケースがあるため、明示的に0にして親のinput幅まで縮められるようにする。 */
+.receiptOcrInput[type="date"]::-webkit-date-and-time-value {
+  min-width: 0;
+  text-align: left;
+}
+
 .receiptOcrAmountRow {
   display: flex;
   align-items: center;
