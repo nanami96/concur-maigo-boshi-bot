@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const rpcMock = vi.fn();
 const fromMock = vi.fn();
+const getSessionMock = vi.fn();
 const mockState = { isSupabaseConfigured: true };
 
 vi.mock("../src/lib/supabaseClient.js", () => ({
@@ -9,7 +10,9 @@ vi.mock("../src/lib/supabaseClient.js", () => ({
     return mockState.isSupabaseConfigured;
   },
   get supabase() {
-    return mockState.isSupabaseConfigured ? { rpc: rpcMock, from: fromMock } : null;
+    return mockState.isSupabaseConfigured
+      ? { rpc: rpcMock, from: fromMock, auth: { getSession: getSessionMock } }
+      : null;
   },
 }));
 
@@ -27,6 +30,8 @@ const {
   redeemInviteCode,
   fetchMyCompanyMembers,
   updateMemberRole,
+  removeCompanyMember,
+  fetchCurrentUserId,
   fetchMyRole,
   fetchIsPlatformAdmin,
   fetchPlatformCompanies,
@@ -39,6 +44,7 @@ beforeEach(() => {
   mockState.isSupabaseConfigured = true;
   rpcMock.mockReset();
   fromMock.mockReset();
+  getSessionMock.mockReset();
 });
 
 describe("classifyMembershipRpcError", () => {
@@ -50,6 +56,8 @@ describe("classifyMembershipRpcError", () => {
     ["already belongs to a company", "already_member"],
     ["invalid invite code", "invalid_code"],
     ["cannot demote the last admin of this company", "last_admin"],
+    ["cannot remove yourself from the company", "cannot_remove_self"],
+    ["cannot remove the last admin of this company", "last_admin_removal"],
     ["admin privileges required", "forbidden"],
     ["invalid role", "invalid_role"],
     ["member not found in your company", "not_found"],
@@ -239,6 +247,88 @@ describe("updateMemberRole", () => {
     rpcMock.mockResolvedValue({ data: null, error: { message: "admin privileges required" } });
     const result = await updateMemberRole("m1", "admin");
     expect(result.error.type).toBe("forbidden");
+  });
+});
+
+describe("removeCompanyMember", () => {
+  it("成功時は削除されたメンバー情報を返す", async () => {
+    rpcMock.mockResolvedValue({ data: { id: "m1", role: "user" }, error: null });
+    const result = await removeCompanyMember("m1");
+    expect(result).toEqual({ member: { id: "m1", role: "user" }, error: null });
+    expect(rpcMock).toHaveBeenCalledWith("remove_company_member", { p_member_id: "m1" });
+  });
+
+  it("最後のadminを削除しようとした場合、last_admin_removalとして分類されたエラーを返す", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "cannot remove the last admin of this company" },
+    });
+    const result = await removeCompanyMember("m1");
+    expect(result.member).toBeNull();
+    expect(result.error.type).toBe("last_admin_removal");
+  });
+
+  it("自分自身を削除しようとした場合、cannot_remove_selfとして分類されたエラーを返す", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "cannot remove yourself from the company" },
+    });
+    const result = await removeCompanyMember("m1");
+    expect(result.error.type).toBe("cannot_remove_self");
+  });
+
+  it("admin権限が無い場合、forbiddenとして分類されたエラーを返す", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: "admin privileges required" } });
+    const result = await removeCompanyMember("m1");
+    expect(result.error.type).toBe("forbidden");
+  });
+
+  it("他社のmember_idを渡す等、対象が見つからない場合、not_foundとして分類されたエラーを返す", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "member not found in your company" },
+    });
+    const result = await removeCompanyMember("missing-id");
+    expect(result.error.type).toBe("not_found");
+  });
+
+  it("Supabase未設定なら呼び出さずエラーを返す", async () => {
+    mockState.isSupabaseConfigured = false;
+    const result = await removeCompanyMember("m1");
+    expect(result.member).toBeNull();
+    expect(result.error).not.toBeNull();
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("fetchCurrentUserId", () => {
+  it("Supabase未設定ならuserId:nullを返す（呼び出さない）", async () => {
+    mockState.isSupabaseConfigured = false;
+    const result = await fetchCurrentUserId();
+    expect(result).toEqual({ userId: null, error: null });
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("ログイン中ならセッションのuser.idを返す", async () => {
+    getSessionMock.mockResolvedValue({
+      data: { session: { user: { id: "current-user-id" } } },
+      error: null,
+    });
+    const result = await fetchCurrentUserId();
+    expect(result).toEqual({ userId: "current-user-id", error: null });
+  });
+
+  it("セッションが無い場合はuserId:nullを返す", async () => {
+    getSessionMock.mockResolvedValue({ data: { session: null }, error: null });
+    const result = await fetchCurrentUserId();
+    expect(result).toEqual({ userId: null, error: null });
+  });
+
+  it("エラー時はerrorを返す", async () => {
+    getSessionMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+    const result = await fetchCurrentUserId();
+    expect(result.userId).toBeNull();
+    expect(result.error).not.toBeNull();
   });
 });
 

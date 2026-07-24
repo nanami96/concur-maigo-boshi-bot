@@ -8,6 +8,8 @@ const MEMBERSHIP_ERROR_MESSAGES = {
   platform_forbidden: "この操作にはサービス運営者権限が必要です。",
   forbidden: "この操作には管理者権限が必要です。",
   last_admin: "この会社の管理者は最低1人必要なため、降格できません。",
+  last_admin_removal: "この会社の管理者は最低1人必要なため、削除できません。",
+  cannot_remove_self: "自分自身を会社から削除することはできません。",
   invalid_role: "指定された権限が不正です。",
   invalid_company_code:
     "会社コードの形式が正しくありません（小文字英数字とハイフンのみ、先頭は英数字）。",

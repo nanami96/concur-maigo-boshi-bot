@@ -8,6 +8,8 @@ import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
 //   "platform_forbidden"  : platform_admin権限が無い（create_platform_company等）
 //   "forbidden"           : admin権限が無い（update_company_member_role等）
 //   "last_admin"          : 最後のadminを降格しようとした（update_company_member_role）
+//   "last_admin_removal"  : 最後のadminを会社から削除しようとした（remove_company_member）
+//   "cannot_remove_self"  : 自分自身を会社から削除しようとした（remove_company_member）
 //   "invalid_role"        : 不正なrole値を渡した（update_company_member_role）
 //   "invalid_company_code": 会社コードの形式が不正（create_platform_company）
 //   "company_name_required": 会社名が空（create_platform_company）
@@ -36,6 +38,12 @@ export function classifyMembershipRpcError(error) {
   }
   if (message.includes("cannot demote the last admin")) {
     return "last_admin";
+  }
+  if (message.includes("cannot remove yourself")) {
+    return "cannot_remove_self";
+  }
+  if (message.includes("cannot remove the last admin")) {
+    return "last_admin_removal";
   }
   if (message.includes("platform admin privileges required")) {
     return "platform_forbidden";
@@ -206,6 +214,57 @@ export async function updateMemberRole(memberId, newRole) {
     return { member: data, error: null };
   } catch (caughtError) {
     return { member: null, error: { type: "network", message: caughtError.message } };
+  }
+}
+
+// 自社メンバーを会社から削除する（＝company_membersの対象行を削除するだけ。
+// auth.usersのアカウント自体・platform_admins・他のテーブルは一切変更しない）。
+// 呼び出し元が対象の所属会社のadminであること、対象が呼び出し元自身ではないこと、
+// 最後のadminではないことは全てremove_company_member RPC側（DB側）で検証される
+// （クライアント側では信用しない。UserManagementPanel.jsx側の disabled 制御は
+// あくまでUXのための早期フィードバックに過ぎない）。
+export async function removeCompanyMember(memberId) {
+  if (!isSupabaseConfigured) {
+    return { member: null, error: { type: "unknown", message: "Supabaseが設定されていません。" } };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc("remove_company_member", {
+      p_member_id: memberId,
+    });
+
+    if (error) {
+      return { member: null, error: { type: classifyMembershipRpcError(error), message: error.message } };
+    }
+
+    return { member: data, error: null };
+  } catch (caughtError) {
+    return { member: null, error: { type: "network", message: caughtError.message } };
+  }
+}
+
+// ログイン中ユーザー自身のuser_id（auth.uid()相当）をクライアント側で確認する。
+// UserManagementPanel.jsxが「会社から削除」ボタンを自分自身の行に対して
+// 表示しない（disabledにする）ためだけのUI用の判定であり、セキュリティ境界では
+// ない（最終的な自己削除の防止はremove_company_member() RPC内部のauth.uid()検証が
+// 担う。詳細はsupabase/schema.sql参照）。AuthGate.jsx等が既に使っている
+// supabase.auth.getSession()（ローカルのセッション情報を読むだけで、
+// getUser()と違いAuthサーバーへの問い合わせを伴わない）をそのまま利用する。
+export async function fetchCurrentUserId() {
+  if (!isSupabaseConfigured) {
+    return { userId: null, error: null };
+  }
+
+  try {
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error) {
+      return { userId: null, error: { type: "unknown", message: error.message } };
+    }
+
+    return { userId: data?.session?.user?.id ?? null, error: null };
+  } catch (caughtError) {
+    return { userId: null, error: { type: "network", message: caughtError.message } };
   }
 }
 

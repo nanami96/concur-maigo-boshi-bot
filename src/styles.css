@@ -1633,6 +1633,40 @@ button {
   border-bottom: 1px solid rgba(22, 32, 51, 0.1);
 }
 
+/* 「操作」列：権限変更（.flowGhostButton）と「会社から削除」（危険操作）を
+   同じセル内に並べるが、gapを通常より広めに取ることで「別カテゴリの操作」
+   であることが視覚的に分かるようにする（列を増やすとレイアウトが大きく
+   変わるため、既存の1列構成のまま距離感だけで区別する）。 */
+.userManagementActions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* .flowGhostButtonと同じ寸法・作法のまま、色だけ危険操作用の赤系にした
+   バリエーション。「会社から削除」専用に新設（既存のflowGhostButtonは
+   他の非破壊的操作でも広く使われているため、そちらを赤くはしない）。 */
+.dangerGhostButton {
+  border: 1px solid #e3b7b7;
+  background: #fff;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  color: #a13d3d;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dangerGhostButton:hover:not(:disabled) {
+  background: #fbebeb;
+}
+
+.dangerGhostButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .userManagementInviteCodeSection {
   display: flex;
   flex-direction: column;
@@ -2143,6 +2177,17 @@ textarea.resultFieldInput {
 .confirmImpact {
   font-weight: 600;
   color: #a13d3d;
+  text-align: center;
+}
+
+/* request.note（任意）：.confirmImpact（赤・太字で「これだけ消えます」を強調する
+   既存用途）とは別に、「アカウント自体は削除されません」等、赤字にするほどでは
+   ない補足説明を追加したい呼び出し元（UserManagementPanel.jsx等）向けの控えめな
+   注記。指定しない既存の呼び出し元の見た目には影響しない。 */
+.confirmNote {
+  margin: 4px 0 0;
+  color: #5a6b85;
+  font-size: 0.85rem;
   text-align: center;
 }
 

@@ -15,6 +15,7 @@ export default function ConfirmDialog({ request, onConfirm, onCancel }) {
       >
         <h3 id="confirm-dialog-title">{request.title || "確認してください"}</h3>
         <p className="confirmMessage">{request.message}</p>
+        {request.note && <p className="confirmNote">{request.note}</p>}
         {request.impact && (
           <p className="confirmImpact">
             質問{request.impact.questionCount}件・選択肢{request.impact.optionCount}件・結果

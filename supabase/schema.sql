@@ -1198,7 +1198,149 @@ revoke all on function list_platform_company_members(uuid) from public;
 grant execute on function list_platform_company_members(uuid) to authenticated;
 
 -- ============================================================================
--- ここまででPhase 8のスキーマも完成です。
+-- 9. Phase 9: 通常管理画面からの「会社から削除」機能
+-- ============================================================================
+--
+-- 目的：
+--   退職者・誤登録ユーザーのcompany_members行（会社所属）を、運営者がSupabase
+--   SQL Editorを操作しなくても、管理画面の「ユーザー管理」から安全に削除できる
+--   ようにする（Phase 8末尾の「まだ実装していないもの」に挙げていた項目）。
+--
+--   削除するのはcompany_membersの対象行だけであり、auth.users（ログイン
+--   アカウント本体）・platform_admins・companies・draft_configs・
+--   published_versionsはこの関数から一切変更しない。
+--   company_members.user_id → auth.users(id) の外部キーは on delete cascade だが、
+--   これは「auth.usersを消したらcompany_membersも消える」という一方向の関係で
+--   あり、逆方向（company_membersの行を消してもauth.usersは一切影響を受けない）。
+--   削除後、そのユーザーはSupabase Authとしてはログインし続けられるが、
+--   company_membersに行が無くなるため、companies/draft_configs/published_versionsの
+--   RLS（いずれも「company_membersに自分がadminとして存在するか」を条件にしている）
+--   により会社データへは即座にアクセスできなくなり、get_my_public_config()も
+--   0行を返すようになる（利用者Bot画面はNoMembershipGateへ、既存の「未所属」
+--   ユーザーと全く同じ扱いで自然に合流する）。同じ会社の招待コードで
+--   redeem_invite_code()を使えば、既存のAuthアカウントのまま（新規Authユーザー
+--   作成は不要）role='user'として再参加できる＝既存の再参加フローは変更しない。
+--
+-- 権限判定・最後のadmin保護・競合対策は、既存のupdate_company_member_role()と
+-- 基本的に同じ設計をそのまま踏襲する（新しい権限モデルを作らない）。異なるのは
+-- 以下の3点：
+--   ・対象行をUPDATEではなくDELETEする
+--   ・対象が呼び出し元自身（auth.uid() = 対象行のuser_id）の場合は、たとえ
+--     最後のadminでなくても常に拒否する。MVPでは「操作した瞬間に自分自身の
+--     管理権限・会社所属が消え、以後の画面状態管理が複雑になる」リスクを
+--     避けるための意図的な制限であり、platform_adminが自分自身の
+--     company_members行を削除しようとした場合も同様に拒否する
+--     （安全性優先。platform_admins自体は今回一切操作しない）。
+--   ・DELETEはUPDATEと違い「対象行が既に無い」状態になり得るため、ロック取得後に
+--     対象行の存在を明示的に再確認する（update_company_member_role()は対象行を
+--     消さないため、同じ行への同時UPDATEはただの冪等な再適用で済み、この再確認は
+--     不要だった）。詳細は関数本体のコメント参照。
+create or replace function remove_company_member(p_member_id uuid)
+returns company_members
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_target company_members%rowtype;
+  v_is_platform_admin boolean;
+  v_caller_is_company_admin boolean;
+  v_remaining_admins int;
+  v_result company_members%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'authentication required' using errcode = '28000';
+  end if;
+
+  select * into v_target from company_members where id = p_member_id;
+
+  if not found then
+    raise exception 'member not found in your company' using errcode = 'P0002';
+  end if;
+
+  v_is_platform_admin := is_platform_admin();
+
+  v_caller_is_company_admin := exists (
+    select 1
+    from company_members
+    where company_id = v_target.company_id
+      and user_id = auth.uid()
+      and role = 'admin'
+  );
+
+  if not (v_is_platform_admin or v_caller_is_company_admin) then
+    raise exception 'admin privileges required' using errcode = '42501';
+  end if;
+
+  -- 対象が呼び出し元自身の場合は、権限の有無に関わらず常に拒否する
+  -- （MVPの意図的な制限。上のコメント参照）。
+  if v_target.user_id = auth.uid() then
+    raise exception 'cannot remove yourself from the company' using errcode = '42501';
+  end if;
+
+  -- 最後のadminは削除できない。update_company_member_role()と同じロック設計：
+  -- 対象会社のadmin行を先に明示的にロックしてから数えることで、2つの削除/降格
+  -- リクエストが並行実行されても、その会社のadminが0人になることはない。
+  --
+  -- 加えて、「全く同じ対象行」を2つのリクエストが同時に削除しようとした場合の
+  -- 対策として、ロック取得（＝待機）後に対象行がまだ存在するかを明示的に
+  -- 再確認する。ロック待機中に先行リクエストが対象行を削除してコミット済みなら、
+  -- 後続リクエストはこの再確認で 'member not found' として安全に失敗する
+  -- （再確認をしないと、待機後にそのままDELETEを実行して0行しか削除されず、
+  -- エラーにもならずNULLを返してしまう＝実際には削除されていないのに成功したかの
+  -- ように見えてしまう不具合があった）。
+  --
+  -- role='admin'とrole='user'でロック方法を分けているのは、デッドロックを
+  -- 避けるため。role='admin'の場合は、対象行自身も含まれる既存のadmin集合ロック
+  -- （company_id・role='admin'条件、両リクエストが常に同じ集合を同じ条件で
+  -- ロックするため安全）をそのまま再利用して存在確認する。role='user'の場合は
+  -- このadmin集合ロックが発生しないため、対象行1行だけを個別にロックする
+  -- （ロック対象が常に「1行だけ」なので、他のリクエストとの間でロック順序が
+  -- 交差してデッドロックすることはない）。
+  if v_target.role = 'admin' then
+    perform 1
+    from company_members
+    where company_id = v_target.company_id
+      and role = 'admin'
+    for update;
+
+    if not exists (select 1 from company_members where id = p_member_id) then
+      raise exception 'member not found in your company' using errcode = 'P0002';
+    end if;
+
+    select count(*) into v_remaining_admins
+    from company_members
+    where company_id = v_target.company_id
+      and role = 'admin'
+      and id <> p_member_id;
+
+    if v_remaining_admins = 0 then
+      raise exception 'cannot remove the last admin of this company' using errcode = '55000';
+    end if;
+  else
+    perform 1 from company_members where id = p_member_id for update;
+
+    if not found then
+      raise exception 'member not found in your company' using errcode = 'P0002';
+    end if;
+  end if;
+
+  delete from company_members where id = p_member_id returning * into v_result;
+
+  return v_result;
+end;
+$$;
+
+comment on function remove_company_member(uuid) is
+  '呼び出し元がその会社のadmin、またはplatform_adminの場合のみ、対象のcompany_members'
+  '行（会社所属）を削除する。auth.users・platform_admins等、company_members以外の'
+  'テーブルは一切変更しない。呼び出し元自身の行、および最後のadminの行は削除できない。';
+
+revoke all on function remove_company_member(uuid) from public;
+grant execute on function remove_company_member(uuid) to authenticated;
+
+-- ============================================================================
+-- ここまででPhase 9のスキーマも完成です。
 --
 -- 最初のplatform_admin登録について：
 --   platform_adminsへのINSERTは、company_membersの最初のadmin登録と同様、
@@ -1211,8 +1353,9 @@ grant execute on function list_platform_company_members(uuid) to authenticated;
 --     完了報告で比較・理由を報告する）
 --   ・platform_adminsの一覧・追加・削除を管理画面から行うUI（Bootstrap方式の
 --     ままSQL Editorから運営者が行う運用）
---   ・company_membersからのユーザー削除（role変更のみ対応。削除が必要な場合は
---     現状SQL Editorから行う）
+--   ・company_membersのユーザー「非有効化」（is_active等のフラグ列を追加した
+--     一時停止）は今回もスコープ外。Phase 9で追加したのは「会社から削除」
+--     （remove_company_member()、role変更と同じ設計での物理削除）のみ。
 --   ・list_public_companies() / get_public_config(text) のanon EXECUTE剥奪
 --     （本番の認証UI稼働確認が済んでから、別途「段階移行」として実施する。
 --     本節では両関数への既存のanon権限には一切手を加えていない）
