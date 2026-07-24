@@ -217,6 +217,12 @@ export default function AuthenticatedBotScreen({ onSignOut }) {
       status="ready"
       headerActions={headerActions}
       onSignOut={onSignOut}
+      // 領収書OCR（ReceiptOcrPanel.jsx）はSupabase Edge Functionを呼ぶため、
+      // ログイン済み（＝ここに到達できている）ユーザーの画面でだけ有効にする。
+      // App.jsx（Supabase未設定のローカル開発・公開デモ、ログイン無し）側では
+      // このpropを渡していないため既定のfalseのままとなり、OCRの導線自体が
+      // 表示されない（実際の認証・権限チェックはEdge Function側が最終防御）。
+      enableReceiptOcr
     />
   );
 }

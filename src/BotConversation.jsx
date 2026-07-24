@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import QuestionEngine from "./engine/QuestionEngine";
 import { renderTextWithLinks } from "./lib/linkifyText";
 import { shouldShowPolicySection } from "./lib/policyVisibility";
+import { shouldShowReceiptOcr } from "./lib/receiptOcrVisibility";
+import ReceiptOcrPanel from "./ReceiptOcrPanel";
 
 // 質問フローのチャットUI本体。「どの会社の設定を、どうやって取得したか」は
 // 一切知らず、確定済みのconfig（config.json互換形式）とstatus（読み込み状態）を
@@ -122,7 +124,13 @@ function CandidateList({ candidates, policies, onSelect }) {
   );
 }
 
-export default function BotConversation({ config, status, headerActions, onSignOut }) {
+export default function BotConversation({
+  config,
+  status,
+  headerActions,
+  onSignOut,
+  enableReceiptOcr = false,
+}) {
   const engine = useMemo(() => (config ? new QuestionEngine(config) : null), [config]);
   const [currentQuestion, setCurrentQuestion] = useState(() => engine?.getFirstQuestion() ?? null);
 
@@ -130,14 +138,33 @@ export default function BotConversation({ config, status, headerActions, onSignO
   const [result, setResult] = useState(null);
   const [messages, setMessages] = useState([]);
   const [history, setHistory] = useState([]);
+  // 領収書OCR（ReceiptOcrPanel.jsx）で確認済みの内容を保持するだけの箱。
+  // 経費タイプ判定（QuestionEngine）へは一切渡さない・参照しない
+  // （疎結合の維持。詳細はReceiptOcrPanel.jsx冒頭のコメント参照）。
+  // 将来のConcur連携等で使う想定のPoC用stateで、今回は保持するだけで
+  // それ以上の送信・表示の拡張は行わない。
+  const [receiptData, setReceiptData] = useState(null);
   const resultNote =
     result?.rule?.warningMessage?.trim() || result?.expenseType?.note?.trim();
+  // 「入力のポイント」（result.rule.message）は、Excel経由の結果には
+  // parseInitialSetupExcel.jsの必須チェックにより常に非空文字列が入るが、
+  // 管理画面のFlowOutlineEditor/ResultForm.jsxからは同じチェックを経ずに
+  // 空文字で保存できるため、実際には空になりうる。上のresultNoteと同じ
+  // 「trimして空なら非表示」という既存パターンをそのまま踏襲する。
+  const inputPointMessage = result?.rule?.message?.trim();
   const receiptStatus = getReceiptStatus(result?.expenseType?.receiptRequired);
   const policyName = getPolicyName(config?.policies, result?.expenseType?.policyId);
   // 結果自体にポリシー名が無い場合はそもそも表示しようがなく、また会社の
   // 有効ポリシーが1件以下の場合は選び分ける意味が無いため表示しない
   // （policyVisibility.js参照）。
   const showPolicySection = Boolean(policyName) && shouldShowPolicySection(config?.policies);
+  // 領収書「不要」の経費タイプではOCR機能自体を出さない。判定は
+  // receiptStatusと同じ値（expenseType.receiptRequired）をそのまま使う
+  // （lib/receiptOcrVisibility.js参照。新しい要否判定は追加していない）。
+  const showReceiptOcr = shouldShowReceiptOcr({
+    enableReceiptOcr,
+    receiptRequired: result?.expenseType?.receiptRequired,
+  });
 
   function handleSelect(answer) {
     if (!engine || !currentQuestion) {
@@ -220,6 +247,7 @@ export default function BotConversation({ config, status, headerActions, onSignO
     setMessages([]);
     setCurrentQuestion(firstQuestion);
     setHistory([]);
+    setReceiptData(null);
   }
 
   useEffect(() => {
@@ -231,6 +259,7 @@ export default function BotConversation({ config, status, headerActions, onSignO
     setResult(null);
     setMessages([]);
     setHistory([]);
+    setReceiptData(null);
   }, [engine]);
 
   return (
@@ -357,15 +386,17 @@ export default function BotConversation({ config, status, headerActions, onSignO
                 )}
               </div>
 
-              <div className="resultAdviceBubble">
-                <h3>
-                  <span className="inputPointIcon" aria-hidden="true">
-                    💡
-                  </span>
-                  入力のポイント
-                </h3>
-                <p>{renderTextWithLinks(result.rule.message)}</p>
-              </div>
+              {inputPointMessage && (
+                <div className="resultAdviceBubble">
+                  <h3>
+                    <span className="inputPointIcon" aria-hidden="true">
+                      💡
+                    </span>
+                    入力のポイント
+                  </h3>
+                  <p>{renderTextWithLinks(inputPointMessage)}</p>
+                </div>
+              )}
 
               <div className="receiptSummary">
                 <span className="receiptIcon" aria-hidden="true">
@@ -381,6 +412,10 @@ export default function BotConversation({ config, status, headerActions, onSignO
                   {receiptStatus.label}
                 </span>
               </div>
+
+              {showReceiptOcr && (
+                <ReceiptOcrPanel key={result.expenseType?.id ?? result.rule?.id} onConfirm={setReceiptData} />
+              )}
 
               {resultNote && (
                 <div className="resultWarningCard">

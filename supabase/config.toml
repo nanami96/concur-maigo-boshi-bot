@@ -1,0 +1,30 @@
+# このプロジェクトはこれまでSupabase CLIを初期化していなかった
+# （supabase/schema.sqlはSQL Editorへ直接貼り付けて運用する方式のため）。
+# このファイルは、Edge Function（ocr-receipt）をデプロイする際に
+# 「Authorizationヘッダーの検証（verify_jwt）を有効にする」という設定を、
+# CLIの暗黙のデフォルトに任せず明示するためだけに追加した最小限のファイルである。
+#
+# project_id は `npx supabase link --project-ref <あなたのプロジェクトref>`
+# を実行すると、このファイルへ自動的に書き込まれる（Supabaseダッシュボード→
+# Project Settings→General→Reference IDでも確認できる）。それまでは
+# プレースホルダーのままで構わない（`supabase functions deploy` 自体は
+# `--project-ref` フラグを渡せばこの値が無くても実行できるが、`link`する方が
+# 以後のCLI操作全般で確実なため推奨する）。
+project_id = "your-project-ref"
+
+# ocr-receipt：Supabaseプラットフォーム自体にAuthorizationヘッダー
+# （呼び出し元ユーザーのJWT）の検証をさせる。これはこのプロジェクトの
+# フロントが新しいpublishable key（sb_publishable_...、JWTではない不透明な
+# トークン）を使っていても関係なく機能する（publishable/secret keyそのものを
+# Authorizationとして渡された場合は、JWTとして解釈できずここで拒否される）。
+#
+# 重要：手元のSupabase CLI（`supabase functions new`でのscaffold結果）で
+# 確認したところ、新規に生成されるconfig.tomlのfunctionsセクションは
+# `verify_jwt = false` になっていた。つまり現行のCLIでは、config.tomlで
+# 明示しない場合の実質的なデフォルトはtrueとは限らない（true前提の思い込みは
+# 危険）。関数内部（index.ts）でも auth.getUser() による独立した二重チェックを
+# 行っているため、これを無効化しても最終的な安全性は失われない設計だが、
+# 「暗黙のデフォルトに依存しない・trueであることを保証する」ため、
+# ここで明示的にtrueとしている。
+[functions.ocr-receipt]
+verify_jwt = true
