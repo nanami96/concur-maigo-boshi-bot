@@ -50,7 +50,10 @@ describe("analyzeReceiptImage", () => {
 
     expect(result.error).toBeNull();
     expect(result.result).toEqual(normalized);
-    expect(invokeMock).toHaveBeenCalledWith("ocr-receipt", { body: expect.any(FormData) });
+    expect(invokeMock).toHaveBeenCalledWith("ocr-receipt", {
+      body: expect.any(FormData),
+      timeout: expect.any(Number),
+    });
   });
 
   it("Edge Functionが未認証エラー(401)を返した場合、サーバーのメッセージ付きでunauthorizedとして分類する", async () => {
@@ -106,6 +109,15 @@ describe("analyzeReceiptImage", () => {
     const result = await analyzeReceiptImage(makeFile());
 
     expect(result.error.type).toBe("network");
+  });
+
+  it("クライアント側タイムアウトによる中断（AbortError）はtimeoutとして分類する", async () => {
+    const abortError = Object.assign(new Error("The operation was aborted"), { name: "AbortError" });
+    invokeMock.mockResolvedValue({ data: null, error: new FunctionsFetchError(abortError) });
+
+    const result = await analyzeReceiptImage(makeFile());
+
+    expect(result.error.type).toBe("timeout");
   });
 
   it("Supabaseリレー側のエラー（FunctionsRelayError）はunknownとして分類する", async () => {

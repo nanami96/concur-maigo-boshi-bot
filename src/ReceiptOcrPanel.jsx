@@ -129,21 +129,35 @@ export default function ReceiptOcrPanel({ onConfirm }) {
     setPhase("analyzing");
     setErrorMessage(null);
 
-    const { result, error } = await analyzeReceiptImage(file);
+    // analyzeReceiptImage()は正常時・既知のエラー時のどちらも{result,error}を
+    // 返す設計で例外は投げない想定だが、万一（想定外の例外・将来の変更等）
+    // ここで例外が発生しても、catchせずに素通りさせると「領収書を読み取って
+    // います…」の表示から二度と抜けられなくなる（利用者は再試行することも
+    // できない）。ここでのtry/catchは、成功・既知の失敗・想定外の失敗の
+    // どの経路でも必ずphaseがanalyzing以外へ遷移することを保証するための
+    // 最終防御線であり、通常の成功/失敗の分岐ロジック自体は変えていない。
+    try {
+      const { result, error } = await analyzeReceiptImage(file);
 
-    if (error) {
-      setErrorMessage(resolveOcrErrorMessage(error));
+      if (error) {
+        console.error("[ReceiptOcrPanel] 領収書OCRの解析に失敗しました", error);
+        setErrorMessage(resolveOcrErrorMessage(error));
+        setPhase("error");
+        return;
+      }
+
+      setOcrResult(result);
+      setFormValues({
+        transactionDate: result.transactionDate || "",
+        merchantName: result.merchantName || "",
+        totalAmount: result.totalAmount != null ? String(result.totalAmount) : "",
+      });
+      setPhase("review");
+    } catch (caughtError) {
+      console.error("[ReceiptOcrPanel] 領収書OCRの解析中に予期しないエラーが発生しました", caughtError);
+      setErrorMessage(resolveOcrErrorMessage({ type: "unknown", message: null }));
       setPhase("error");
-      return;
     }
-
-    setOcrResult(result);
-    setFormValues({
-      transactionDate: result.transactionDate || "",
-      merchantName: result.merchantName || "",
-      totalAmount: result.totalAmount != null ? String(result.totalAmount) : "",
-    });
-    setPhase("review");
   }
 
   function handleRetryAfterError() {

@@ -12,12 +12,37 @@ import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@s
 // 自動的にAuthorizationヘッダーへ付与する（membershipRepository.jsの各RPC
 // 呼び出しと同じ、既存のsupabaseクライアント経由の認証方式）。呼び出し側
 // （ReceiptOcrPanel.jsx）が明示的にトークンを扱う必要は無い。
+//
+// Edge Function自身のポーリング処理（supabase/functions/ocr-receipt/index.ts の
+// POLL_MAX_ATTEMPTS×POLL_INTERVAL_MS）には最大約24秒のタイムアウトが既にあるが、
+// 従来はこのフロント側（supabase.functions.invoke()呼び出し）にタイムアウト指定が
+// 無かった。モバイル回線の瞬断・電波状況の悪化等でリクエスト/レスポンスの
+// 途中でTCP接続自体が応答不能になった場合、fetch()のPromiseはブラウザの
+// 既定動作としてresolveもrejectもされないまま残り得る（サーバー側が
+// どれだけ早く応答を返せても、そもそも届かない/戻らないケースには効かない）。
+// ReceiptOcrPanel.jsx側はこの結果をawaitしているだけなので、Promiseが
+// 一切決着しないと「領収書を読み取っています…」から永久に抜けられなくなる
+// （本番のiPhone実機で発生した「ローディングのまま止まる」不具合の根本原因）。
+// timeoutを指定すると、supabase-js（@supabase/functions-js）が内部で
+// AbortControllerを生成しこの時間で自動的にfetchをabortしてくれるため、
+// 必ずPromiseが決着するようになる。値はEdge Function側の最大処理時間
+// （約24-30秒）にアップロード・往復分の余裕を足した40秒とする。
+const OCR_INVOKE_TIMEOUT_MS = 40_000;
+
 export async function classifyOcrFunctionError(error) {
   if (!error) {
     return { type: null, message: null };
   }
 
   if (error instanceof FunctionsFetchError) {
+    // フロント側のtimeout（上記OCR_INVOKE_TIMEOUT_MS）によるAbortも、supabase-js
+    // 内部では通常のfetch失敗と同じくFunctionsFetchErrorとして届く（.contextに
+    // 元のAbortErrorが入る）。単なる通信断と区別し、利用者へは「時間切れ」として
+    // 案内する（OCR_ERROR_MESSAGES.timeoutは既にEdge Function側の504と共通で
+    // 使っている文言）。
+    if (error.context?.name === "AbortError") {
+      return { type: "timeout", message: null };
+    }
     return { type: "network", message: null };
   }
 
@@ -56,6 +81,7 @@ export async function analyzeReceiptImage(file) {
   try {
     const { data, error } = await supabase.functions.invoke("ocr-receipt", {
       body: formData,
+      timeout: OCR_INVOKE_TIMEOUT_MS,
     });
 
     if (error) {
