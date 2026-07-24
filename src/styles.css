@@ -1465,6 +1465,81 @@ button {
   border-bottom: 1px solid #d7deea;
 }
 
+/* 「基本設定｜ポリシー｜経費タイプ」と同じタブ列に見えないよう、設定全体を
+   まとめて取り込む操作として独立した横長カードにする。ExpenseTypeSettings/
+   PolicySettingsの.settingsCard（見た目・ダークモード対応込み）をそのまま
+   ベースにし、レイアウト（横並び・両端揃え）だけをこのクラスで追加している。
+   ボタンは「下書きを保存」（青の塗りつぶし）「公開する」（緑の塗りつぶし）と
+   混同しないよう、あえて縁取りのみの控えめな見た目にとどめている。 */
+.excelImportCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.excelImportCardInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.excelImportCardIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  flex: 0 0 52px;
+}
+
+/* アイコン自体がExcel標準の緑系で塗りつぶし済み（固定色）のため、他の
+   stroke描画アイコン（.resultLabelIcon svg等）と違いcurrentColor経由の
+   着色は行わない。テーマに依存しないのでダークモード用の上書きも不要。 */
+.excelImportCardIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.excelImportCardText {
+  min-width: 0;
+}
+
+.excelImportCardTitle {
+  margin: 0;
+  color: #172033;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.excelImportCardNote {
+  margin: 2px 0 0;
+  color: #5a6b85;
+  font-size: 0.78rem;
+}
+
+.excelImportCardButton {
+  flex: 0 0 auto;
+  border: 1px solid #c7d2e0;
+  background: #fff;
+  color: #33415c;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-weight: 500;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.excelImportCardButton:hover {
+  background: #f4f7fc;
+}
+
 .adminTabs {
   display: flex;
   flex-wrap: wrap;
@@ -3011,6 +3086,19 @@ textarea.resultFieldInput {
   .flowGhostButton,
   .optionMenuItem {
     color: #eef2f7;
+  }
+
+  .excelImportCardTitle {
+    color: #eef2f7;
+  }
+
+  .excelImportCardButton {
+    border-color: #33415c;
+    color: #eef2f7;
+  }
+
+  .excelImportCardButton:hover {
+    background: #223049;
   }
 
   .flowQuestionTextInput,

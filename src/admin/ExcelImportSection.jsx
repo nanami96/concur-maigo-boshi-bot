@@ -3,6 +3,40 @@ import ExcelImportPanel from "./ExcelImportPanel";
 import UnsavedChangesDialog from "./UnsavedChangesDialog";
 import { buildWorkspaceStateFromImport } from "./excelImportForExistingCompany";
 
+// 入口カード（idle状態）のアイコン。新しい画像ファイル・アイコンライブラリは
+// 追加せず、他の管理画面アイコン（FlowPreview.jsxのTagIcon/ReceiptIcon等）と
+// 同じ「インラインSVGのローカル関数コンポーネント」という作法のまま、
+// Excel（.xlsx）ファイルだと直感的に連想できるよう、フォルダ角折れの書類＋
+// 「XLSX」ラベルという一般的なファイルアイコンの意匠・Excel標準の緑系
+// （#217346付近）で塗りつぶして描画している。テーマに依存しない固定色のため
+// ダークモード用の上書きは不要。
+function ExcelFileIcon() {
+  return (
+    <span className="excelImportCardIcon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" focusable="false">
+        <path
+          d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"
+          fill="#1c7a44"
+        />
+        <path d="M14 3 19 8h-5Z" fill="#3fa06a" />
+        <rect x="5" y="14.4" width="14" height="5.6" rx="0.8" fill="#0f5c34" />
+        <text
+          x="12"
+          y="18.7"
+          textAnchor="middle"
+          fontSize="4.6"
+          fontWeight="700"
+          fontFamily="Arial, Helvetica, sans-serif"
+          letterSpacing="-0.2"
+          fill="#ffffff"
+        >
+          XLSX
+        </text>
+      </svg>
+    </span>
+  );
+}
+
 // 既に設定がある会社の通常管理画面から、初期設定Excel（正式仕様）を
 // 下書きへ取り込むための入口。
 //
@@ -114,12 +148,26 @@ export default function ExcelImportSection({ editor, persistence, companyId }) {
 
   return (
     <div className="excelImportSection">
-      <button type="button" className="flowGhostButton" onClick={handleStartClick}>
-        Excelからインポート
-      </button>
-      <p className="settingsHint">
-        初期設定Excel（正式仕様）から、この会社の設定を下書きへ取り込みます。取り込み後は保存・公開の操作を行うまで、公開中のBotには反映されません。
-      </p>
+      {/* 「基本設定｜ポリシー｜経費タイプ」タブと横並びの1項目に見えないよう、
+          設定全体をまとめて取り込む操作として独立したカードにしている。
+          ボタンを押すとファイル選択ダイアログが即座に開くのではなく、
+          ドロップゾーン・プレビューを含むExcelImportPanelへ画面遷移するため、
+          ボタン文言は「Excelファイルを選択」ではなく「Excelからインポート」とした。 */}
+      <div className="settingsCard excelImportCard">
+        <div className="excelImportCardInfo">
+          <ExcelFileIcon />
+          <div className="excelImportCardText">
+            <p className="excelImportCardTitle">Excelから設定を一括インポート</p>
+            <p className="settingsCardMeta">
+              基本設定・ポリシー・経費タイプ・質問フローを、Excelからまとめて下書きへ取り込めます。
+            </p>
+            <p className="excelImportCardNote">公開するまで、公開中のBotには反映されません。</p>
+          </div>
+        </div>
+        <button type="button" className="excelImportCardButton" onClick={handleStartClick}>
+          Excelからインポート
+        </button>
+      </div>
     </div>
   );
 }
