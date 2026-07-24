@@ -1450,6 +1450,21 @@ button {
   max-width: 900px;
 }
 
+/* 既存会社の通常管理画面からのExcelインポート導線（ExcelImportSection.jsx）。
+   「設定」タブの直下・基本設定/ポリシー/経費タイプの.adminTabsより上に置き、
+   「下書きを保存」「公開する」（DraftSaveBar/PublishPanel、こちらより上に表示
+   される）とは見た目・位置ともにはっきり分離する。下のadminTabsと同じ罫線色で
+   区切ることで、設定操作エリアの一部であることを示しつつ視覚的に独立させる。 */
+.excelImportSection {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-bottom: 14px;
+  margin-top: 12px;
+  border-bottom: 1px solid #d7deea;
+}
+
 .adminTabs {
   display: flex;
   flex-wrap: wrap;

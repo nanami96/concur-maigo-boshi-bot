@@ -25,6 +25,7 @@ import CompanySettings from "./CompanySettings";
 import PolicySettings from "./PolicySettings";
 import ExpenseTypeSettings from "./ExpenseTypeSettings";
 import InitialSetupScreen from "./InitialSetupScreen";
+import ExcelImportSection from "./ExcelImportSection";
 import UserManagementPanel from "./UserManagementPanel";
 import CreatePlatformCompanyScreen from "./CreatePlatformCompanyScreen";
 
@@ -223,6 +224,7 @@ function AdminWorkspace({
 
       {section === "settings" && (
         <>
+          <ExcelImportSection editor={editor} persistence={persistence} companyId={companyCode} />
           <nav className="adminTabs" aria-label="設定の切り替え">
             {SETTINGS_TABS.map((tab) => (
               <button

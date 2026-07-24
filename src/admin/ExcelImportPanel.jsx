@@ -1,12 +1,25 @@
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { parseInitialSetupExcel } from "../flow/parseInitialSetupExcel";
+import { detectCompanyIdMismatch } from "./excelImportForExistingCompany";
 import ImportPreview from "./ImportPreview";
 
-// 「初期設定Excel 正式仕様 v1」をアップロードし、解析・バリデーション・プレビューを行う。
-// アップロード直後には何も確定しない。「この内容で初期設定を作成」を押すまでは
-// パース結果はこのコンポーネント内のstateにとどまる。
-export default function ExcelImportPanel({ onConfirm }) {
+// 「初期設定Excel 正式仕様」をアップロードし、解析・バリデーション・プレビューを行う。
+// アップロード直後には何も確定しない。確定ボタン（既定は「この内容で初期設定を作成」）を
+// 押すまでは、パース結果はこのコンポーネント内のstateにとどまる。
+//
+// confirmLabel・noticeTextは新規会社の初期セットアップ（InitialSetupScreen.jsx）と
+// 既存会社への取り込み（ExcelImportSection.jsx）で文言を差し替えるための任意
+// プロパティ。currentCompanyIdを指定した場合のみ、Excel内の会社IDと比較して
+// 不一致の注意文をImportPreviewに表示する（会社IDそのものを書き換える処理は
+// このコンポーネントの責務ではなく、呼び出し側がonConfirmで受け取ったbundleを
+// 使って行う。excelImportForExistingCompany.js参照）。
+export default function ExcelImportPanel({
+  onConfirm,
+  confirmLabel,
+  noticeText,
+  currentCompanyId = null,
+}) {
   const [status, setStatus] = useState("idle"); // idle | parsing | preview | file-error
   const [fileError, setFileError] = useState(null);
   const [parseResult, setParseResult] = useState(null);
@@ -63,12 +76,26 @@ export default function ExcelImportPanel({ onConfirm }) {
   }
 
   if (status === "preview" && parseResult) {
+    const companyIdMismatch =
+      currentCompanyId &&
+      detectCompanyIdMismatch({
+        parsedCompanyId: parseResult.company?.company_id,
+        currentCompanyId,
+      });
+
     return (
       <div>
         <p className="importFileName">選択したファイル: {fileName}</p>
         <ImportPreview
           parseResult={parseResult}
           onReselect={handleReselect}
+          confirmLabel={confirmLabel}
+          noticeText={noticeText}
+          companyIdWarning={
+            companyIdMismatch
+              ? `Excel内の会社ID「${parseResult.company?.company_id}」は現在の会社（${currentCompanyId}）と異なりますが、会社IDは変更されません。この内容は現在の会社（${currentCompanyId}）の下書きへ取り込まれます。`
+              : null
+          }
           onConfirm={() =>
             onConfirm({
               company: parseResult.company,

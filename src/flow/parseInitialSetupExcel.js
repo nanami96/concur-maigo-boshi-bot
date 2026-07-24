@@ -1,9 +1,16 @@
-// 「初期設定Excel 正式仕様 v1」（excel/templates/initial-setup-template-v1.xlsx）を解析し、
+// 「初期設定Excel 正式仕様」（excel/templates/initial-setup-template.xlsx）を解析し、
 // 管理画面がそのまま使える { company, policies, expenseTypes, flow } を組み立てる。
 //
 // 06_判定ルールは存在せず、質問→選択肢→次の質問 または 結果 という構造を
 // 05_選択肢シートから直接読み取る。ルールID・条件グループ・AND条件といった概念は
 // このファイルの外（既存のQuestionEngine/buildConfigFromFlow）にも一切登場しない。
+//
+// Excel仕様は常に最新の1種類のみをサポートし、過去バージョンとの後方互換は
+// 持たない方針のため、以前あったschema_version（01_基本設定シートの列）による
+// バージョン判定の仕組みは廃止した。形式が正しいかどうかは、以下の
+// 必須シート・必須列・データ構造・参照整合性の検証だけで判断する
+// （schema_version列が残ったままの古いExcelを読み込んでも、その列は
+// 単に無視される＝他の必須列さえ揃っていれば正常にインポートできる）。
 import * as XLSX from "xlsx";
 import { generateNextId } from "./idGenerator";
 
@@ -67,20 +74,6 @@ export function slugify(value) {
 export function generateCompanyId(companyName) {
   const slug = slugify(companyName);
   return slug || `company-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-// --- schema_version ---------------------------------------------------
-
-export function detectSchemaVersion(workbook) {
-  const rows = readSheetRows(workbook, "01_基本設定");
-  const raw = rows[0]?.["schema_version"];
-
-  if (raw === undefined || raw === null || text(raw) === "") {
-    return null;
-  }
-
-  const numeric = Number(raw);
-  return Number.isFinite(numeric) ? numeric : NaN;
 }
 
 // --- 01_基本設定 ---------------------------------------------------
@@ -694,36 +687,12 @@ export function parseInitialSetupExcel(workbook) {
   const errors = [];
   const warnings = [];
 
-  const schemaVersion = detectSchemaVersion(workbook);
-
-  if (schemaVersion === null) {
-    errors.push(
-      issue(
-        "error",
-        "schema-version-legacy",
-        "このExcelは旧形式（schema_versionが未設定）です。初期設定インポートは新テンプレート（schema_version=1）のみ対応しています。旧形式のExcelは、これまでどおり npm run generate:config のパイプラインをご利用ください。",
-      ),
-    );
-    return { schemaVersion: null, company: null, policies: [], expenseTypes: [], flow: null, errors, warnings };
-  }
-
-  if (Number.isNaN(schemaVersion) || schemaVersion !== 1) {
-    errors.push(
-      issue(
-        "error",
-        "schema-version-unsupported",
-        `このExcelの設定形式には対応していません（schema_version=${schemaVersion}）。`,
-      ),
-    );
-    return { schemaVersion, company: null, policies: [], expenseTypes: [], flow: null, errors, warnings };
-  }
-
   const missingSheets = REQUIRED_SHEETS.filter((name) => !workbook.Sheets[name]);
   if (missingSheets.length > 0) {
     missingSheets.forEach((name) => {
       errors.push(issue("error", `missing-sheet-${name}`, `必須シート「${name}」が見つかりません。`));
     });
-    return { schemaVersion, company: null, policies: [], expenseTypes: [], flow: null, errors, warnings };
+    return { company: null, policies: [], expenseTypes: [], flow: null, errors, warnings };
   }
 
   const missingColumns = [];
@@ -741,7 +710,7 @@ export function parseInitialSetupExcel(workbook) {
         issue("error", `missing-column-${sheetName}-${column}`, `${sheetName}シートに必須列「${column}」が見つかりません。`),
       );
     });
-    return { schemaVersion, company: null, policies: [], expenseTypes: [], flow: null, errors, warnings };
+    return { company: null, policies: [], expenseTypes: [], flow: null, errors, warnings };
   }
 
   const company = parseCompany(workbook, errors, warnings);
@@ -755,7 +724,6 @@ export function parseInitialSetupExcel(workbook) {
   }
 
   return {
-    schemaVersion,
     company,
     policies,
     expenseTypes,

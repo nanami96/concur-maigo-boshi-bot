@@ -18,8 +18,26 @@ function IssueGroup({ title, items }) {
 }
 
 // Excelインポートのプレビュー画面。パース結果（未確定）を表示するだけで、
-// 「この内容で初期設定を作成」が押されるまでは何もコミットしない。
-export default function ImportPreview({ parseResult, onConfirm, onReselect }) {
+// 確定ボタン（既定は「この内容で初期設定を作成」）が押されるまで何もコミットしない。
+//
+// confirmLabel・noticeTextは、既存会社の通常管理画面からのインポート
+// （ExcelImportSection.jsx）でボタン文言・案内文を「下書きに反映する」という
+// 文脈に合わせて差し替えられるようにするための任意プロパティ。指定が無ければ
+// 従来通り初期セットアップ向けの文言のまま動作する（InitialSetupScreen経由の
+// 既存フローには一切影響しない）。
+//
+// companyIdWarningも同様に任意で、既存会社への取り込み時に「Excel内の会社IDが
+// 現在の会社と異なる」場合の注意文をこの画面内に表示するためのもの
+// （ExcelImportSection.jsx参照。会社IDそのものは常に現在の会社のものが使われ、
+// Excelの値で置き換わることはない）。
+export default function ImportPreview({
+  parseResult,
+  onConfirm,
+  onReselect,
+  confirmLabel = "この内容で初期設定を作成",
+  noticeText = "まだ何も確定していません。内容を確認してから「この内容で初期設定を作成」を押してください。",
+  companyIdWarning = null,
+}) {
   const { company, policies, expenseTypes, flow, errors, warnings } = parseResult;
 
   const questionCount = flow ? Object.keys(flow.questions).length : 0;
@@ -32,9 +50,13 @@ export default function ImportPreview({ parseResult, onConfirm, onReselect }) {
   return (
     <div className="importPreview">
       <h2>インポートプレビュー</h2>
-      <p className="importPreviewNotice">
-        まだ何も確定していません。内容を確認してから「この内容で初期設定を作成」を押してください。
-      </p>
+      <p className="importPreviewNotice">{noticeText}</p>
+
+      {companyIdWarning && (
+        <p className="settingsErrorText" role="alert">
+          {companyIdWarning}
+        </p>
+      )}
 
       <div className="importSummaryGrid">
         <div className="importSummaryItem">
@@ -109,7 +131,7 @@ export default function ImportPreview({ parseResult, onConfirm, onReselect }) {
           別のファイルを選び直す
         </button>
         <button type="button" className="importConfirmButton" disabled={!canConfirm} onClick={onConfirm}>
-          この内容で初期設定を作成
+          {confirmLabel}
         </button>
       </div>
     </div>
