@@ -1181,10 +1181,20 @@ button {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
+/* min-width:0が無いと、CSS Gridアイテム（このクラス自身）の既定値
+   min-width:autoにより「中の子要素の最小コンテンツ幅」より縮まなくなる。
+   input[type="date"]はiOS Safari等のWebKitで年/月/日の内部表示＋
+   カレンダーアイコン分の最小コンテンツ幅がテキスト/数値欄より大きいため、
+   これが.receiptOcrFieldGridの列幅・親カード幅を超えてはみ出す原因になって
+   いた（支払先・金額の欄はinput自体の最小コンテンツ幅が小さいため、同じ
+   min-width:autoでも顕在化していなかった。金額欄は.receiptOcrAmountRow側で
+   既にmin-width:0を指定済み）。min-width:0により、width:100%が実際の
+   グリッド列幅まで正しく縮小できるようになる。 */
 .receiptOcrField {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .receiptOcrFieldLabel {
@@ -1201,6 +1211,11 @@ button {
   color: #172033;
   background: #fff;
   width: 100%;
+  /* .receiptOcrFieldがmin-width:0で縮めるようになっても、input自身が
+     既定のmin-width:auto（type="date"はWebKitで内部表示分の最小コンテンツ幅を
+     持つ）のままだと、今度はinput自身が親のreceiptOcrFieldをはみ出す。
+     width:100%を実際の親幅まで正しく縮小させるために必須。 */
+  min-width: 0;
 }
 
 .receiptOcrInput:disabled {
