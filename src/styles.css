@@ -1220,9 +1220,23 @@ button {
   min-width: 0;
 }
 
+/* 確定後（disabled）の3項目（利用日・支払先・金額）を同じ見た目に揃える。
+   支払先・金額はinputの値がそのままテキストとして描画されるため、colorが
+   そのまま反映されるが、利用日（type="date"）の値はブラウザ内部の
+   シャドウDOM側の部品（Safari: ::-webkit-date-and-time-value、
+   Chromium: ::-webkit-datetime-edit-*-field）として描画されており、disabled時に
+   ブラウザ自身が独自の文字色（システムの無効化色）をそこへ当ててしまい、
+   author側のcolorの継承を上書きする。加えて多くのブラウザはdisabled化した
+   フォーム部品全体にUA既定のopacityを掛けており、これがcolorとは別に
+   コントラストを変えてしまう（支払先・金額が薄く見えすぎる一因でもある）。
+   -webkit-text-fill-colorで文字色を強制し、opacity:1でUA既定の減光を
+   打ち消すことで、3項目とも同じ背景・枠線・文字色に統一される。 */
 .receiptOcrInput:disabled {
-  background: #f1f5f9;
-  color: #5a6b85;
+  background: #f8fafc;
+  border-color: #dce3ec;
+  color: #475569;
+  -webkit-text-fill-color: #475569;
+  opacity: 1;
 }
 
 /* 前回（min-width:0のみ）で直らなかった理由：
