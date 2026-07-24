@@ -19,6 +19,7 @@
   "devDependencies": {
     "exceljs": "^4.4.0",
     "jszip": "^3.10.1",
+    "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.10"
   }
 }

@@ -4,16 +4,19 @@ const JSZip = require("jszip");
 const XLSX = require("xlsx");
 
 const companyId = process.argv[2] || "sample-company";
-const inputFilePath = path.join("excel", `${companyId}.xlsx`);
+const inputFilePath = path.join("excel", `${companyId}.xlsm`);
 const outputDir = path.join("excel", "output");
 const outputFilePath = path.join(outputDir, `${companyId}.xlsx`);
 
-const RULE_SHEET_NAME = "03_判定ルール";
-const EXPENSE_TYPES_SHEET_NAME = "99_expense_types";
-const RULE_EXPENSE_TYPE_HEADER = "経費タイプ";
-const EXPENSE_TYPE_NAME_HEADER = "expense_type_name";
+const RULE_SHEET_NAME = "06_判定ルール";
+const EXPENSE_TYPES_SHEET_NAME = "03_経費タイプ";
+const RULE_EXPENSE_TYPE_HEADER = "表示する経費タイプID";
+const EXPENSE_TYPE_ID_HEADER = "経費タイプID";
 const HEADER_ROW_INDEX = 0;
-const FIRST_DATA_ROW_NUMBER = 3;
+// 新スキーマ（関係モデル）はメタ行（必須/任意の注記行）を持たず、
+// ヘッダー行の次から即データ行になる（scripts/generators/sheetReader.js の
+// DATA_START_ROW_BY_SHEET と揃える）。
+const FIRST_DATA_ROW_NUMBER = 2;
 const LAST_EXCEL_ROW_NUMBER = 1048576;
 
 function columnNumberToName(columnNumber) {
@@ -52,7 +55,9 @@ function readRows(workbook, sheetName) {
 }
 
 function findColumnNumber(headers, headerName, sheetName) {
-  const index = headers.findIndex((header) => String(header).trim() === headerName);
+  const index = headers.findIndex(
+    (header) => String(header).trim() === headerName,
+  );
 
   if (index === -1) {
     throw new Error(`${sheetName} シートに ${headerName} 列が見つかりません。`);
@@ -122,11 +127,15 @@ async function getWorksheetPath(zip, sheetName) {
     const relationshipRegex = /<Relationship\b[^>]*>/g;
     let relationshipMatch;
 
-    while ((relationshipMatch = relationshipRegex.exec(workbookRelsXml)) !== null) {
+    while (
+      (relationshipMatch = relationshipRegex.exec(workbookRelsXml)) !== null
+    ) {
       const relationshipTag = relationshipMatch[0];
 
       if (getAttribute(relationshipTag, "Id") === relationshipId) {
-        return normalizeWorksheetTarget(getAttribute(relationshipTag, "Target"));
+        return normalizeWorksheetTarget(
+          getAttribute(relationshipTag, "Target"),
+        );
       }
     }
   }
@@ -243,19 +252,19 @@ async function main() {
     RULE_EXPENSE_TYPE_HEADER,
     RULE_SHEET_NAME,
   );
-  const expenseTypeNameColumn = findColumnNumber(
+  const expenseTypeIdColumn = findColumnNumber(
     expenseTypeRows[HEADER_ROW_INDEX] || [],
-    EXPENSE_TYPE_NAME_HEADER,
+    EXPENSE_TYPE_ID_HEADER,
     EXPENSE_TYPES_SHEET_NAME,
   );
   const lastExpenseTypeRow = findLastDataRow(
     expenseTypeRows,
-    expenseTypeNameColumn,
+    expenseTypeIdColumn,
     EXPENSE_TYPES_SHEET_NAME,
   );
   const ruleExpenseTypeColumnName = columnNumberToName(ruleExpenseTypeColumn);
-  const expenseTypeNameColumnName = columnNumberToName(expenseTypeNameColumn);
-  const formula = `'${EXPENSE_TYPES_SHEET_NAME}'!$${expenseTypeNameColumnName}$${FIRST_DATA_ROW_NUMBER}:$${expenseTypeNameColumnName}$${lastExpenseTypeRow}`;
+  const expenseTypeIdColumnName = columnNumberToName(expenseTypeIdColumn);
+  const formula = `'${EXPENSE_TYPES_SHEET_NAME}'!$${expenseTypeIdColumnName}$${FIRST_DATA_ROW_NUMBER}:$${expenseTypeIdColumnName}$${lastExpenseTypeRow}`;
   const ruleWorksheetPath = await getWorksheetPath(zip, RULE_SHEET_NAME);
   const ruleWorksheetFile = zip.file(ruleWorksheetPath);
 

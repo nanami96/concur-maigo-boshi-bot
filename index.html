@@ -9,6 +9,15 @@
          ハードコードすると、GitHub Pagesのサブパス公開時にパスがずれて
          404になるため、必ずこの書き方にする。 -->
     <link rel="icon" type="image/png" href="%BASE_URL%favicon.png" />
+    <meta name="theme-color" content="#1f4fd8" />
+    <!-- vite-plugin-pwaはmanifest.webmanifestへのlink・Service Worker登録は
+         自動で挿入するが、iOS Safariの「ホーム画面に追加」はWeb App Manifestを
+         見ず、この3つ（apple-mobile-web-app-*・apple-touch-icon）だけを見て
+         standalone起動・アイコンを決めるため、手動で追加する必要がある。 -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="迷子ボット" />
+    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
     <title>Concur迷子防止Bot</title>
   </head>
   <body>
