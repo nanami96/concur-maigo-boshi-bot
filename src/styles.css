@@ -3032,6 +3032,18 @@ textarea.resultFieldInput {
   text-align: center;
 }
 
+/* 確定済みロゴ（src/assets/maigo-bot-logo.png、横長2:1、白背景）。
+   .authScreenの内幅（PC:420-64=356px、スマホ:20px paddingでさらに狭くなる）に
+   対して余裕を持たせつつ、width:100%との組み合わせでどの画面幅でも
+   自動的に縮小され、はみ出し・巨大化のどちらも起きないようにしている。 */
+.authLogo {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  margin: 0 auto 20px;
+}
+
 /* 会社へ参加（InviteCodeEntryScreen）の説明文用。標準の1remだと.authScreenの
    内幅（420px - 左右padding）よりわずかに広くなり、不自然な位置で2行に
    折り返されてしまうため、1行に収まる大きさへ少しだけ縮小する。

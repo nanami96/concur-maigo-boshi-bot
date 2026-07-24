@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { redeemInviteCode } from "../data/membershipRepository";
 import { resolveMembershipErrorMessage } from "./membershipErrorMessages";
+import AuthLogo from "./AuthLogo";
 
 // ログイン済みだがまだどの会社にも所属していないユーザー向けの初回セットアップ画面。
 //
@@ -48,6 +49,7 @@ export default function InviteCodeScreen({ onJoined, initialErrorMessage = null 
   return (
     <main className="appShell">
       <div className="authScreen">
+        <AuthLogo />
         <h1>会社への参加</h1>
         <p>
           まだどの会社にも登録されていません。会社の担当者から案内された招待コードを

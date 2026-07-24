@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { translateUpdatePasswordError } from "./passwordResetErrorMessages";
+import AuthLogo from "./AuthLogo";
 
 // パスワード再設定リンクの交換（PasswordRecoveryGate.jsx参照）が成功した後にだけ
 // 表示される、「新しいパスワードを設定」する画面。この画面が表示されている間、
@@ -51,6 +52,7 @@ export default function ResetPasswordScreen({ onDone }) {
     return (
       <main className="appShell adminShell">
         <div className="authScreen">
+          <AuthLogo />
           <h1>パスワードを再設定</h1>
           <p className="authSentMessage">
             パスワードを変更しました。新しいパスワードでログインしてください。
@@ -66,6 +68,7 @@ export default function ResetPasswordScreen({ onDone }) {
   return (
     <main className="appShell adminShell">
       <div className="authScreen">
+        <AuthLogo />
         <h1>新しいパスワードを設定</h1>
         <p>新しいパスワードを入力してください。</p>
 

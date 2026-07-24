@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { translateAuthError } from "./authErrorMessages";
+import AuthLogo from "./AuthLogo";
 
 // メールアドレス＋パスワードでのユーザー登録画面。
 //
@@ -76,6 +77,7 @@ export default function SignUpScreen({ onSwitchToLogin, onSignedUp, title = "ア
     return (
       <main className="appShell adminShell">
         <div className="authScreen">
+          <AuthLogo />
           <h1>{title}</h1>
           <p className="authSentMessage">
             <strong>{email.trim()}</strong>{" "}
@@ -92,6 +94,7 @@ export default function SignUpScreen({ onSwitchToLogin, onSignedUp, title = "ア
   return (
     <main className="appShell adminShell">
       <div className="authScreen">
+        <AuthLogo />
         <h1>{title}</h1>
 
         <form onSubmit={handleSubmit} className="authForm">

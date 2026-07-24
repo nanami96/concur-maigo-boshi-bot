@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { savePendingInviteCode } from "../data/pendingInviteCode";
+import AuthLogo from "./AuthLogo";
 
 // 新規一般ユーザー向け、未ログイン時点で最初に表示する「会社へ参加」画面。
 //
@@ -41,6 +42,7 @@ export default function InviteCodeEntryScreen({ onNext, onSwitchToLogin }) {
   return (
     <main className="appShell adminShell">
       <div className="authScreen">
+        <AuthLogo />
         <h1>会社へ参加</h1>
         <p className="authScreenLead">会社から案内された招待コードを入力してください。</p>
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { translateAuthError } from "./authErrorMessages";
 import { translateResetRequestError } from "./passwordResetErrorMessages";
+import AuthLogo from "./AuthLogo";
 
 // emailRedirectTo は「リンクをクリックした後に戻ってくるURL」で、実行時の
 // window.location から組み立てる。こうすることで、ローカル開発
@@ -167,6 +168,7 @@ export default function LoginScreen({
   return (
     <main className="appShell adminShell">
       <div className="authScreen">
+        <AuthLogo />
         <h1>{mode === "forgot" ? "パスワードを再設定" : title}</h1>
 
         {bannerMessage && (

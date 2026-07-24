@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- %BASE_URL% はViteがbase設定（vite.config.js参照。通常は"/"、
+         GitHub Pages公開用ビルドでは"/concur-maigo-boshi-bot/"）に応じて
+         自動的に置き換えるプレースホルダー。ここへ直接"/favicon.png"等を
+         ハードコードすると、GitHub Pagesのサブパス公開時にパスがずれて
+         404になるため、必ずこの書き方にする。 -->
+    <link rel="icon" type="image/png" href="%BASE_URL%favicon.png" />
     <title>Concur迷子防止Bot</title>
   </head>
   <body>
