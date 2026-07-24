@@ -2031,18 +2031,38 @@ textarea.resultFieldInput {
   box-shadow: 0 10px 30px rgba(22, 32, 51, 0.3);
 }
 
+/* タイトル・本文は既定のtext-align:left（ダイアログ自体には指定なし）のまま
+   だったが、直後の.confirmActionsだけがjustify-content:flex-endでボタンを
+   右へ寄せていたため、短いタイトル/本文（左寄せ）とボタン列（右寄せ）の
+   基準がズレ、ダイアログ全体としては「右側にボタンが偏り、左側だけ余白が
+   残る」ように見えていた。.confirmDialog自体ではなくタイトル・本文
+   （このh3・.confirmMessage）を明示的に中央寄せにすることで、
+   .publishWarningSummary（警告の箇条書き。PublishConfirmDialog.jsx参照）や
+   .settingsErrorText（エラー文）等、text-align:centerが不自然な兄弟要素には
+   影響させずに済む（.confirmDialog自体にtext-align:centerを付けるとこれらにも
+   継承されてしまうため、あえて子要素側を個別に指定している）。 */
+.confirmDialog h3 {
+  text-align: center;
+}
+
 .confirmMessage {
   margin: 8px 0;
+  text-align: center;
 }
 
 .confirmImpact {
   font-weight: 600;
   color: #a13d3d;
+  text-align: center;
 }
 
+/* ボタン列も中央寄せに変更。.confirmDialog・.confirmActionsを使う
+   ConfirmDialog.jsx（削除確認）・UnsavedChangesDialog.jsx（3択の確認）・
+   PublishConfirmDialog.jsx（公開確認）はいずれも単純な文章＋ボタン列という
+   構造で、右寄せより中央寄せの方がタイトル・本文と軸が揃い自然に見える。 */
 .confirmActions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 10px;
   margin-top: 16px;
 }
