@@ -186,7 +186,10 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function analyzeReceipt(imageBytes, contentType) {
+// pollAttemptsは呼び出し元（Deno.serve側）のOCR成功/失敗/タイムアウトログで
+// 経過時間と合わせて報告するために返す（Polling回数の目安として、詳細な
+// 毎回のログは残さない。理由は下のDeno.serve側のコメント参照）。
+async function analyzeReceipt(imageBytes, contentType, log) {
   const endpoint = Deno.env.get("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT");
   const apiKey = Deno.env.get("AZURE_DOCUMENT_INTELLIGENCE_KEY");
 
@@ -196,6 +199,7 @@ async function analyzeReceipt(imageBytes, contentType) {
 
   const analyzeUrl = new URL(AZURE_ANALYZE_PATH, endpoint.endsWith("/") ? endpoint : `${endpoint}/`);
 
+  log("OCR API送信");
   const analyzeResponse = await fetch(analyzeUrl, {
     method: "POST",
     headers: {
@@ -228,28 +232,43 @@ async function analyzeReceipt(imageBytes, contentType) {
 
     if (!pollResponse.ok) {
       console.error("azure poll request failed", pollResponse.status);
-      return { outcome: "azure_error" };
+      return { outcome: "azure_error", pollAttempts: attempt + 1 };
     }
 
     const pollBody = await pollResponse.json();
 
     if (pollBody.status === "succeeded") {
-      return { outcome: "succeeded", analyzeResult: pollBody.analyzeResult };
+      return { outcome: "succeeded", analyzeResult: pollBody.analyzeResult, pollAttempts: attempt + 1 };
     }
 
     if (pollBody.status === "failed") {
       console.error("azure analysis failed", pollBody?.error?.code);
-      return { outcome: "analysis_failed" };
+      return { outcome: "analysis_failed", pollAttempts: attempt + 1 };
     }
     // "notStarted" | "running" はそのままポーリング継続。
   }
 
-  return { outcome: "timeout" };
+  return { outcome: "timeout", pollAttempts: POLL_MAX_ATTEMPTS };
 }
 
 Deno.serve(async (req) => {
+  // OCR処理の障害調査（応答が返らない・遅い等）に備えた最小限のログ。
+  // requestIdで1リクエスト分のログをまとめて追え、elapsedで関数開始からの
+  // 経過時間(ms)が分かる。画像バイト列・Azureの生レスポンス本文は
+  // 一切ログへ出さない。Polling等の詳細な工程は毎回ログすると本番運用で
+  // ノイズになるため出力せず、最終的な成功/失敗/タイムアウトの結果と
+  // Polling回数・経過時間だけを残す（下のOCR成功/OCR失敗/タイムアウトの
+  // 各ログ参照）。
+  const requestId = crypto.randomUUID().slice(0, 8);
+  const startedAt = Date.now();
+  const log = (stage) => {
+    console.log(`[ocr-receipt:${requestId}] ${stage} (+${Date.now() - startedAt}ms)`);
+  };
+
   const origin = req.headers.get("origin") ?? "";
   const corsHeaders = buildCorsHeaders(origin);
+
+  log("Function開始");
 
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -322,7 +341,7 @@ Deno.serve(async (req) => {
 
   let analysis;
   try {
-    analysis = await analyzeReceipt(imageBytes, file.type);
+    analysis = await analyzeReceipt(imageBytes, file.type, log);
   } catch (caughtError) {
     console.error("azure request threw", caughtError?.message);
     return errorResponse(502, "azure_error", "領収書の解析中にエラーが発生しました。", corsHeaders);
@@ -334,10 +353,12 @@ Deno.serve(async (req) => {
   }
 
   if (analysis.outcome === "azure_error") {
+    log(`OCR失敗 (reason=azure_error, pollAttempts=${analysis.pollAttempts ?? 0})`);
     return errorResponse(502, "azure_error", "領収書の解析中にエラーが発生しました。しばらくしてから再度お試しください。", corsHeaders);
   }
 
   if (analysis.outcome === "analysis_failed") {
+    log(`OCR失敗 (reason=analysis_failed, pollAttempts=${analysis.pollAttempts ?? 0})`);
     return errorResponse(
       422,
       "analysis_failed",
@@ -347,11 +368,13 @@ Deno.serve(async (req) => {
   }
 
   if (analysis.outcome === "timeout") {
+    log(`タイムアウト (pollAttempts=${analysis.pollAttempts ?? 0})`);
     return errorResponse(504, "timeout", "解析に時間がかかりすぎたため中断しました。もう一度お試しください。", corsHeaders);
   }
 
   const { normalizeReceiptAnalyzeResult } = await import("./normalizeReceiptResult.js");
   const normalized = normalizeReceiptAnalyzeResult(analysis.analyzeResult);
 
+  log(`OCR成功 (pollAttempts=${analysis.pollAttempts ?? 0})`);
   return jsonResponse(200, normalized, corsHeaders);
 });
