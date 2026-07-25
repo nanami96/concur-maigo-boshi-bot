@@ -1660,25 +1660,20 @@ button {
     width: 12px;
   }
 
-  /* .avatarのmin-width（Bot=48px・あなた=58px）より列幅が狭いと、アバターが
-     列からはみ出してgapを食いつぶし、Botラベルと吹き出しが密着して見える
-     原因になっていた（36px列にmin-width 48/58pxのアバターを収めようとしていた）。
-     アバターの実幅に合わせて列幅を広げ、gapで指定した間隔が実際に見えるようにする。 */
+  /* .avatarのmin-width（Bot=48px）より列幅が狭いと、アバターが列からはみ出して
+     gapを食いつぶし、Botラベルと吹き出しが密着して見える原因になっていた
+     （36px列にmin-width 48pxのアバターを収めようとしていた）。アバターの実幅に
+     合わせて列幅を広げ、gapで指定した間隔が実際に見えるようにする。
+     .messageRow.user（あなたの発言）はここで上書きしない。基本ルール
+     （本ファイル前方の.messageRow.user、grid-template-columns:
+     minmax(0,1fr) 58px）がPC・スマホ問わずそのまま適用され、あなたの発言は
+     常にBotと反対側（右）に寄る。列幅は58pxのままでアバターのmin-widthと
+     一致しているため、このブレークポイントで別途上書きする必要が無い
+     （かつてここで左寄せへ上書きしていたのは、Bot側の列幅バグ修正のついでに
+     あなた側の見た目までBotと同じ「左・左」に揃えてしまっていたための不具合。
+     一般的なチャットUIと同じ「Bot=左／あなた=右」に統一するため削除した）。 */
   .messageRow {
     grid-template-columns: 48px minmax(0, 1fr);
-  }
-
-  .messageRow.user {
-    grid-template-columns: 58px minmax(0, 1fr);
-  }
-
-  .messageRow.user .avatar {
-    grid-column: 1;
-  }
-
-  .messageRow.user .messageBubble {
-    grid-column: 2;
-    justify-self: start;
   }
 
   .choiceGrid {
