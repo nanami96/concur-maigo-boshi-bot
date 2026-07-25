@@ -18,20 +18,24 @@
 //   3. ユーザーは解決できたが、company_membersに1件も所属が無い → forbidden
 //      （一度も招待コードで会社に参加していないアカウント。コスト暴走対策）
 //   4. 上記いずれもクリアした場合のみ authorized（Azureへの処理へ進んでよい）
+// unauthorizedには3つの異なる分岐がある（判定順序のコメント参照）。
+// 呼び出し元（index.ts）がログでどの分岐かを区別できるよう、reasonを
+// 付与する（"no_auth_header" | "fetch_user_exception" | "fetch_user_null"）。
+// トークン本体・ユーザー情報は含まないため、そのままログへ出しても安全。
 export async function resolveOcrAuthorization({ authHeader, fetchUser, hasCompanyMembership }) {
   if (!authHeader) {
-    return { outcome: "unauthorized", user: null };
+    return { outcome: "unauthorized", user: null, reason: "no_auth_header" };
   }
 
   let user;
   try {
     user = await fetchUser(authHeader);
   } catch {
-    return { outcome: "unauthorized", user: null };
+    return { outcome: "unauthorized", user: null, reason: "fetch_user_exception" };
   }
 
   if (!user) {
-    return { outcome: "unauthorized", user: null };
+    return { outcome: "unauthorized", user: null, reason: "fetch_user_null" };
   }
 
   let isMember;

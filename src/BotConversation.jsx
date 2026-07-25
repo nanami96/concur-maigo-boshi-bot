@@ -414,7 +414,16 @@ export default function BotConversation({
               </div>
 
               {showReceiptOcr && (
-                <ReceiptOcrPanel key={result.expenseType?.id ?? result.rule?.id} onConfirm={setReceiptData} />
+                <ReceiptOcrPanel
+                  key={result.expenseType?.id ?? result.rule?.id}
+                  onConfirm={setReceiptData}
+                  // セッション切れ時、ReceiptOcrPanel独自の画面遷移は持たせず、
+                  // 既存のログアウト導線（AppAuthGateのsignOut。ログアウトボタンや
+                  // eyebrowRowのmobileSignOutButtonと同じ関数）をそのまま使う。
+                  // signOut()後はonAuthStateChangeにより、AppAuthGateが自動的に
+                  // ログイン画面へ切り替える（ここから直接遷移させる処理は書かない）。
+                  onAuthExpired={onSignOut}
+                />
               )}
 
               {resultNote && (

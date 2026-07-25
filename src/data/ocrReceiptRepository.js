@@ -51,18 +51,63 @@ export async function classifyOcrFunctionError(error) {
   }
 
   if (error instanceof FunctionsHttpError) {
+    // error.contextはinvoke()内部でconsumeされる前のResponseそのもの
+    // （supabase-jsのFunctionsClient.invoke()参照）のため、.statusは
+    // .json()の成否に関わらずここで確実に読める。
+    const status = error.context?.status;
+
     try {
       const body = await error.context.json();
       if (body?.error?.code) {
         return { type: body.error.code, message: body.error.message || null };
       }
     } catch {
-      // Edge Functionが想定外の形（JSON以外）を返した場合はunknownへ落とす。
+      // Edge Functionが想定外の形（JSON以外）を返した場合は下のstatusベースの
+      // 判定へフォールバックする。
     }
+
+    // 本文がこのEdge Function独自の{error:{code,message}}形式でなくても
+    // （例：Supabaseプラットフォーム自体のverify_jwtがこの関数のコードより
+    // 前でリクエストを拒否した場合、本文の形は自前のものと異なる）、
+    // HTTPステータスが401であれば認証切れとして扱う。timeout・通信エラー
+    // 等の別カテゴリへ誤分類しないためのフォールバック。
+    if (status === 401) {
+      return { type: "unauthorized", message: null };
+    }
+
     return { type: "unknown", message: null };
   }
 
   return { type: "unknown", message: null };
+}
+
+// OCR開始直前にセッションの有無を確認する。supabase.functions.invoke()は
+// 呼び出し時点のsession（access_token）を使ってAuthorizationヘッダーを
+// 組み立てるが、このプロジェクトのフロントは新形式のpublishable keyを使って
+// いるため、sessionが無い状態でinvoke()を呼ぶとAuthorizationヘッダー自体が
+// 付与されないままリクエストが送られ、Edge Function側でunauthorized（401）に
+// なる（@supabase/supabase-jsのlib/fetch.ts、fetchWithAuthのomitApiKeyAsBearer
+// 実装を確認済み）。この状態でAzure呼び出しへ進んでも意味が無く、OCR特有の
+// エラー（タイムアウト・解析失敗等）として利用者に見せるべきではないため、
+// invoke()を呼ぶ前にここで打ち切る。
+// getSession()は期限が近ければ内部で自動的にリフレッシュを試みるが、それでも
+// 復元できない場合の保険として、ここでrefreshSession()を一度だけ追加で試す
+// （無限リトライ・毎回の強制更新はしない）。
+async function ensureValidSession() {
+  try {
+    const { data } = await supabase.auth.getSession();
+    if (data?.session?.access_token) {
+      return true;
+    }
+
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    return Boolean(refreshed?.session?.access_token);
+  } catch {
+    // getSession/refreshSession自体が失敗した場合も「セッション無し」と同じ
+    // 扱いにする（fail-closed。Azure呼び出しへ進めて余計なOCRエラーを
+    // 見せるより、まず再ログインを促す方が安全）。
+    return false;
+  }
 }
 
 // 領収書画像（File）をEdge Functionへ送り、正規化済みのOCR結果を受け取る。
@@ -73,6 +118,10 @@ export async function classifyOcrFunctionError(error) {
 export async function analyzeReceiptImage(file) {
   if (!isSupabaseConfigured) {
     return { result: null, error: { type: "unknown", message: "Supabaseが設定されていません。" } };
+  }
+
+  if (!(await ensureValidSession())) {
+    return { result: null, error: { type: "unauthorized", message: null } };
   }
 
   const formData = new FormData();

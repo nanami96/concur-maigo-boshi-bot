@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
 
 const invokeMock = vi.fn();
+const getSessionMock = vi.fn();
+const refreshSessionMock = vi.fn();
 const mockState = { isSupabaseConfigured: true };
 
 vi.mock("../src/lib/supabaseClient.js", () => ({
@@ -9,7 +11,12 @@ vi.mock("../src/lib/supabaseClient.js", () => ({
     return mockState.isSupabaseConfigured;
   },
   get supabase() {
-    return mockState.isSupabaseConfigured ? { functions: { invoke: invokeMock } } : null;
+    return mockState.isSupabaseConfigured
+      ? {
+          functions: { invoke: invokeMock },
+          auth: { getSession: getSessionMock, refreshSession: refreshSessionMock },
+        }
+      : null;
   },
 }));
 
@@ -17,9 +24,25 @@ const { analyzeReceiptImage, classifyOcrFunctionError } = await import(
   "../src/data/ocrReceiptRepository.js"
 );
 
+function mockValidSession() {
+  getSessionMock.mockResolvedValue({ data: { session: { access_token: "valid-token" } } });
+  refreshSessionMock.mockResolvedValue({ data: { session: null } });
+}
+
+function mockNoSession() {
+  getSessionMock.mockResolvedValue({ data: { session: null } });
+  refreshSessionMock.mockResolvedValue({ data: { session: null } });
+}
+
 beforeEach(() => {
   mockState.isSupabaseConfigured = true;
   invokeMock.mockReset();
+  getSessionMock.mockReset();
+  refreshSessionMock.mockReset();
+  // 既存の分類テスト（Edge Functionのレスポンス分岐）はセッションの有無を
+  // 検証対象にしていないため、既定では有効なセッションがある状態にする。
+  // セッション自体を検証するテストだけmockNoSession()で個別に上書きする。
+  mockValidSession();
 });
 
 function makeFile() {
@@ -135,6 +158,66 @@ describe("analyzeReceiptImage", () => {
 
     expect(result.result).toBeNull();
     expect(result.error.type).toBe("network");
+  });
+
+  it("本文がEdge Function独自の形式でなくても、HTTPステータスが401ならunauthorizedとして分類する", async () => {
+    // Supabaseプラットフォーム自体（verify_jwt）がこの関数のコードより前で
+    // リクエストを拒否した場合等、本文が{error:{code,message}}形式でない401を
+    // 想定したケース。
+    const context = { status: 401, json: async () => ({ message: "Missing authorization header" }) };
+    invokeMock.mockResolvedValue({ data: null, error: new FunctionsHttpError(context) });
+
+    const result = await analyzeReceiptImage(makeFile());
+
+    expect(result.error.type).toBe("unauthorized");
+  });
+
+  it("本文がJSONとして解析できなくても、HTTPステータスが401ならunauthorizedとして分類する", async () => {
+    const context = { status: 401, json: async () => { throw new Error("not json"); } };
+    invokeMock.mockResolvedValue({ data: null, error: new FunctionsHttpError(context) });
+
+    const result = await analyzeReceiptImage(makeFile());
+
+    expect(result.error.type).toBe("unauthorized");
+  });
+
+  it("セッションが無く、refreshSessionでも復元できない場合はEdge Functionを呼ばずunauthorizedを返す", async () => {
+    mockNoSession();
+
+    const result = await analyzeReceiptImage(makeFile());
+
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(result.result).toBeNull();
+    expect(result.error.type).toBe("unauthorized");
+  });
+
+  it("getSessionではセッションが無いが、refreshSessionで復元できた場合はEdge Functionを呼ぶ", async () => {
+    getSessionMock.mockResolvedValue({ data: { session: null } });
+    refreshSessionMock.mockResolvedValue({ data: { session: { access_token: "refreshed-token" } } });
+    invokeMock.mockResolvedValue({ data: { transactionDate: null, merchantName: null, totalAmount: null, currencyCode: null, confidence: {} }, error: null });
+
+    const result = await analyzeReceiptImage(makeFile());
+
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(result.error).toBeNull();
+  });
+
+  it("getSession/refreshSession自体が例外を投げた場合もEdge Functionを呼ばずunauthorizedを返す（fail-closed）", async () => {
+    getSessionMock.mockRejectedValue(new Error("network down"));
+
+    const result = await analyzeReceiptImage(makeFile());
+
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(result.error.type).toBe("unauthorized");
+  });
+
+  it("有効なセッションがある場合はrefreshSessionを呼ばずにEdge Functionを呼ぶ", async () => {
+    invokeMock.mockResolvedValue({ data: { transactionDate: null, merchantName: null, totalAmount: null, currencyCode: null, confidence: {} }, error: null });
+
+    await analyzeReceiptImage(makeFile());
+
+    expect(refreshSessionMock).not.toHaveBeenCalled();
+    expect(invokeMock).toHaveBeenCalledTimes(1);
   });
 });
 

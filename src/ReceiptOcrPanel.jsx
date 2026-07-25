@@ -43,9 +43,12 @@ function formatConfidence(confidence) {
 // レンダリングしない（BotConversation.jsx参照）。ただし、それはUI上の導線を
 // 隠しているだけであり、実際の認証・権限チェックはEdge Function側
 // （supabase/functions/ocr-receipt/index.ts）が最終防御として行う。
-export default function ReceiptOcrPanel({ onConfirm }) {
+export default function ReceiptOcrPanel({ onConfirm, onAuthExpired }) {
   const [phase, setPhase] = useState("idle");
-  // idle | picking | preview | analyzing | review | confirmed | error
+  // idle | picking | preview | analyzing | review | confirmed | error | auth_error
+  // auth_errorは「セッションが無い／Edge Functionが401を返した」場合専用の phase。
+  // 通常のerror（Azure側のタイムアウト・解析失敗等、再試行に意味がある失敗）とは
+  // 導線を分ける（再試行してもセッションが無いままでは再度失敗するだけのため）。
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [ocrResult, setOcrResult] = useState(null);
@@ -142,7 +145,9 @@ export default function ReceiptOcrPanel({ onConfirm }) {
       if (error) {
         console.error("[ReceiptOcrPanel] 領収書OCRの解析に失敗しました", error);
         setErrorMessage(resolveOcrErrorMessage(error));
-        setPhase("error");
+        // unauthorized（セッション無し／Edge Functionの401）だけは、再試行しても
+        // 解決しないため専用のauth_error phaseへ（下のJSX・onAuthExpired参照）。
+        setPhase(error.type === "unauthorized" ? "auth_error" : "error");
         return;
       }
 
@@ -247,6 +252,25 @@ export default function ReceiptOcrPanel({ onConfirm }) {
               onChange={handleFileChosen}
               style={{ display: "none" }}
             />
+          </>
+        )}
+
+        {phase === "auth_error" && (
+          <>
+            <p className="receiptOcrErrorText" role="alert">
+              {errorMessage}
+            </p>
+            {/* 「もう一度試す」「別の画像を選び直す」は主要導線にしない
+                （セッションが無効なままではAzure呼び出し以前に必ず同じ結果になる）。
+                独自の画面遷移は追加せず、onAuthExpired（BotConversation.jsx経由で
+                渡されるAppAuthGateのsignOut）を呼ぶだけに留める。signOut()により
+                無効なセッションがクリアされ、既存のonAuthStateChange監視で
+                AppAuthGateが自動的にログイン画面へ切り替える。 */}
+            <div className="receiptOcrActions">
+              <button type="button" className="receiptOcrPrimaryButton" onClick={onAuthExpired}>
+                ログイン画面へ戻る
+              </button>
+            </div>
           </>
         )}
 

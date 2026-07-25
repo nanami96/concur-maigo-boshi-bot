@@ -16,7 +16,7 @@ describe("resolveOcrAuthorization", () => {
       hasCompanyMembership,
     });
 
-    expect(result).toEqual({ outcome: "unauthorized", user: null });
+    expect(result).toEqual({ outcome: "unauthorized", user: null, reason: "no_auth_header" });
     expect(fetchUser).not.toHaveBeenCalled();
     expect(hasCompanyMembership).not.toHaveBeenCalled();
   });
@@ -30,7 +30,7 @@ describe("resolveOcrAuthorization", () => {
       hasCompanyMembership,
     });
 
-    expect(result).toEqual({ outcome: "unauthorized", user: null });
+    expect(result).toEqual({ outcome: "unauthorized", user: null, reason: "fetch_user_null" });
     expect(hasCompanyMembership).not.toHaveBeenCalled();
   });
 
@@ -44,6 +44,7 @@ describe("resolveOcrAuthorization", () => {
     });
 
     expect(result.outcome).toBe("unauthorized");
+    expect(result.reason).toBe("fetch_user_exception");
   });
 
   it("有効なJWTだがcompany_membersに所属が無い場合はforbidden", async () => {

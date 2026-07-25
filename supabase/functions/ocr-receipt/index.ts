@@ -144,7 +144,7 @@ function resolveProjectApiKey() {
   return Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY");
 }
 
-async function resolveAuthorization(authHeader) {
+async function resolveAuthorization(authHeader, log) {
   const { createClient } = await import("npm:@supabase/supabase-js@2");
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -162,7 +162,14 @@ async function resolveAuthorization(authHeader) {
     authHeader,
     fetchUser: async () => {
       const { data, error } = await supabase.auth.getUser();
-      if (error || !data?.user) {
+      if (error) {
+        // トークン本体・メールアドレス・ユーザーIDは出さない。HTTPステータスと
+        // Supabase Auth側のエラーコードのみ（例: 401/bad_jwt、403/session_not_found等）。
+        log?.(`認証詳細 (getUserエラー: status=${error.status ?? "?"}, code=${error.code ?? "?"})`);
+        return null;
+      }
+      if (!data?.user) {
+        log?.("認証詳細 (getUserは成功したがuserが空)");
         return null;
       }
       return data.user;
@@ -280,15 +287,31 @@ Deno.serve(async (req) => {
 
   const authHeader = req.headers.get("authorization");
 
+  log("認証開始");
+  // トークン本体は出さず、存在有無・Bearer形式か・長さ（文字数）だけを記録する。
+  // これだけで「フロントがそもそもAuthorizationヘッダーを送っていない」
+  // （＝クライアント側でセッションが無かった）ケースと、「ヘッダーは送って
+  // いるがSupabase側で無効と判定された」ケースを区別できる。
+  if (!authHeader) {
+    log("認証情報 (Authorizationヘッダーなし)");
+  } else {
+    const isBearerFormat = /^Bearer\s+.+/i.test(authHeader);
+    const tokenLength = authHeader.replace(/^Bearer\s+/i, "").length;
+    log(`認証情報 (Authorizationヘッダーあり, Bearer形式=${isBearerFormat}, トークン長=${tokenLength})`);
+  }
+
   let authResult;
   try {
-    authResult = await resolveAuthorization(authHeader);
+    authResult = await resolveAuthorization(authHeader, log);
   } catch (caughtError) {
+    // アクセストークンの値自体はここでも一切ログへ出さない（例外メッセージのみ）。
     console.error("auth resolution failed", caughtError?.message);
+    log("認証失敗 (例外)");
     return errorResponse(500, "unknown", "認証の確認中にエラーが発生しました。", corsHeaders);
   }
 
   if (authResult.outcome === "unauthorized") {
+    log(`認証失敗 (unauthorized: ${authResult.reason ?? "不明"})`);
     return errorResponse(
       401,
       "unauthorized",
@@ -298,6 +321,7 @@ Deno.serve(async (req) => {
   }
 
   if (authResult.outcome === "forbidden") {
+    log("認証失敗 (forbidden)");
     return errorResponse(
       403,
       "forbidden",
@@ -306,20 +330,26 @@ Deno.serve(async (req) => {
     );
   }
 
+  log("認証成功");
+
   let formData;
   try {
     formData = await req.formData();
   } catch (caughtError) {
+    console.error("formData parse failed", caughtError?.message);
+    log("ファイル取得失敗 (リクエスト形式不正)");
     return errorResponse(400, "bad_request", "リクエストの形式が不正です。", corsHeaders);
   }
 
   const file = formData.get("file");
 
   if (!(file instanceof File)) {
+    log("ファイル取得失敗 (ファイル未選択)");
     return errorResponse(400, "invalid_file", "領収書の画像が選択されていません。", corsHeaders);
   }
 
   if (!file.type || !file.type.startsWith(ALLOWED_CONTENT_TYPE_PREFIX)) {
+    log("ファイル取得失敗 (対応していない形式)");
     return errorResponse(
       400,
       "invalid_file",
@@ -329,6 +359,7 @@ Deno.serve(async (req) => {
   }
 
   if (file.size > MAX_FILE_SIZE_BYTES) {
+    log("ファイル取得失敗 (サイズ超過)");
     return errorResponse(
       400,
       "invalid_file",
@@ -337,7 +368,19 @@ Deno.serve(async (req) => {
     );
   }
 
-  const imageBytes = new Uint8Array(await file.arrayBuffer());
+  // 従来ここでfile.arrayBuffer()の例外を一切catchしておらず、失敗すると
+  // どのログも残さないままDenoランタイムの既定エラーハンドリングに落ちる
+  // 唯一の箇所だった（原因調査時に「Function開始」しか出ない候補の1つ）。
+  let imageBytes;
+  try {
+    imageBytes = new Uint8Array(await file.arrayBuffer());
+  } catch (caughtError) {
+    console.error("file arrayBuffer failed", caughtError?.message);
+    log("ファイル取得失敗 (読み込み例外)");
+    return errorResponse(400, "invalid_file", "画像を読み込めませんでした。もう一度お試しください。", corsHeaders);
+  }
+
+  log("ファイル取得成功");
 
   let analysis;
   try {
@@ -349,6 +392,7 @@ Deno.serve(async (req) => {
 
   if (analysis.outcome === "misconfigured") {
     console.error("azure secrets are not configured");
+    log("OCR失敗 (reason=misconfigured)");
     return errorResponse(500, "unknown", "現在この機能を利用できません。しばらくしてから再度お試しください。", corsHeaders);
   }
 
@@ -372,8 +416,19 @@ Deno.serve(async (req) => {
     return errorResponse(504, "timeout", "解析に時間がかかりすぎたため中断しました。もう一度お試しください。", corsHeaders);
   }
 
-  const { normalizeReceiptAnalyzeResult } = await import("./normalizeReceiptResult.js");
-  const normalized = normalizeReceiptAnalyzeResult(analysis.analyzeResult);
+  // ここも従来try/catch無しだった箇所。Azureのレスポンス形状が想定と
+  // 異なった場合にnormalizeReceiptAnalyzeResult()が例外を投げると、
+  // Azure呼び出し自体は成功しているにもかかわらずログを残せないまま
+  // 終了してしまうため、他の箇所と同様に例外だけを記録できるようにする。
+  let normalized;
+  try {
+    const { normalizeReceiptAnalyzeResult } = await import("./normalizeReceiptResult.js");
+    normalized = normalizeReceiptAnalyzeResult(analysis.analyzeResult);
+  } catch (caughtError) {
+    console.error("normalize result failed", caughtError?.message);
+    log("OCR失敗 (reason=normalize_error)");
+    return errorResponse(500, "unknown", "領収書の解析結果を処理できませんでした。もう一度お試しください。", corsHeaders);
+  }
 
   log(`OCR成功 (pollAttempts=${analysis.pollAttempts ?? 0})`);
   return jsonResponse(200, normalized, corsHeaders);
