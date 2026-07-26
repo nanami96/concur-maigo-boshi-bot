@@ -1993,7 +1993,7 @@ button {
   border-radius: 999px;
   background: #ffffff;
   color: #243047;
-  padding: 10px 28px;
+  padding: 10px 22px;
   font: inherit;
   cursor: pointer;
 }
@@ -2003,8 +2003,8 @@ button {
 }
 
 .companyManageMenuLabel {
-  margin-left: 12px;
-  margin-right: 14px;
+  margin-left: 10px;
+  margin-right: 12px;
 }
 
 .companyManageMenuChevron {
@@ -2038,8 +2038,8 @@ button {
   box-shadow: 0 6px 18px rgba(22, 32, 51, 0.15);
   list-style: none;
   margin: 0;
-  padding: 8px;
-  min-width: 240px;
+  padding: 6px;
+  min-width: 222px;
   z-index: 1000;
 }
 
@@ -2049,7 +2049,7 @@ button {
   border: none;
   background: transparent;
   text-align: left;
-  padding: 16px 24px;
+  padding: 12px 20px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.9rem;
@@ -2071,7 +2071,7 @@ button {
 
 .companyManageMenuDivider {
   height: 1px;
-  margin: 10px 6px;
+  margin: 6px 4px;
   background: #e2e8f0;
 }
 
