@@ -71,12 +71,35 @@ function AdminWorkspace({
   isPlatformAdmin,
   initialUpdatedAt,
   onPersistenceChange,
+  // ヘッダー「会社を管理」＞「招待コードを再発行」ショートカット用。クリックの
+  // たびにAdminRoot側でインクリメントされる値（トークン）。0/undefinedは
+  // 「まだ一度も押されていない」を表す。同じ値を2回渡されても検知できるよう、
+  // 単純な真偽値ではなく毎回変化する値にしている。
+  jumpToInviteCodeToken,
 }) {
   const editor = useWorkspaceEditor(initialState);
   const [section, setSection] = useState(initialSection || "flow");
   const [settingsTab, setSettingsTab] = useState(initialSettingsTab || "company");
   const [flowTab, setFlowTab] = useState("editor");
   const [previewStartQuestionId, setPreviewStartQuestionId] = useState(null);
+
+  // 招待コード再発行ショートカット：jumpToInviteCodeTokenが（前回処理済みの
+  // 値から）変化したら「ユーザー管理」タブへ切り替え、UserManagementPanel側へ
+  // 「スクロールしてよい」フラグを渡す。AdminWorkspaceは会社を切り替えない限り
+  // タブ切り替えの間もマウントされ続けるため、「このトークンはもう処理した」を
+  // 覚えておくのに適した場所（UserManagementPanel自身はタブ切り替えのたびに
+  // mount/unmountされるため、ここに持たせないと同じトークンで何度も
+  // スクロールが再発火してしまう）。
+  const handledInviteCodeTokenRef = useRef(0);
+  const [pendingInviteCodeScroll, setPendingInviteCodeScroll] = useState(false);
+
+  useEffect(() => {
+    if (jumpToInviteCodeToken && jumpToInviteCodeToken !== handledInviteCodeTokenRef.current) {
+      handledInviteCodeTokenRef.current = jumpToInviteCodeToken;
+      setSection("users");
+      setPendingInviteCodeScroll(true);
+    }
+  }, [jumpToInviteCodeToken]);
 
   const baseData = useMemo(
     () => ({
@@ -313,6 +336,8 @@ function AdminWorkspace({
           <UserManagementPanel
             companyDbId={isPlatformAdmin ? companyDbId : null}
             isPlatformAdmin={Boolean(isPlatformAdmin)}
+            shouldScrollToInviteCode={pendingInviteCodeScroll}
+            onScrolledToInviteCode={() => setPendingInviteCodeScroll(false)}
           />
         </div>
       )}
@@ -359,7 +384,7 @@ function normalizeInitialState(initialState) {
 // 安全に誘導する。ただしこちらは「既に登録済みの会社（companyId）」への初期設定なので、
 // InitialSetupScreenが内部で生成するcompany_idは使わず、常に既存のcompanyIdへ
 // 上書きしてから使う（保存先の会社コードは既に確定しているため）。
-function CompanyEditor({ companyId, isPlatformAdmin, onPersistenceChange }) {
+function CompanyEditor({ companyId, isPlatformAdmin, onPersistenceChange, jumpToInviteCodeToken }) {
   const config = getConfig(companyId);
 
   const staticInitialState = useMemo(() => {
@@ -449,6 +474,7 @@ function CompanyEditor({ companyId, isPlatformAdmin, onPersistenceChange }) {
         companyDbId={resolved.companyDbId}
         isPlatformAdmin={isPlatformAdmin}
         onPersistenceChange={onPersistenceChange}
+        jumpToInviteCodeToken={jumpToInviteCodeToken}
       />
     );
   }
@@ -486,6 +512,7 @@ function CompanyEditor({ companyId, isPlatformAdmin, onPersistenceChange }) {
         isPlatformAdmin={isPlatformAdmin}
         initialUpdatedAt={resolved.initialUpdatedAt}
         onPersistenceChange={onPersistenceChange}
+        jumpToInviteCodeToken={jumpToInviteCodeToken}
       />
     </>
   );
@@ -555,6 +582,39 @@ export default function AdminRoot() {
   const [deleteCompanyRequest, setDeleteCompanyRequest] = useState(null);
   const [deleteCompanyState, setDeleteCompanyState] = useState({ status: "idle", errorMessage: null });
   const [deleteCompanySuccessMessage, setDeleteCompanySuccessMessage] = useState(null);
+
+  // 削除成功メッセージは一時的な通知として扱い、表示から4秒後に自動で消す
+  // （エラーメッセージ側=deleteCompanyState.errorMessageは対象外。利用者が
+  // 原因を確認できるよう、従来通り明示的な操作があるまで残す）。
+  // メッセージが変わるたびにこのeffectが再実行され、クリーンアップで前回の
+  // タイマーを解除してから新しいタイマーを張るため、4秒以内に別の削除が
+  // 続けて成功しても古いタイマーで新しい通知が消えることはない。
+  // このstateは会社削除専用（他の成功通知と共有していない。上のコメント参照）。
+  useEffect(() => {
+    if (!deleteCompanySuccessMessage) {
+      return undefined;
+    }
+
+    const timerId = setTimeout(() => {
+      setDeleteCompanySuccessMessage(null);
+    }, 4000);
+
+    return () => clearTimeout(timerId);
+  }, [deleteCompanySuccessMessage]);
+
+  // 「会社を管理」＞「招待コードを再発行」ショートカット用のトークン。
+  // クリックのたびに+1するだけの値で、AdminWorkspace（companyId単位で
+  // マウントされ続ける、タブを切り替えても消えないコンポーネント）側の
+  // useEffectがこの値の変化を検知して「ユーザー管理」タブへ切り替え・
+  // スクロールを行う（実装はAdminWorkspace参照）。ここでは「招待コードを
+  // 直接再発行する」処理は一切行わない（既存のregenerateInviteCode()・
+  // UserManagementPanel.jsxの確認導線をそのまま使うためのショートカットに
+  // 留める、というご指示通り）。
+  const [jumpToInviteCodeToken, setJumpToInviteCodeToken] = useState(0);
+
+  const handleJumpToInviteCodeSection = () => {
+    setJumpToInviteCodeToken((value) => value + 1);
+  };
 
   // 現在表示中のAdminWorkspaceの「未保存の変更があるか」「今すぐ保存する関数」を
   // 参照だけしておくためのref。AdminWorkspace側のuseDraftSaveが変化するたびに
@@ -814,14 +874,31 @@ export default function AdminRoot() {
     myCompanies.length > 1 &&
     deleteCompanyState.status !== "deleting";
 
-  // 「＋ 新しい会社を作成」「🗑 この会社を削除」を1つの「⚙ 会社を管理」
-  // メニューへ集約する（ヘッダーに個別ボタンを並べない）。表示条件・disabled
-  // 条件・実際の処理（handleStartNewCompany/handleDeleteCompanyClick）は
-  // 変更前とまったく同じものをそのまま使う（機能は変えず、UIの見せ方だけを
-  // 変える）。
+  // 「招待コードを再発行」ショートカットは、regenerate_invite_code() RPC自体が
+  // platform_admin専用（schema.sql参照）であることに合わせ、showDeleteCompanyと
+  // 同じ条件にしている（権限の無い利用者に、実行できないショートカットだけを
+  // 見せないため）。値が同じでも意図が異なるため、あえて別の定数として持つ
+  // （将来どちらかの権限条件だけが変わっても、もう片方に影響しないように）。
+  const showInviteCodeShortcut = isSupabaseConfigured && isPlatformAdmin;
+
+  // 「＋ 新しい会社を作成」「🔑 招待コードを再発行」「🗑 この会社を削除」を
+  // 1つの「⚙ 会社を管理」メニューへ集約する（ヘッダーに個別ボタンを並べない）。
+  // 表示条件・disabled条件・実際の処理（handleStartNewCompany/
+  // handleDeleteCompanyClick/handleJumpToInviteCodeSection）は変更前と
+  // まったく同じものをそのまま使う（機能は変えず、UIの見せ方だけを変える）。
+  // 「招待コードを再発行」はhandleJumpToInviteCodeSectionを呼ぶだけで、
+  // ここから直接regenerateInviteCode()を呼ぶことはしない（実際の再発行は
+  // 従来通りUserManagementPanel.jsx側の確認導線を経由する）。
   const companyManageMenuItems = [];
   if (showCreateNewCompany) {
     companyManageMenuItems.push({ label: "＋ 新しい会社を作成", onClick: handleStartNewCompany });
+  }
+  if (showInviteCodeShortcut) {
+    companyManageMenuItems.push({
+      icon: "🔑",
+      label: "招待コードを再発行",
+      onClick: handleJumpToInviteCodeSection,
+    });
   }
   if (showDeleteCompany) {
     if (companyManageMenuItems.length > 0) {
@@ -936,6 +1013,7 @@ export default function AdminRoot() {
           companyId={companyId}
           isPlatformAdmin={isPlatformAdmin}
           onPersistenceChange={handlePersistenceChange}
+          jumpToInviteCodeToken={jumpToInviteCodeToken}
         />
       )}
 

@@ -2008,6 +2008,14 @@ button {
   transform: rotate(45deg);
 }
 
+/* トリガーの⚙・メニュー項目の＋/🗑。文字サイズ（0.9rem前後）に対して
+   絵文字がやや小さく見えていたため、アイコンだけ大きくする
+   （ラベル文字のfont-sizeはそのまま）。 */
+.companyManageMenuIcon {
+  font-size: 1.15em;
+  line-height: 1;
+}
+
 .companyManageMenuList {
   background: #fff;
   border: 1px solid #d7deea;

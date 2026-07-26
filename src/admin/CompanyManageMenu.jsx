@@ -67,7 +67,7 @@ export default function CompanyManageMenu({ items }) {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span aria-hidden="true">⚙</span> 会社を管理
+        <span className="companyManageMenuIcon" aria-hidden="true">⚙</span> 会社を管理
         <span className="companyManageMenuChevron" aria-hidden="true" />
       </button>
 
@@ -97,7 +97,11 @@ export default function CompanyManageMenu({ items }) {
                     item.onClick();
                   }}
                 >
-                  {item.icon && <span aria-hidden="true">{item.icon} </span>}
+                  {item.icon && (
+                    <span className="companyManageMenuIcon" aria-hidden="true">
+                      {item.icon}{" "}
+                    </span>
+                  )}
                   {item.label}
                 </button>
               </li>

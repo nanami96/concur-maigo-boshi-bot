@@ -50,8 +50,11 @@ export default function CreatePlatformCompanyScreen({ onCreated, onCancel }) {
       <div className="initialSetupScreen">
         <h2>「{createdCompany.companyName}」を作成しました</h2>
         <p className="settingsErrorText" role="alert">
-          以下の招待コードは今この画面でしか表示されません。必ず控えてから、
-          会社の担当者へ安全な方法で伝えてください（このコード自体はDBに保存されません）。
+          会社への招待コードを発行しました。
+          <br />
+          このコードを会社の担当者へ安全な方法で共有してください。
+          <br />
+          コードが分からなくなった場合は、管理画面から新しい招待コードを再発行できます。
         </p>
         <p className="authSentMessage">
           <strong>{createdCompany.inviteCode}</strong>
@@ -61,7 +64,7 @@ export default function CreatePlatformCompanyScreen({ onCreated, onCancel }) {
           className="importConfirmButton"
           onClick={() => onCreated?.(createdCompany)}
         >
-          確認しました。設定を進める
+          設定を開始する
         </button>
       </div>
     );

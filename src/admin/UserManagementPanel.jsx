@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchMyCompanyMembers,
   fetchPlatformCompanyMembers,
@@ -45,12 +45,27 @@ function formatTimestamp(iso) {
 // （詳細はsupabase/schema.sqlのremove_company_member()コメント参照）。
 // 自分自身の行・最後のadminの行はRPC側で拒否されるため、UI側（isSelf・
 // isLastAdminによるdisabled制御）はあくまでUXのための早期フィードバックに過ぎない。
-export default function UserManagementPanel({ companyDbId = null, isPlatformAdmin = false }) {
+export default function UserManagementPanel({
+  companyDbId = null,
+  isPlatformAdmin = false,
+  // ヘッダーの「会社を管理」＞「招待コードを再発行」ショートカット
+  // （AdminRoot.jsx→AdminWorkspace経由）から使う。true になったら招待コード
+  // 再発行セクションまでスクロール・フォーカスし、完了したら
+  // onScrolledToInviteCode()を呼んで呼び出し元のフラグを倒してもらう
+  // （このコンポーネント自身はタブ切り替えのたびにmount/unmountされるため、
+  // 「既に処理済みか」をこのコンポーネント内だけでは覚えておけない。
+  // そのため状態はAdminWorkspace側に持たせ、ここでは渡された指示に
+  // 従うだけにしている）。
+  shouldScrollToInviteCode = false,
+  onScrolledToInviteCode,
+}) {
   const [state, setState] = useState({ status: "loading", members: [] });
   const [pendingMemberId, setPendingMemberId] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [removeRequest, setRemoveRequest] = useState(null);
+  const inviteCodeSectionRef = useRef(null);
+  const inviteCodeHeadingRef = useRef(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [inviteCodeState, setInviteCodeState] = useState({
     status: "idle", // idle | submitting | shown | error
@@ -99,6 +114,28 @@ export default function UserManagementPanel({ companyDbId = null, isPlatformAdmi
       cancelled = true;
     };
   }, []);
+
+  // ショートカットからの遷移直後は、state.statusがまだ"loading"で
+  // 招待コード再発行セクション自体がDOMにまだ無い（下のstate.status==="loading"の
+  // 早期returnを参照）。固定時間のsetTimeoutで「待ったつもり」にするのではなく、
+  // 一覧取得が完了しセクションが実際に描画されたこと（state.status変化）を
+  // 検知してからscrollIntoViewする。取得が"error"に倒れた場合はスクロール対象
+  // 自体が存在しないため、その場合も（何もせず）指示を消費済み扱いにする。
+  useEffect(() => {
+    if (!shouldScrollToInviteCode || state.status === "loading") {
+      return;
+    }
+
+    const sectionElement = inviteCodeSectionRef.current;
+    if (sectionElement) {
+      sectionElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      sectionElement.classList.add("flowJumpHighlight");
+      window.setTimeout(() => sectionElement.classList.remove("flowJumpHighlight"), 1500);
+      inviteCodeHeadingRef.current?.focus();
+    }
+
+    onScrolledToInviteCode?.();
+  }, [shouldScrollToInviteCode, state.status, onScrolledToInviteCode]);
 
   const adminCount = state.members.filter((member) => member.role === "admin").length;
 
@@ -193,8 +230,14 @@ export default function UserManagementPanel({ companyDbId = null, isPlatformAdmi
   }
 
   const inviteCodeSection = usingPlatformFetch && (
-    <div className="userManagementInviteCodeSection">
-      <h3>招待コードの再発行</h3>
+    <div className="userManagementInviteCodeSection" ref={inviteCodeSectionRef}>
+      {/* tabIndex={-1}：スクリプトからfocus()できるが、通常のTab移動では
+          素通りする（見出しがTab順に割り込まない）。ヘッダーの「招待コードを
+          再発行」ショートカット経由でここへ来た利用者に、スクリーンリーダー等でも
+          「今ここに来た」ことが伝わるようにするためだけの用途。 */}
+      <h3 ref={inviteCodeHeadingRef} tabIndex={-1}>
+        招待コードの再発行
+      </h3>
       <p>
         再発行すると、この会社の既存の招待コードは即座に無効になります。新しいコードは
         この画面にのみ一度表示され、以後は再取得できません（DBにはハッシュのみ保存されます）。
@@ -243,6 +286,8 @@ export default function UserManagementPanel({ companyDbId = null, isPlatformAdmi
 
       {errorMessage && <p className="settingsErrorText">{errorMessage}</p>}
       {successMessage && <p className="authSentMessage">{successMessage}</p>}
+
+      {inviteCodeSection}
 
       <div className="userManagementTableWrap">
         <table className="userManagementTable">
@@ -308,8 +353,6 @@ export default function UserManagementPanel({ companyDbId = null, isPlatformAdmi
           </tbody>
         </table>
       </div>
-
-      {inviteCodeSection}
 
       <ConfirmDialog
         request={removeRequest}
