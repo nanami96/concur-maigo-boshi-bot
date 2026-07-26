@@ -44,6 +44,45 @@ button {
   min-width: 0;
 }
 
+/* 管理画面のヘッダーだけ、タイトル行＋「利用者画面へ戻る」の1行目と、
+   会社選択・「会社を管理」メニューをまとめた2行目（区切り線付き）の
+   縦積みレイアウトにする。.appHeaderは一般利用者Bot画面（BotConversation.jsx）
+   とも共有しているクラスのため、flex-directionの変更等はここ（.adminHeader、
+   管理画面のheaderだけに付く追加クラス）に閉じ、.appHeader自体は一切変更しない。 */
+.adminHeader {
+  flex-direction: column;
+  align-items: stretch;
+  /* .appHeaderのjustify-content: space-betweenは横1列だった頃の指定で、
+     flex-direction: columnにすると縦方向のspace-betweenとして働いてしまい、
+     1行目（タイトル・戻るリンク）と2行目（会社ツールバー）の間に
+     .appHeaderの高さいっぱいの余白ができてしまう。管理画面では単純に
+     上から詰めるだけでよいため、ここで明示的に上書きする。 */
+  justify-content: flex-start;
+}
+
+.adminHeaderTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+/* .appHeader > div:first-child と同じ意図（タイトル一式の余白確保）を、
+   1階層深くなったこの構造でも保つための、管理画面専用の対応する指定。 */
+.adminHeaderTop > div:first-child {
+  flex: 1 1 360px;
+  min-width: 0;
+}
+
+.companyToolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
 .appHeader h1 {
   margin: 4px 0 8px;
   font-size: 28px;
@@ -149,7 +188,8 @@ button {
 }
 
 .companySelector select:focus-visible,
-.resetButton:focus-visible {
+.resetButton:focus-visible,
+.companyManageMenuTrigger:focus-visible {
   outline: 3px solid rgba(37, 99, 235, 0.24);
   outline-offset: 2px;
 }
@@ -1929,6 +1969,89 @@ button {
   cursor: not-allowed;
 }
 
+/* ==========================================================================
+   会社を管理メニュー（AdminRoot.jsxヘッダー、CompanyManageMenu.jsx）
+   OptionMenu.jsx（「⋮」専用メニュー）と同じ「position:fixedでトリガーの
+   実座標から位置計算・外側クリックで閉じる」という考え方だけを踏襲した、
+   別コンポーネント向けの専用クラス（既存の.optionMenu*とは独立）。
+   ========================================================================== */
+.companyManageMenu {
+  position: relative;
+}
+
+/* .resetButtonと同じ寸法・配色（ピル形状・42px・#cbd5e1枠線）に揃える。
+   ヘッダーの他のボタン（利用者画面へ戻る等）と並んでも違和感が無いように。 */
+.companyManageMenuTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #243047;
+  padding: 10px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.companyManageMenuTrigger:hover {
+  background: #f8fafc;
+}
+
+.companyManageMenuChevron {
+  width: 8px;
+  height: 8px;
+  margin-left: 2px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.companyManageMenuList {
+  background: #fff;
+  border: 1px solid #d7deea;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(22, 32, 51, 0.15);
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  min-width: 200px;
+  z-index: 1000;
+}
+
+.companyManageMenuItem {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #1f2c44;
+}
+
+.companyManageMenuItem:hover:not(:disabled) {
+  background: #f4f7fc;
+}
+
+.companyManageMenuItem:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.companyManageMenuItem.danger {
+  color: #a13d3d;
+}
+
+.companyManageMenuDivider {
+  height: 1px;
+  margin: 4px 2px;
+  background: #e2e8f0;
+}
+
 .userManagementInviteCodeSection {
   display: flex;
   flex-direction: column;
@@ -3251,6 +3374,7 @@ textarea.resultFieldInput {
   .adminTabPanel,
   .confirmDialog,
   .optionMenuList,
+  .companyManageMenuList,
   .initialSetupScreen {
     background: #182234;
     color: #eef2f7;
@@ -3397,7 +3521,8 @@ textarea.resultFieldInput {
   .flowOptionLabelButton:hover,
   .flowGhostButton:hover,
   .optionMenuTrigger:hover,
-  .optionMenuItem:hover {
+  .optionMenuItem:hover,
+  .companyManageMenuItem:hover:not(:disabled) {
     background: #223049;
   }
 
@@ -3422,8 +3547,13 @@ textarea.resultFieldInput {
   }
 
   .flowGhostButton,
-  .optionMenuItem {
+  .optionMenuItem,
+  .companyManageMenuItem {
     color: #eef2f7;
+  }
+
+  .companyManageMenuDivider {
+    background: #33415c;
   }
 
   .excelImportCardTitle {

@@ -20,6 +20,7 @@ import {
 } from "../data/membershipRepository";
 import { resolveMembershipErrorMessage } from "./membershipErrorMessages";
 import ConfirmDialog from "./ConfirmDialog";
+import CompanyManageMenu from "./CompanyManageMenu";
 import DraftSaveBar from "./DraftSaveBar";
 import PublishPanel from "./PublishPanel";
 import UnsavedChangesDialog from "./UnsavedChangesDialog";
@@ -813,16 +814,55 @@ export default function AdminRoot() {
     myCompanies.length > 1 &&
     deleteCompanyState.status !== "deleting";
 
+  // 「＋ 新しい会社を作成」「🗑 この会社を削除」を1つの「⚙ 会社を管理」
+  // メニューへ集約する（ヘッダーに個別ボタンを並べない）。表示条件・disabled
+  // 条件・実際の処理（handleStartNewCompany/handleDeleteCompanyClick）は
+  // 変更前とまったく同じものをそのまま使う（機能は変えず、UIの見せ方だけを
+  // 変える）。
+  const companyManageMenuItems = [];
+  if (showCreateNewCompany) {
+    companyManageMenuItems.push({ label: "＋ 新しい会社を作成", onClick: handleStartNewCompany });
+  }
+  if (showDeleteCompany) {
+    if (companyManageMenuItems.length > 0) {
+      companyManageMenuItems.push("divider");
+    }
+    companyManageMenuItems.push({
+      icon: "🗑",
+      label: "この会社を削除",
+      danger: true,
+      disabled: !canDeleteCurrentCompany,
+      disabledTitle:
+        !canDeleteCurrentCompany && myCompanies.length <= 1
+          ? "最低1社は存在する必要があるため、削除できません"
+          : undefined,
+      onClick: handleDeleteCompanyClick,
+    });
+  }
+
   return (
     <main className="appShell adminShell">
-      <header className="appHeader">
-        <div>
-          <p className="eyebrow">Concur迷子防止Bot</p>
-          <h1>管理画面</h1>
-          <p>会社ごとの設定や質問フローを編集できます。</p>
-        </div>
-        <div className="headerActions">
-          {showCompanySelector && (
+      <header className="appHeader adminHeader">
+        {/* divではなくsectionにしているのは意図的：.appHeader > div:first-child
+            （flex: 1 1 360px、元々は横1列レイアウトでの「タイトル側の幅」指定）
+            が、divのままだとこの要素にもマッチしてしまい、flex-direction:
+            columnの.adminHeaderでは360pxが幅ではなく高さとして解釈され、
+            意図しない巨大な余白ができてしまっていたため（実機検証で発見）。
+            タグを変えることでその古いセレクタの対象から外れ、CSSの詳細度勝負を
+            せずに済む。 */}
+        <section className="adminHeaderTop">
+          <div>
+            <p className="eyebrow">Concur迷子防止Bot</p>
+            <h1>管理画面</h1>
+            <p>会社ごとの設定や質問フローを編集できます。</p>
+          </div>
+          <a className="resetButton" href="#">
+            利用者画面へ戻る
+          </a>
+        </section>
+
+        {showCompanySelector && (
+          <div className="companyToolbar">
             <label className="companySelector">
               <span className="companySelectorLabel">会社</span>
               <span className="companySelectWrap">
@@ -845,31 +885,10 @@ export default function AdminRoot() {
                 </select>
               </span>
             </label>
-          )}
-          {showDeleteCompany && (
-            <button
-              type="button"
-              className="dangerGhostButton"
-              disabled={!canDeleteCurrentCompany}
-              title={
-                !canDeleteCurrentCompany && myCompanies.length <= 1
-                  ? "最低1社は存在する必要があるため、削除できません"
-                  : undefined
-              }
-              onClick={handleDeleteCompanyClick}
-            >
-              {deleteCompanyState.status === "deleting" ? "削除中…" : "会社を削除"}
-            </button>
-          )}
-          {showCreateNewCompany && (
-            <button type="button" className="resetButton" onClick={handleStartNewCompany}>
-              ＋ 新しい会社を作成
-            </button>
-          )}
-          <a className="resetButton" href="#">
-            利用者画面へ戻る
-          </a>
-        </div>
+
+            {companyManageMenuItems.length > 0 && <CompanyManageMenu items={companyManageMenuItems} />}
+          </div>
+        )}
       </header>
 
       {deleteCompanySuccessMessage && (
