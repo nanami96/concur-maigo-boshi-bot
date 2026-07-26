@@ -13,6 +13,7 @@ describe("resolveMembershipErrorMessage", () => {
     "forbidden",
     "last_admin",
     "last_admin_removal",
+    "last_company",
     "cannot_remove_self",
     "invalid_role",
     "invalid_company_code",

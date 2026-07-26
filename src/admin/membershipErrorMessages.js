@@ -9,6 +9,7 @@ const MEMBERSHIP_ERROR_MESSAGES = {
   forbidden: "この操作には管理者権限が必要です。",
   last_admin: "この会社の管理者は最低1人必要なため、降格できません。",
   last_admin_removal: "この会社の管理者は最低1人必要なため、削除できません。",
+  last_company: "最低1社は存在する必要があるため、この会社は削除できません。",
   cannot_remove_self: "自分自身を会社から削除することはできません。",
   invalid_role: "指定された権限が不正です。",
   invalid_company_code:

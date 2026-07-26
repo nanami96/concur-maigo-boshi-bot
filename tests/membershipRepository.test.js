@@ -36,6 +36,7 @@ const {
   fetchIsPlatformAdmin,
   fetchPlatformCompanies,
   createPlatformCompany,
+  deletePlatformCompany,
   regenerateInviteCode,
   fetchPlatformCompanyMembers,
 } = await import("../src/data/membershipRepository.js");
@@ -58,6 +59,7 @@ describe("classifyMembershipRpcError", () => {
     ["cannot demote the last admin of this company", "last_admin"],
     ["cannot remove yourself from the company", "cannot_remove_self"],
     ["cannot remove the last admin of this company", "last_admin_removal"],
+    ["cannot delete the last remaining company", "last_company"],
     ["admin privileges required", "forbidden"],
     ["invalid role", "invalid_role"],
     ["member not found in your company", "not_found"],
@@ -481,6 +483,55 @@ describe("regenerateInviteCode", () => {
     rpcMock.mockResolvedValue({ data: null, error: { message: "company not found" } });
     const result = await regenerateInviteCode("uuid-missing");
     expect(result.error.type).toBe("not_found");
+  });
+});
+
+describe("deletePlatformCompany", () => {
+  it("成功時は削除した会社情報を返す", async () => {
+    rpcMock.mockResolvedValue({
+      data: [{ company_id: "uuid-1", company_code: "test", company_name: "テスト会社" }],
+      error: null,
+    });
+
+    const result = await deletePlatformCompany("uuid-1");
+    expect(result).toEqual({
+      company: { companyDbId: "uuid-1", companyCode: "test", companyName: "テスト会社" },
+      error: null,
+    });
+    expect(rpcMock).toHaveBeenCalledWith("delete_platform_company", { p_company_id: "uuid-1" });
+  });
+
+  it("platform_admin権限が無い場合、platform_forbiddenとして分類されたエラーを返す", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "platform admin privileges required" },
+    });
+    const result = await deletePlatformCompany("uuid-1");
+    expect(result.company).toBeNull();
+    expect(result.error.type).toBe("platform_forbidden");
+  });
+
+  it("対象の会社が存在しない場合、not_foundとして分類されたエラーを返す", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: "company not found" } });
+    const result = await deletePlatformCompany("uuid-missing");
+    expect(result.error.type).toBe("not_found");
+  });
+
+  it("会社が1件しか無い場合、last_companyとして分類されたエラーを返す", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "cannot delete the last remaining company" },
+    });
+    const result = await deletePlatformCompany("uuid-only");
+    expect(result.error.type).toBe("last_company");
+  });
+
+  it("Supabase未設定なら呼び出さずエラーを返す", async () => {
+    mockState.isSupabaseConfigured = false;
+    const result = await deletePlatformCompany("uuid-1");
+    expect(result.company).toBeNull();
+    expect(result.error).not.toBeNull();
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 });
 

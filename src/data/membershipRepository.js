@@ -9,6 +9,7 @@ import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
 //   "forbidden"           : admin権限が無い（update_company_member_role等）
 //   "last_admin"          : 最後のadminを降格しようとした（update_company_member_role）
 //   "last_admin_removal"  : 最後のadminを会社から削除しようとした（remove_company_member）
+//   "last_company"        : 会社が1件しか無い状態で削除しようとした（delete_platform_company）
 //   "cannot_remove_self"  : 自分自身を会社から削除しようとした（remove_company_member）
 //   "invalid_role"        : 不正なrole値を渡した（update_company_member_role）
 //   "invalid_company_code": 会社コードの形式が不正（create_platform_company）
@@ -44,6 +45,9 @@ export function classifyMembershipRpcError(error) {
   }
   if (message.includes("cannot remove the last admin")) {
     return "last_admin_removal";
+  }
+  if (message.includes("cannot delete the last remaining company")) {
+    return "last_company";
   }
   if (message.includes("platform admin privileges required")) {
     return "platform_forbidden";
@@ -344,6 +348,38 @@ export async function createPlatformCompany({ companyCode, companyName }) {
             companyName: row.company_name,
             inviteCode: row.invite_code,
           }
+        : null,
+      error: null,
+    };
+  } catch (caughtError) {
+    return { company: null, error: { type: "network", message: caughtError.message } };
+  }
+}
+
+// 会社を削除する（platform_adminのみ）。company_members・draft_configs・
+// published_versionsはdelete_platform_company() RPC側のon delete cascadeにより
+// 自動的に削除されるため、ここで個別にDELETEする処理は無い（孤立データが
+// 残らないことはRPC側の保証に委ねる。詳細はsupabase/schema.sql参照）。
+// 会社が1件しか無い場合はRPC側で拒否される（last_companyとして分類される）。
+export async function deletePlatformCompany(companyDbId) {
+  if (!isSupabaseConfigured) {
+    return { company: null, error: { type: "unknown", message: "Supabaseが設定されていません。" } };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc("delete_platform_company", {
+      p_company_id: companyDbId,
+    });
+
+    if (error) {
+      return { company: null, error: { type: classifyMembershipRpcError(error), message: error.message } };
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+
+    return {
+      company: row
+        ? { companyDbId: row.company_id, companyCode: row.company_code, companyName: row.company_name }
         : null,
       error: null,
     };

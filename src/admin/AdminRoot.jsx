@@ -13,7 +13,13 @@ import {
   resolveInitialWorkspaceState,
   mapDraftRowToWorkspaceState,
 } from "../data/draftConfigRepository";
-import { fetchIsPlatformAdmin, fetchPlatformCompanies } from "../data/membershipRepository";
+import {
+  fetchIsPlatformAdmin,
+  fetchPlatformCompanies,
+  deletePlatformCompany,
+} from "../data/membershipRepository";
+import { resolveMembershipErrorMessage } from "./membershipErrorMessages";
+import ConfirmDialog from "./ConfirmDialog";
 import DraftSaveBar from "./DraftSaveBar";
 import PublishPanel from "./PublishPanel";
 import UnsavedChangesDialog from "./UnsavedChangesDialog";
@@ -540,6 +546,15 @@ export default function AdminRoot() {
   const [customSetup, setCustomSetup] = useState(null);
   const [showCreateCompanyScreen, setShowCreateCompanyScreen] = useState(false);
 
+  // 「会社を削除」（platform_adminのみ）：確認ダイアログの対象・削除処理中/失敗
+  // 状態・完了後のメッセージを、他の会社一覧state（myCompaniesState/companyId）
+  // とは別に持つ。削除自体はdelete_platform_company() RPC（schema.sql参照）が
+  // company_members・draft_configs・published_versionsをon delete cascadeで
+  // まとめて削除するため、ここでは対象companyDbIdを渡すだけでよい。
+  const [deleteCompanyRequest, setDeleteCompanyRequest] = useState(null);
+  const [deleteCompanyState, setDeleteCompanyState] = useState({ status: "idle", errorMessage: null });
+  const [deleteCompanySuccessMessage, setDeleteCompanySuccessMessage] = useState(null);
+
   // 現在表示中のAdminWorkspaceの「未保存の変更があるか」「今すぐ保存する関数」を
   // 参照だけしておくためのref。AdminWorkspace側のuseDraftSaveが変化するたびに
   // onPersistenceChange経由で更新される。stateではなくrefにしているのは、
@@ -656,6 +671,75 @@ export default function AdminRoot() {
     setShowCreateCompanyScreen(false);
   };
 
+  // 「会社を削除」ボタン押下：確認ダイアログを開くだけで、この時点ではまだ
+  // 何もDBへ変更を加えない。対象はcompanyId（選択中のcompany_code）から
+  // myCompaniesを引いて解決する（fetchPlatformCompaniesの各要素が持つ
+  // companyDbId=companies.idのuuidを、RPCへ渡す実際のキーとして使う）。
+  const handleDeleteCompanyClick = () => {
+    const target = myCompanies.find((company) => company.id === companyId);
+    if (!target || !target.companyDbId) {
+      return;
+    }
+
+    setDeleteCompanyState({ status: "idle", errorMessage: null });
+    setDeleteCompanySuccessMessage(null);
+    setDeleteCompanyRequest({
+      companyDbId: target.companyDbId,
+      companyCode: target.id,
+      companyName: target.label,
+    });
+  };
+
+  const handleCancelDeleteCompany = () => {
+    setDeleteCompanyRequest(null);
+  };
+
+  // 削除確定：delete_platform_company() RPCを呼ぶだけで、company_members・
+  // draft_configs・published_versionsはRPC側のon delete cascadeにより
+  // まとめて削除される（孤立データは残らない。詳細はschema.sql参照）。
+  // 成功後は会社一覧を再取得し、削除した会社が選択中だった場合は
+  // 先頭の会社（無ければnull）へ選び直す。
+  const handleConfirmDeleteCompany = async () => {
+    const target = deleteCompanyRequest;
+    setDeleteCompanyRequest(null);
+
+    if (!target) {
+      return;
+    }
+
+    setDeleteCompanyState({ status: "deleting", errorMessage: null });
+    setDeleteCompanySuccessMessage(null);
+
+    const { company, error } = await deletePlatformCompany(target.companyDbId);
+
+    if (error) {
+      console.error("会社の削除に失敗しました", error);
+      setDeleteCompanyState({
+        status: "error",
+        errorMessage: resolveMembershipErrorMessage(error.type),
+      });
+      return;
+    }
+
+    setDeleteCompanyState({ status: "idle", errorMessage: null });
+    setDeleteCompanySuccessMessage(`会社「${company?.companyName ?? target.companyName}」を削除しました。`);
+
+    const { companies, error: listError } = await fetchPlatformCompanies();
+
+    if (listError) {
+      console.error("会社一覧の再取得に失敗しました", listError);
+      setMyCompaniesState({ status: "error", companies: [] });
+      return;
+    }
+
+    setMyCompaniesState({ status: "ready", companies });
+
+    if (companyId === target.companyCode) {
+      setCustomSetup(null);
+      setCompanyId(companies[0]?.id ?? null);
+    }
+  };
+
   const handleCancelNavigation = () => {
     setPendingNavigation(null);
     setNavigationSaveError(null);
@@ -715,6 +799,20 @@ export default function AdminRoot() {
   const showCompanySelector = !isSupabaseConfigured || isPlatformAdmin || myCompanies.length > 1;
   const showCreateNewCompany = !isSupabaseConfigured || isPlatformAdmin;
 
+  // 「会社を削除」はplatform_admin専用（create_platform_companyと対称）。
+  // ローカル開発（Supabase未設定）のcustomSetupはDBに実体を持たないため対象外。
+  // 会社が1件しか無い場合・新規セットアップ中・一覧未確定の間は無効化する
+  // （「最低1社は存在する」前提を守るため。delete_platform_company() RPC側でも
+  // 同じ条件を最終防御として検証しており、ここでのdisabled制御はUXのための
+  // 早期フィードバックに過ぎない）。
+  const showDeleteCompany = isSupabaseConfigured && isPlatformAdmin;
+  const canDeleteCurrentCompany =
+    showDeleteCompany &&
+    !isNewCompanyMode &&
+    companyId !== null &&
+    myCompanies.length > 1 &&
+    deleteCompanyState.status !== "deleting";
+
   return (
     <main className="appShell adminShell">
       <header className="appHeader">
@@ -748,6 +846,21 @@ export default function AdminRoot() {
               </span>
             </label>
           )}
+          {showDeleteCompany && (
+            <button
+              type="button"
+              className="dangerGhostButton"
+              disabled={!canDeleteCurrentCompany}
+              title={
+                !canDeleteCurrentCompany && myCompanies.length <= 1
+                  ? "最低1社は存在する必要があるため、削除できません"
+                  : undefined
+              }
+              onClick={handleDeleteCompanyClick}
+            >
+              {deleteCompanyState.status === "deleting" ? "削除中…" : "会社を削除"}
+            </button>
+          )}
           {showCreateNewCompany && (
             <button type="button" className="resetButton" onClick={handleStartNewCompany}>
               ＋ 新しい会社を作成
@@ -758,6 +871,15 @@ export default function AdminRoot() {
           </a>
         </div>
       </header>
+
+      {deleteCompanySuccessMessage && (
+        <p className="authSentMessage">{deleteCompanySuccessMessage}</p>
+      )}
+      {deleteCompanyState.status === "error" && (
+        <p className="settingsErrorText" role="alert">
+          {deleteCompanyState.errorMessage}
+        </p>
+      )}
 
       {showCreateCompanyScreen ? (
         <CreatePlatformCompanyScreen
@@ -807,6 +929,23 @@ export default function AdminRoot() {
           onSaveAndContinue={handleSaveAndContinue}
         />
       )}
+
+      <ConfirmDialog
+        request={
+          deleteCompanyRequest && {
+            title: "会社を削除しますか？",
+            message: `会社「${deleteCompanyRequest.companyName}」を削除します。この会社に紐づく会社設定・経費タイプ・質問・選択肢・判定ルールなど、配下のデータもすべて削除されます。`,
+            note: "この操作は元に戻せません。",
+            confirmLabel: "削除する",
+            confirmInput: {
+              label: "確認のため、会社名を入力してください",
+              expectedValue: deleteCompanyRequest.companyName,
+            },
+          }
+        }
+        onConfirm={handleConfirmDeleteCompany}
+        onCancel={handleCancelDeleteCompany}
+      />
     </main>
   );
 }

@@ -1340,7 +1340,77 @@ revoke all on function remove_company_member(uuid) from public;
 grant execute on function remove_company_member(uuid) to authenticated;
 
 -- ============================================================================
--- ここまででPhase 9のスキーマも完成です。
+-- 10. Phase 10: 管理画面からの「会社削除」機能（platform_adminのみ）
+-- ============================================================================
+--
+-- 目的：
+--   検証用・誤って作成した会社（例：test、test1）を、運営者がSupabase
+--   SQL Editorを操作しなくても、管理画面の会社セレクタ横から安全に削除できる
+--   ようにする。
+--
+-- 削除範囲（孤立データ対策）：
+--   companiesの対象行のみをDELETEする。会社配下の各テーブルは、いずれも
+--   company_id（またはdraft_configsの場合はcompany_id自体が主キー）が
+--   companies(id) on delete cascadeとして定義済みのため（Phase 1・6・8参照：
+--   company_members.company_id／draft_configs.company_id／
+--   published_versions.company_id）、Postgresが自動的にカスケード削除する。
+--   手動でのDELETE FROM（子テーブル→親テーブルの順）は不要であり、あえて
+--   individually DELETEしない（カスケード定義と処理が二重になり、将来
+--   スキーマ側だけ変更されて処理側が追従し忘れる不整合の原因になるため）。
+--   platform_admins・auth.usersはcompaniesと無関係のテーブルであり、
+--   この関数から一切変更しない。
+--
+-- 権限・安全対策：
+--   ・is_platform_admin()のみ実行可能（create_platform_company()と対称の設計）。
+--   ・対象会社が存在しない場合は 'company not found'（P0002）。
+--   ・「最低1社は必ず存在する」という前提を守るため、companiesが1件しか
+--     無い状態からの削除は拒否する（'cannot delete the last remaining
+--     company'、55000）。companies全体を先に行ロック（for update）してから
+--     件数を数えることで、2つの削除リクエストが同時に走っても
+--     「どちらも2件あるから削除してよい」と判断してcompaniesが0件に
+--     なってしまう競合を防ぐ（remove_company_member()のadmin集合ロックと
+--     同じ考え方）。
+create or replace function delete_platform_company(p_company_id uuid)
+returns table (company_id uuid, company_code text, company_name text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_company companies%rowtype;
+begin
+  if not is_platform_admin() then
+    raise exception 'platform admin privileges required' using errcode = '42501';
+  end if;
+
+  perform 1 from companies for update;
+
+  if not exists (select 1 from companies where id = p_company_id) then
+    raise exception 'company not found' using errcode = 'P0002';
+  end if;
+
+  if (select count(*) from companies) <= 1 then
+    raise exception 'cannot delete the last remaining company' using errcode = '55000';
+  end if;
+
+  delete from companies where id = p_company_id returning * into v_company;
+
+  return query
+    select v_company.id, v_company.company_code, v_company.company_name;
+end;
+$$;
+
+comment on function delete_platform_company(uuid) is
+  'platform_adminの場合のみ、対象会社を削除する。company_members・draft_configs・'
+  'published_versionsはon delete cascadeにより自動的に削除される（孤立データは'
+  '残らない）。companiesが1件のみの場合は削除できない（最低1社は存在する'
+  '前提を守るため）。';
+
+revoke all on function delete_platform_company(uuid) from public;
+grant execute on function delete_platform_company(uuid) to authenticated;
+
+-- ============================================================================
+-- ここまででPhase 9・10のスキーマも完成です。
 --
 -- 最初のplatform_admin登録について：
 --   platform_adminsへのINSERTは、company_membersの最初のadmin登録と同様、

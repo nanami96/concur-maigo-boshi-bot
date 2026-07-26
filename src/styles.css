@@ -2481,6 +2481,25 @@ textarea.resultFieldInput {
   cursor: pointer;
 }
 
+.confirmOkButton:disabled {
+  background: #d9b3b3;
+  cursor: not-allowed;
+}
+
+/* request.confirmInput（会社削除等の誤操作防止用の入力欄）専用。
+   タイトル・本文（.confirmMessage等）は中央寄せだが、入力欄はラベル・
+   入力とも左寄せの方が自然に読めるため、ここだけtext-align:leftを明示する。 */
+.confirmInputLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  text-align: left;
+  font-size: 0.85rem;
+  color: #33415c;
+  font-weight: 700;
+}
+
 .flowPreviewHeader {
   display: flex;
   justify-content: space-between;
