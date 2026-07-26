@@ -2,6 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const VIEWPORT_MARGIN = 8;
 
+// トリガー中央とメニュー中央を揃えるための横位置計算。画面右端（あるいは
+// 左端）からはみ出す場合だけ、収まる位置へ補正する。
+function computeMenuLeft(triggerRect, menuWidth) {
+  const centered = triggerRect.left + triggerRect.width / 2 - menuWidth / 2;
+  const maxLeft = Math.max(VIEWPORT_MARGIN, window.innerWidth - menuWidth - VIEWPORT_MARGIN);
+  return Math.min(Math.max(centered, VIEWPORT_MARGIN), maxLeft);
+}
+
 // ヘッダーの「⚙ 会社を管理」メニュー。
 //
 // 既存のOptionMenu.jsx（フローの選択肢行・ポリシーカード・経費タイプ行で使う
@@ -47,14 +55,16 @@ export default function CompanyManageMenu({ items }) {
       return;
     }
 
+    // 初回描画時（画面外にオフスクリーン表示している間）でも、既にDOMには
+    // 存在しレイアウト計算は済んでいるため、getBoundingClientRect()で
+    // メニューの実際の幅を取得できる（OptionMenu.jsxと同じ考え方）。
+    // これにより「トリガー中央 = メニュー中央」を、固定pxのずらしではなく
+    // 実寸から計算する。
     const triggerRect = triggerRef.current.getBoundingClientRect();
+    const menuWidth = listRef.current.getBoundingClientRect().width;
+    const left = computeMenuLeft(triggerRect, menuWidth);
 
-    let right = window.innerWidth - triggerRect.right;
-    if (right < VIEWPORT_MARGIN) {
-      right = VIEWPORT_MARGIN;
-    }
-
-    setStyle({ position: "fixed", top: triggerRect.bottom + 6, right });
+    setStyle({ position: "fixed", top: triggerRect.bottom + 6, left });
   }, [open]);
 
   return (
@@ -67,7 +77,8 @@ export default function CompanyManageMenu({ items }) {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span className="companyManageMenuIcon" aria-hidden="true">⚙</span> 会社を管理
+        <span className="companyManageMenuIcon" aria-hidden="true">⚙</span>
+        <span className="companyManageMenuLabel">会社を管理</span>
         <span className="companyManageMenuChevron" aria-hidden="true" />
       </button>
 
@@ -78,7 +89,7 @@ export default function CompanyManageMenu({ items }) {
           role="menu"
           // 初回描画時（位置計算前）は画面外にオフスクリーン表示し、
           // useLayoutEffectで正しい位置が決まってから見せる（ちらつき防止）。
-          style={style || { position: "fixed", top: -9999, right: -9999 }}
+          style={style || { position: "fixed", top: -9999, left: -9999 }}
         >
           {items.map((item, index) =>
             item === "divider" ? (
@@ -99,7 +110,7 @@ export default function CompanyManageMenu({ items }) {
                 >
                   {item.icon && (
                     <span className="companyManageMenuIcon" aria-hidden="true">
-                      {item.icon}{" "}
+                      {item.icon}
                     </span>
                   )}
                   {item.label}

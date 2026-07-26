@@ -1979,18 +1979,21 @@ button {
   position: relative;
 }
 
-/* .resetButtonと同じ寸法・配色（ピル形状・42px・#cbd5e1枠線）に揃える。
-   ヘッダーの他のボタン（利用者画面へ戻る等）と並んでも違和感が無いように。 */
+/* 高さ・角丸は.companySelector select（会社選択プルダウン）と揃えたまま、
+   左右paddingを広げてアイコン・文言・矢印が詰まって見えないようにする。
+   アイコン⇄文言・文言⇄矢印の間隔は、この要素のgapではなく
+   .companyManageMenuLabelのmargin-left/right側で個別に持たせる
+   （アイコン⇄文言と文言⇄矢印で異なる間隔にしたいため、一律のgapでは
+   表現できない）。 */
 .companyManageMenuTrigger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   min-height: 42px;
   border: 1px solid #cbd5e1;
   border-radius: 999px;
   background: #ffffff;
   color: #243047;
-  padding: 10px 16px;
+  padding: 10px 28px;
   font: inherit;
   cursor: pointer;
 }
@@ -1999,10 +2002,14 @@ button {
   background: #f8fafc;
 }
 
+.companyManageMenuLabel {
+  margin-left: 12px;
+  margin-right: 14px;
+}
+
 .companyManageMenuChevron {
   width: 8px;
   height: 8px;
-  margin-left: 2px;
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
   transform: rotate(45deg);
@@ -2016,6 +2023,14 @@ button {
   line-height: 1;
 }
 
+/* メニュー項目内のアイコンだけ、文言との間隔を確保する（トリガー側の
+   アイコンは.companyManageMenuLabelのmargin-leftで間隔を持たせているため
+   対象外）。以前は絵文字の直後に半角スペース文字を1つ置くだけだったが、
+   フォントによって幅が不安定なため、CSSのmarginへ置き換えた。 */
+.companyManageMenuItem .companyManageMenuIcon {
+  margin-right: 12px;
+}
+
 .companyManageMenuList {
   background: #fff;
   border: 1px solid #d7deea;
@@ -2023,8 +2038,8 @@ button {
   box-shadow: 0 6px 18px rgba(22, 32, 51, 0.15);
   list-style: none;
   margin: 0;
-  padding: 4px;
-  min-width: 200px;
+  padding: 8px;
+  min-width: 240px;
   z-index: 1000;
 }
 
@@ -2034,7 +2049,7 @@ button {
   border: none;
   background: transparent;
   text-align: left;
-  padding: 8px 10px;
+  padding: 16px 24px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.9rem;
@@ -2056,7 +2071,7 @@ button {
 
 .companyManageMenuDivider {
   height: 1px;
-  margin: 4px 2px;
+  margin: 10px 6px;
   background: #e2e8f0;
 }
 
