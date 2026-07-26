@@ -909,6 +909,16 @@ button {
   line-height: 1.5;
 }
 
+/* エンドユーザー画面（BotConversation.jsx）の単一結果カード専用。管理画面の
+   FlowPreview.jsxも.resultHeroLabelを使うが、このeuXxx修飾クラスは
+   付与していないため影響しない。ラベル（「おすすめの経費タイプ」「ポリシー」）
+   と直後の値（経費タイプ名・ポリシー名）の間が32px+.resultHero h2の
+   padding-top10pxで計42pxも空いてしまい不自然に見えていたため、
+   margin-bottomだけを縮める。 */
+.euResultHeroLabel {
+  margin-bottom: 8px;
+}
+
 .resultLabelIcon {
   display: inline-flex;
   align-items: center;
@@ -917,6 +927,46 @@ button {
   height: 24px;
   min-width: 24px;
   flex: 0 0 24px;
+}
+
+/* エンドユーザー画面（BotConversation.jsx）の「おすすめの経費タイプ」専用。
+   「ポリシー」ラベル等が使う共通の.resultLabelIcon（24px、モバイルのみ28px）は
+   変更せず、このメダルアイコンだけ常時28px程度＝タグアイコンより少し
+   存在感のあるサイズにする（PC・モバイルどちらも28pxで統一。モバイルは
+   元々.resultLabelIconが28pxのため実質差は無いが、PC/モバイルで意図を
+   揃えるため明示している）。画像自体は高解像度のPNG（元512px相当）を
+   等比縮小するだけなのでRetinaでもぼやけない。 */
+.euRecommendedMedalIcon {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  flex: 0 0 28px;
+}
+
+.euRecommendedMedalIcon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* エンドユーザー画面（BotConversation.jsx）の「ポリシー」専用。共通の
+   .resultLabelIcon（管理画面FlowPreview.jsxも使用）は変更せず、この
+   アイコンだけおすすめメダル（.euRecommendedMedalIcon）と同じ28pxへ
+   揃える。元画像はほぼ正方形（988x1004）だが、object-fit: containで
+   縦横比の崩れを防ぐ。 */
+.euPolicyIcon {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  flex: 0 0 28px;
+}
+
+.euPolicyIcon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .resultLabelIcon svg,
@@ -1028,6 +1078,36 @@ button {
   border-top: 1px solid #e2e8f0;
   border-bottom: 1px solid #e2e8f0;
   border-radius: 0;
+}
+
+/* エンドユーザー画面（BotConversation.jsx）専用。領収書要否バッジと
+   OCRボタン（ReceiptOcrPanel.jsx）を1つのまとまりに見せるためのラッパー。
+   .receiptSummary自体の共通スタイル（管理画面FlowPreview.jsxも使用）は
+   変更せず、ここでスコープした上書きだけでborder-bottomの位置を
+   .receiptSummaryの直後からこのラッパーの末尾（OCRボタンの後ろ）へ
+   付け替える。OCRボタンが無い場合は.euReceiptSectionHasOcrが付かず
+   paddingも増えないため、.receiptSummary単体だった頃と見た目は変わらない。 */
+.euReceiptSection {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.euReceiptSection .receiptSummary {
+  border-bottom: 0;
+}
+
+.euReceiptSection.euReceiptSectionHasOcr {
+  padding-bottom: 18px;
+}
+
+/* OCRボタン（.receiptOcrSection、ReceiptOcrPanel.jsxのルート）を、
+   .receiptSummaryの領収書アイコン・文字の開始位置（padding-left: 28px）に
+   揃える。.receiptOcrSection自体の共通margin（管理画面が使う可能性に備え
+   触れない）は変更せず、.euReceiptSection配下だけの上書きに留める。
+   上マージンは16px→8pxへ縮め、領収書情報とOCRボタンの距離だけを詰める
+   （OCRボタンの下＝注意事項との間隔は.euReceiptSectionHasOcrのpadding-bottomが
+   別途担っているため、ここでは影響しない）。 */
+.euReceiptSection .receiptOcrSection {
+  margin: 8px 28px 0;
 }
 
 .receiptIcon {
@@ -1347,6 +1427,19 @@ button {
   box-shadow: none;
 }
 
+/* エンドユーザー画面（BotConversation.jsx）の単一結果カード専用。管理画面の
+   FlowPreview.jsxは.resultAdviceBubble/.resultWarningCardを使うが、この
+   euXxx修飾クラスは付与していないため影響しない。共通paddingを丸ごと
+   再指定せず、本文下側だけをスコープして上書きする（16px 18px 18px →
+   実質16px 18px 12px）。 */
+.euResultAdviceBubble {
+  padding-bottom: 12px;
+}
+
+.euResultWarningCard {
+  padding-bottom: 12px;
+}
+
 .resultWarningCard h3 {
   color: #92400e;
   font-size: 16px;
@@ -1483,6 +1576,68 @@ button {
   background: #dbeafe;
 }
 
+/* エンドユーザー画面（BotConversation.jsx）専用の控えめな入場アニメーション。
+   管理画面のFlowPreview.jsx等は同名クラスを一切使わないため、既存の共通
+   クラス（.messageRow/.recommendationCard/.candidateList等）はそのままに、
+   このeuXxxEnterクラスを追加した要素だけに影響する。transform/opacityのみを
+   使い、height等のレイアウト計算が絡むプロパティは使わない。
+   質問・履歴はtranslateYを使わずopacityのみにしている。回答直後は
+   「選択肢付きの大きな質問ブロックが短い履歴吹き出しへ入れ替わる」こと自体で
+   レイアウト高さが大きく変わり、そこへさらにtranslateYを重ねると縦方向の
+   動きが二重になってガタつきが目立ったため。実際の視認上のガタつきは
+   BotConversation.jsx側の自動スクロール（次の質問・判定結果の先頭へ
+   scrollIntoView）で解消しており、ここではopacityのみの控えめな変化に留める。 */
+@keyframes euQuestionEnter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes euHistoryEnter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes euResultEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.euQuestionEnter {
+  animation: euQuestionEnter 140ms ease-out both;
+}
+
+.euHistoryEnter {
+  animation: euHistoryEnter 140ms ease-out both;
+}
+
+.euResultEnter {
+  animation: euResultEnter 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .euQuestionEnter,
+  .euHistoryEnter,
+  .euResultEnter {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+}
+
 @media (max-width: 768px) {
   .appShell {
     width: min(100% - 20px, 680px);
@@ -1571,6 +1726,13 @@ button {
     font-size: 18px;
   }
 
+  /* .resultHeroLabelのモバイル向けmargin-bottom（22px）がこの後に続くため、
+     同じ詳細度のままだとeuResultHeroLabel側のmargin-bottomが打ち消される。
+     PCと同じ理由でモバイルでも明示的に上書きする。 */
+  .euResultHeroLabel {
+    margin-bottom: 8px;
+  }
+
   .resultLabelIcon {
     width: 28px;
     height: 28px;
@@ -1649,11 +1811,29 @@ button {
     border-radius: 7px;
   }
 
+  /* モバイルの.resultAdviceBubble/.resultWarningCardは上記のとおり
+     padding: 14px（4辺一律）の指定がこの後に続くため、カスケード順で
+     euXxx側のpadding-bottom: 12px（この2つより前に定義済み）が
+     打ち消されてしまう。同じ詳細度のまま、ここでモバイル向けに
+     再度明示することで下側だけ12pxを優先させる（padding全体の
+     再指定はしない）。 */
+  .euResultAdviceBubble,
+  .euResultWarningCard {
+    padding-bottom: 12px;
+  }
+
   /* 他の結果カード内要素（.resultAdviceBubble等）と同じ理由で、左右の
      余白をPCの18pxから12pxへ詰める。カード自体の縦方向gapはCSS grid
      （.receiptOcrCard）で確保済みのため、パディングはPCと共通のままでよい。 */
   .receiptOcrSection {
     margin: 16px 12px 0;
+  }
+
+  /* PCと同じ理由・同じ縮め方（詳細度が同じ.receiptOcrSectionのモバイル値
+     より後ろに置くことで確実に優先させる）。モバイルの.receiptSummaryは
+     左右均等padding:16pxのため、揃える左右マージンも16pxにする。 */
+  .euReceiptSection .receiptOcrSection {
+    margin: 8px 16px 0;
   }
 
   .warningIcon {

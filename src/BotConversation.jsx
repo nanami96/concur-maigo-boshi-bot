@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import QuestionEngine from "./engine/QuestionEngine";
 import { renderTextWithLinks } from "./lib/linkifyText";
 import { shouldShowPolicySection } from "./lib/policyVisibility";
 import { shouldShowReceiptOcr } from "./lib/receiptOcrVisibility";
 import ReceiptOcrPanel from "./ReceiptOcrPanel";
+import recommendedMedalIcon from "./assets/recommended-medal.png";
+import policyTagIcon from "./assets/policy-tag.png";
 
 // 質問フローのチャットUI本体。「どの会社の設定を、どうやって取得したか」は
 // 一切知らず、確定済みのconfig（config.json互換形式）とstatus（読み込み状態）を
@@ -39,22 +41,49 @@ function getPolicyName(policies, policyId) {
   return policies?.find((policy) => policy.policy_id === policyId)?.policy_name;
 }
 
-function TagIcon() {
+// 「おすすめの経費タイプ」の目印用アイコン（メダル＋星＋青いリボン、
+// src/assets/recommended-medal.png、デザイン提供のPNG素材）。
+// 「ポリシー」ラベル（TagIcon）とは意図的に別コンポーネント・別クラスに
+// してあり、「おすすめ」表示だけを対象にした今回の差し替えがTagIconの
+// 他の用途（ポリシーラベル・FlowPreview.jsx側の複製markup）へ波及しない
+// ようにしている。素材は512px近い高解像度のまま読み込み、表示サイズだけ
+// CSS（.euRecommendedMedalIcon）で28pxに縮小することでRetina環境でも
+// ぼやけないようにする。
+function RecommendedBadgeIcon() {
   return (
-    <span className="resultLabelIcon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" focusable="false">
-        <path d="M20.6 13.1 13.1 20.6a2.1 2.1 0 0 1-3 0L3.8 14.3A2.8 2.8 0 0 1 3 12.4V5.8A2.8 2.8 0 0 1 5.8 3h6.6a2.8 2.8 0 0 1 1.9.8l6.3 6.3a2.1 2.1 0 0 1 0 3Z" />
-        <path d="M8 8h.01" />
-      </svg>
+    <span className="resultLabelIcon euRecommendedMedalIcon" aria-hidden="true">
+      <img src={recommendedMedalIcon} alt="" />
     </span>
   );
 }
 
-function ChatMessage({ speaker = "bot", children }) {
+// 「ポリシー」の目印用アイコン（淡いブルーの輪郭＋点線のタグ、
+// src/assets/policy-tag.png）。おすすめメダルと役割の違いが見た目でも
+// 分かるよう、TagIcon（従来のSVGタグ）とは別コンポーネント・別クラスに
+// してある。「ポリシー」ラベル以外（FlowPreview.jsx側の複製markup含む）
+// には一切影響しない。
+function PolicyTagIcon() {
   return (
-    <div className={`messageRow ${speaker}`}>
+    <span className="resultLabelIcon euPolicyIcon" aria-hidden="true">
+      <img src={policyTagIcon} alt="" />
+    </span>
+  );
+}
+
+// bare=trueのときは、通常メッセージが使う薄いグレーの.messageBubble吹き出しを
+// 挟まず、children（結果カード自体）を.messageRowの2列目へ直接配置する。
+// 判定結果表示だけ「Botアイコン＋白い結果カード」の二重カードを解消するための
+// 専用モードで、質問・履歴等の通常メッセージ（bare未指定）は従来どおり。
+function ChatMessage({ speaker = "bot", className = "", containerRef, bare = false, children }) {
+  return (
+    <div
+      ref={containerRef}
+      className={["messageRow", speaker, bare ? "resultMessageRow" : "", className]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <div className="avatar">{speaker === "bot" ? "Bot" : "あなた"}</div>
-      <div className="messageBubble">{children}</div>
+      {bare ? children : <div className="messageBubble">{children}</div>}
     </div>
   );
 }
@@ -80,7 +109,7 @@ function ChoiceButtons({ options, selected, onSelect }) {
 
 function CandidateList({ candidates, policies, onSelect }) {
   return (
-    <div className="candidateList">
+    <div className="candidateList euResultEnter">
       <h3 className="candidateListHeading">候補となる経費タイプ</h3>
       {candidates.map((candidate) => {
         const receiptStatus = getReceiptStatus(
@@ -144,6 +173,16 @@ export default function BotConversation({
   // 将来のConcur連携等で使う想定のPoC用stateで、今回は保持するだけで
   // それ以上の送信・表示の拡張は行わない。
   const [receiptData, setReceiptData] = useState(null);
+  // 「次の質問」または「判定結果」の会話領域末尾をスクロール先として指すref。
+  // どちらか一方しか同時に描画されないため（!result / result && ... の排他条件）、
+  // 1つのrefを使い回してよい。document.querySelector等の広範なDOM検索は使わず、
+  // Reactのrefで直接対象要素を指す。
+  const questionAnchorRef = useRef(null);
+  const resultAnchorRef = useRef(null);
+  // 初回表示・会社切り替え直後・「最初から」やり直した直後は自動スクロールしない
+  // ためのフラグ。回答による前進・戻る操作のときだけfalseのまま
+  // （＝スクロールを実行する）にする。
+  const skipNextScrollRef = useRef(true);
   const resultNote =
     result?.rule?.warningMessage?.trim() || result?.expenseType?.note?.trim();
   // 「入力のポイント」（result.rule.message）は、Excel経由の結果には
@@ -242,6 +281,9 @@ export default function BotConversation({
 
     const firstQuestion = engine.reset();
 
+    // 「最初から」は会話全体を畳んで先頭質問だけに戻す操作であり、
+    // 会話の前進を追いかけるためのスクロールは不要（不要なスクロールを避ける）。
+    skipNextScrollRef.current = true;
     setSelectedAnswer("");
     setResult(null);
     setMessages([]);
@@ -254,6 +296,8 @@ export default function BotConversation({
     if (!engine) {
       return;
     }
+    // 会社切り替え・設定ロード直後の初期表示でもスクロールしない。
+    skipNextScrollRef.current = true;
     setCurrentQuestion(engine.getFirstQuestion());
     setSelectedAnswer("");
     setResult(null);
@@ -261,6 +305,32 @@ export default function BotConversation({
     setHistory([]);
     setReceiptData(null);
   }, [engine]);
+
+  // 回答によって次の質問または判定結果が表示されたときだけ、その要素の先頭が
+  // 見える位置まで自然にスクロールする。currentQuestion.id・resultの参照が
+  // 変わるたびに1回だけ実行され、同じ回答処理の中で複数回発火することはない
+  // （handleSelect等は1回の呼び出しでどちらか一方しか更新しないため）。
+  useEffect(() => {
+    if (skipNextScrollRef.current) {
+      skipNextScrollRef.current = false;
+      return;
+    }
+
+    const target = result ? resultAnchorRef.current : questionAnchorRef.current;
+
+    if (!target) {
+      return;
+    }
+
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    target.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
+  }, [currentQuestion?.id, result]);
 
   return (
     <main className="appShell">
@@ -333,7 +403,7 @@ export default function BotConversation({
       {status === "ready" && currentQuestion && (
       <section className="chatPanel" aria-label="Concur迷子防止Botの質問">
         {messages.map((message, index) => (
-          <ChatMessage key={index} speaker={message.speaker}>
+          <ChatMessage key={index} speaker={message.speaker} className="euHistoryEnter">
             {message.type === "question" ? (
               <h2>{message.text}</h2>
             ) : (
@@ -342,7 +412,11 @@ export default function BotConversation({
           </ChatMessage>
         ))}
         {!result && (
-          <ChatMessage>
+          <ChatMessage
+            key={currentQuestion.id}
+            className="euQuestionEnter"
+            containerRef={questionAnchorRef}
+          >
             <h2>{currentQuestion.text}</h2>
             <ChoiceButtons
               options={currentQuestion.options}
@@ -353,7 +427,7 @@ export default function BotConversation({
         )}
 
         {result && result.candidates && (
-          <ChatMessage>
+          <ChatMessage containerRef={resultAnchorRef} bare>
             <CandidateList
               candidates={result.candidates}
               policies={config.policies}
@@ -363,11 +437,11 @@ export default function BotConversation({
         )}
 
         {result && !result.candidates && (
-          <ChatMessage>
-            <div className="recommendationCard">
+          <ChatMessage containerRef={resultAnchorRef} bare>
+            <div className="recommendationCard euResultEnter">
               <div className="resultHero">
-                <p className="resultHeroLabel">
-                  <TagIcon />
+                <p className="resultHeroLabel euResultHeroLabel">
+                  <RecommendedBadgeIcon />
                   おすすめの経費タイプ
                 </p>
                 <div className="resultExpenseType">
@@ -375,8 +449,8 @@ export default function BotConversation({
                 </div>
                 {showPolicySection && (
                   <div className="resultPolicySection">
-                    <p className="resultHeroLabel">
-                      <TagIcon />
+                    <p className="resultHeroLabel euResultHeroLabel">
+                      <PolicyTagIcon />
                       ポリシー
                     </p>
                     <div className="resultExpenseType">
@@ -387,7 +461,7 @@ export default function BotConversation({
               </div>
 
               {inputPointMessage && (
-                <div className="resultAdviceBubble">
+                <div className="resultAdviceBubble euResultAdviceBubble">
                   <h3>
                     <span className="inputPointIcon" aria-hidden="true">
                       💡
@@ -398,36 +472,45 @@ export default function BotConversation({
                 </div>
               )}
 
-              <div className="receiptSummary">
-                <span className="receiptIcon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <path d="M6 3h12v18l-2-1.2-2 1.2-2-1.2-2 1.2-2-1.2L6 21V3Z" />
-                    <path d="M9 8h6" />
-                    <path d="M9 12h6" />
-                    <path d="M9 16h4" />
-                  </svg>
-                </span>
-                <span className="receiptLabel">領収書</span>
-                <span className={receiptStatus.className}>
-                  {receiptStatus.label}
-                </span>
+              {/* 領収書要否とOCRボタンを1つのまとまり（euReceiptSection）として
+                  扱う。以前は.receiptSummary自身がborder-top/bottomを持ち、
+                  OCRボタンはその外側に独立した行として続いていたため、
+                  「領収書欄」と「OCR導線」が別セクションに見えていた。
+                  ここでは.receiptSummary自体の共通スタイルは変更せず
+                  （管理画面FlowPreview.jsxも同じクラスを使うため）、
+                  end-user専用のラッパーでborder-bottomの位置だけ付け替える。 */}
+              <div className={`euReceiptSection${showReceiptOcr ? " euReceiptSectionHasOcr" : ""}`}>
+                <div className="receiptSummary">
+                  <span className="receiptIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M6 3h12v18l-2-1.2-2 1.2-2-1.2-2 1.2-2-1.2L6 21V3Z" />
+                      <path d="M9 8h6" />
+                      <path d="M9 12h6" />
+                      <path d="M9 16h4" />
+                    </svg>
+                  </span>
+                  <span className="receiptLabel">領収書</span>
+                  <span className={receiptStatus.className}>
+                    {receiptStatus.label}
+                  </span>
+                </div>
+
+                {showReceiptOcr && (
+                  <ReceiptOcrPanel
+                    key={result.expenseType?.id ?? result.rule?.id}
+                    onConfirm={setReceiptData}
+                    // セッション切れ時、ReceiptOcrPanel独自の画面遷移は持たせず、
+                    // 既存のログアウト導線（AppAuthGateのsignOut。ログアウトボタンや
+                    // eyebrowRowのmobileSignOutButtonと同じ関数）をそのまま使う。
+                    // signOut()後はonAuthStateChangeにより、AppAuthGateが自動的に
+                    // ログイン画面へ切り替える（ここから直接遷移させる処理は書かない）。
+                    onAuthExpired={onSignOut}
+                  />
+                )}
               </div>
 
-              {showReceiptOcr && (
-                <ReceiptOcrPanel
-                  key={result.expenseType?.id ?? result.rule?.id}
-                  onConfirm={setReceiptData}
-                  // セッション切れ時、ReceiptOcrPanel独自の画面遷移は持たせず、
-                  // 既存のログアウト導線（AppAuthGateのsignOut。ログアウトボタンや
-                  // eyebrowRowのmobileSignOutButtonと同じ関数）をそのまま使う。
-                  // signOut()後はonAuthStateChangeにより、AppAuthGateが自動的に
-                  // ログイン画面へ切り替える（ここから直接遷移させる処理は書かない）。
-                  onAuthExpired={onSignOut}
-                />
-              )}
-
               {resultNote && (
-                <div className="resultWarningCard">
+                <div className="resultWarningCard euResultWarningCard">
                   <h3>
                     <span className="warningIcon" aria-hidden="true">
                       <svg viewBox="0 0 24 24" focusable="false">
