@@ -4,6 +4,8 @@ import { buildConfigFromFlow } from "../flow/buildConfigFromFlow";
 import { computeAnswersToReachQuestion } from "../flow/computeAnswersToReachQuestion";
 import { renderTextWithLinks } from "../lib/linkifyText";
 import { shouldShowPolicySection } from "../lib/policyVisibility";
+import recommendedMedalIcon from "../assets/recommended-medal.png";
+import policyTagIcon from "../assets/policy-tag.png";
 
 // 既存App.jsxのチャットUIと同じCSSクラス（styles.css）を再利用し、
 // 見た目の一貫性を保ちながらApp.jsx自体は一切変更しない。
@@ -33,6 +35,26 @@ function TagIcon() {
         <path d="M20.6 13.1 13.1 20.6a2.1 2.1 0 0 1-3 0L3.8 14.3A2.8 2.8 0 0 1 3 12.4V5.8A2.8 2.8 0 0 1 5.8 3h6.6a2.8 2.8 0 0 1 1.9.8l6.3 6.3a2.1 2.1 0 0 1 0 3Z" />
         <path d="M8 8h.01" />
       </svg>
+    </span>
+  );
+}
+
+// 本番のチャットUI（BotConversation.jsx）で「おすすめの経費タイプ」「ポリシー」に
+// 使っているアイコンをここでも同じ画像で再現する。プレビューは本番の見え方を
+// 確認するための画面のため、TagIconのままにせず本番と揃える（見た目の
+// 一致が目的で、判定ロジック・表示条件には一切影響しない）。
+function RecommendedBadgeIcon() {
+  return (
+    <span className="resultLabelIcon euRecommendedMedalIcon" aria-hidden="true">
+      <img src={recommendedMedalIcon} alt="" />
+    </span>
+  );
+}
+
+function PolicyTagIcon() {
+  return (
+    <span className="resultLabelIcon euPolicyIcon" aria-hidden="true">
+      <img src={policyTagIcon} alt="" />
     </span>
   );
 }
@@ -77,9 +99,20 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
   // 常に防ぐ。
   const [flowError, setFlowError] = useState(null);
   const visitedQuestionIdsRef = useRef(new Set());
+  // 本番のチャットUI（BotConversation.jsx）と同じ自動スクロール処理。
+  // 「次の質問」または「判定結果」のどちらか一方しか同時に描画されないため、
+  // 1つのrefを使い回してよい。
+  const questionAnchorRef = useRef(null);
+  const resultAnchorRef = useRef(null);
+  // 初回表示・flow編集内容の反映直後・「最初から」やり直した直後は
+  // 自動スクロールしないためのフラグ。
+  const skipNextScrollRef = useRef(true);
 
   useEffect(() => {
     setFlowError(null);
+    // flowの編集内容が変わるたびにプレビューを最初からやり直すため、
+    // その初期表示ではスクロールしない。
+    skipNextScrollRef.current = true;
 
     if (startQuestionId && config.questions.some((question) => question.id === startQuestionId)) {
       const ancestorPath = computeAnswersToReachQuestion(flow, startQuestionId);
@@ -117,6 +150,39 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
     // config が変わるたびに（= flowの編集内容が変わるたびに）プレビューを最初からやり直す。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, flow, startQuestionId]);
+
+  // 回答によって次の質問または判定結果が表示されたときだけ、その要素の先頭が
+  // 見える位置まで自然にスクロールする（本番のBotConversation.jsxと同じ処理）。
+  useEffect(() => {
+    // currentQuestionはnullで初期化され、直後の初期化用useEffectで実際の質問が
+    // セットされるまで一時的にnullの状態でこのeffectも1度走る（本番のBotConversation.jsxは
+    // useStateの初期値で最初から質問をセットしているため、この中間状態が存在しない）。
+    // その中間状態でskipNextScrollRefのフラグを消費してしまわないよう、
+    // まだ質問が無い間は何もせず素通りする。
+    if (!currentQuestion) {
+      return;
+    }
+
+    if (skipNextScrollRef.current) {
+      skipNextScrollRef.current = false;
+      return;
+    }
+
+    const target = result ? resultAnchorRef.current : questionAnchorRef.current;
+
+    if (!target) {
+      return;
+    }
+
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    target.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
+  }, [currentQuestion?.id, result]);
 
   if (!currentQuestion) {
     return <p className="flowEmptyState">まだ質問が設定されていないため、プレビューできません。</p>;
@@ -173,6 +239,9 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
     if (onClearStart) {
       onClearStart();
     }
+    // 「最初から」は会話全体を畳んで先頭質問だけに戻す操作であり、
+    // 会話の前進を追いかけるためのスクロールは不要（不要なスクロールを避ける）。
+    skipNextScrollRef.current = true;
     const firstQuestion = engine.reset();
     visitedQuestionIdsRef.current = new Set(firstQuestion ? [firstQuestion.id] : []);
     setCurrentQuestion(firstQuestion);
@@ -229,7 +298,7 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
         )}
 
         {!result && !flowError && (
-          <div className="messageRow bot">
+          <div className="messageRow bot" ref={questionAnchorRef}>
             <div className="avatar">Bot</div>
             <div className="messageBubble">
               <h2>{currentQuestion.text}</h2>
@@ -250,78 +319,74 @@ export default function FlowPreview({ flow, baseData, startQuestionId, onClearSt
         )}
 
         {result && result.candidates && (
-          <div className="messageRow bot">
+          <div className="messageRow bot resultMessageRow" ref={resultAnchorRef}>
             <div className="avatar">Bot</div>
-            <div className="messageBubble">
-              <div className="candidateList">
-                <h3 className="candidateListHeading">候補となる経費タイプ</h3>
-                {result.candidates.map((candidate) => (
-                  <div className="candidateCard" key={candidate.rule.id}>
-                    <h4 className="candidateName">{candidate.expenseType?.name}</h4>
-                    {candidate.rule.message && (
-                      <p className="candidateMessage">{renderTextWithLinks(candidate.rule.message)}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
+            <div className="candidateList">
+              <h3 className="candidateListHeading">候補となる経費タイプ</h3>
+              {result.candidates.map((candidate) => (
+                <div className="candidateCard" key={candidate.rule.id}>
+                  <h4 className="candidateName">{candidate.expenseType?.name}</h4>
+                  {candidate.rule.message && (
+                    <p className="candidateMessage">{renderTextWithLinks(candidate.rule.message)}</p>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
 
         {result && !result.candidates && (
-          <div className="messageRow bot">
+          <div className="messageRow bot resultMessageRow" ref={resultAnchorRef}>
             <div className="avatar">Bot</div>
-            <div className="messageBubble">
-              <div className="recommendationCard">
-                <div className="resultHero">
-                  <p className="resultHeroLabel">
-                    <TagIcon />
-                    おすすめの経費タイプ
-                  </p>
-                  <div className="resultExpenseType">
-                    <h2>{result.expenseType?.name}</h2>
-                  </div>
-                  {showPolicySection && (
-                    <div className="resultPolicySection">
-                      <p className="resultHeroLabel">
-                        <TagIcon />
-                        ポリシー
-                      </p>
-                      <div className="resultExpenseType">
-                        <h2>{policyName}</h2>
-                      </div>
+            <div className="recommendationCard">
+              <div className="resultHero">
+                <p className="resultHeroLabel euResultHeroLabel">
+                  <RecommendedBadgeIcon />
+                  おすすめの経費タイプ
+                </p>
+                <div className="resultExpenseType">
+                  <h2>{result.expenseType?.name}</h2>
+                </div>
+                {showPolicySection && (
+                  <div className="resultPolicySection">
+                    <p className="resultHeroLabel euResultHeroLabel">
+                      <PolicyTagIcon />
+                      ポリシー
+                    </p>
+                    <div className="resultExpenseType">
+                      <h2>{policyName}</h2>
                     </div>
-                  )}
-                </div>
-
-                {result.rule?.message && (
-                  <div className="resultAdviceBubble">
-                    <h3>
-                      <span className="inputPointIcon" aria-hidden="true">
-                        💡
-                      </span>
-                      入力のポイント
-                    </h3>
-                    <p>{renderTextWithLinks(result.rule.message)}</p>
-                  </div>
-                )}
-
-                <div className="receiptSummary">
-                  <ReceiptIcon />
-                  <span className="receiptLabel">領収書</span>
-                  <span className={receiptStatus.className}>{receiptStatus.label}</span>
-                </div>
-
-                {resultNote && (
-                  <div className="resultWarningCard">
-                    <h3>
-                      <WarningIcon />
-                      注意事項
-                    </h3>
-                    <p>{renderTextWithLinks(resultNote)}</p>
                   </div>
                 )}
               </div>
+
+              {result.rule?.message && (
+                <div className="resultAdviceBubble euResultAdviceBubble">
+                  <h3>
+                    <span className="inputPointIcon" aria-hidden="true">
+                      💡
+                    </span>
+                    入力のポイント
+                  </h3>
+                  <p>{renderTextWithLinks(result.rule.message)}</p>
+                </div>
+              )}
+
+              <div className="receiptSummary">
+                <ReceiptIcon />
+                <span className="receiptLabel">領収書</span>
+                <span className={receiptStatus.className}>{receiptStatus.label}</span>
+              </div>
+
+              {resultNote && (
+                <div className="resultWarningCard euResultWarningCard">
+                  <h3>
+                    <WarningIcon />
+                    注意事項
+                  </h3>
+                  <p>{renderTextWithLinks(resultNote)}</p>
+                </div>
+              )}
             </div>
           </div>
         )}
