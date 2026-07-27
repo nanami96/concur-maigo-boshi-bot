@@ -2190,15 +2190,18 @@ button {
 }
 
 .companyManageMenuLabel {
-  margin-left: 10px;
   margin-right: 12px;
 }
 
+/* .companySelectWrap::after（会社選択プルダウンの矢印）と同じ #475569 を
+   明示指定する。トリガー本体の文字色（#243047、ラベルにそのまま残る）を
+   そのまま継承すると矢印だけ濃く太く見えてしまい、隣の会社選択プルダウンの
+   矢印より大きく見える原因になっていたための調整。 */
 .companyManageMenuChevron {
   width: 8px;
   height: 8px;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
+  border-right: 2px solid #475569;
+  border-bottom: 2px solid #475569;
   transform: rotate(45deg);
 }
 

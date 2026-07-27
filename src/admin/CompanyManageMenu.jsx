@@ -77,7 +77,6 @@ export default function CompanyManageMenu({ items }) {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span className="companyManageMenuIcon" aria-hidden="true">⚙</span>
         <span className="companyManageMenuLabel">会社を管理</span>
         <span className="companyManageMenuChevron" aria-hidden="true" />
       </button>
