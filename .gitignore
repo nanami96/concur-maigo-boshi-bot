@@ -83,6 +83,17 @@ web_modules/
 # 管理用スクリプトからのみ読む想定。フロントエンド/Viteからは絶対に読み込まない）。
 .env.admin.local
 
+# Supabase CLI（`supabase link`等）がローカルに生成する作業ファイル。
+# 実際のプロジェクトref・組織ID・pooler接続ホスト名等、開発者のマシンに
+# 紐づく情報を含むため、他の開発者環境でも確実に除外されるようここへ明示する
+# （汎用的な.tempパターン頼みにしない）。
+supabase/.temp/
+
+# Claude Codeがユーザーごとに生成するローカル専用設定（許可した権限の
+# 個人的な調整等）。settings.json（チーム共有用）とは別物で、コミット対象に
+# したことはない想定だが、他の開発者環境でも確実に除外されるようここへ明示する。
+.claude/settings.local.json
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
