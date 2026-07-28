@@ -1424,6 +1424,66 @@ button {
   flex: 1 1 100%;
 }
 
+/* Concur登録前確認（src/ConcurRegistrationPanel.jsx、表示専用）。
+   見た目は.receiptOcrCard等（上記）と揃えているが、無関係な画面への影響を
+   避けるため既存クラスは直接使い回さず、独立したクラス名にしている
+   （このプロジェクトのeuXxxスコープクラス等と同じ、既存クラスを直接
+   編集・共有しない方針）。 */
+.concurRegistrationSection {
+  margin: 16px 18px 0;
+}
+
+.concurRegistrationCard {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dce4ef;
+  border-radius: 10px;
+  background: #fff;
+  padding: 16px;
+}
+
+.concurRegistrationHeading {
+  margin: 0;
+  color: #172033;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.concurRegistrationHint {
+  margin: 0;
+  color: #5a6b85;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.concurRegistrationFieldGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin: 0;
+}
+
+.concurRegistrationField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.concurRegistrationFieldLabel {
+  margin: 0;
+  color: #263244;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.concurRegistrationFieldValue {
+  margin: 0;
+  color: #172033;
+  font-size: 14px;
+  word-break: break-word;
+}
+
 .resultWarningCard {
   margin: 20px 18px 18px;
   padding: 16px 18px 18px;

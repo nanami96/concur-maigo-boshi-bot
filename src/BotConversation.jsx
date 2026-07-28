@@ -4,8 +4,19 @@ import { renderTextWithLinks } from "./lib/linkifyText";
 import { shouldShowPolicySection } from "./lib/policyVisibility";
 import { shouldShowReceiptOcr } from "./lib/receiptOcrVisibility";
 import ReceiptOcrPanel from "./ReceiptOcrPanel";
+import ConcurRegistrationPanel from "./ConcurRegistrationPanel";
 import recommendedMedalIcon from "./assets/recommended-medal.png";
 import policyTagIcon from "./assets/policy-tag.png";
+
+// 実際のConcur Expense Type Codeはまだ未確定で、本番のマッピングデータも
+// まだ存在しない（Concur側の接続方式・認証確認待ち。src/lib/
+// concurExpenseTypeMapping.js参照）。空配列を渡した場合、
+// ConcurRegistrationPanel.jsxは「マッピングが見つからない」という扱いになり、
+// 登録前確認カード自体を表示しない（buildConcurRegistrationData()が
+// エラーを返すため）。マッピングデータの実際の保存場所・取得方法が決まり
+// 次第、ここをconfig経由の値などへ差し替える想定（現時点ではSupabase
+// テーブル新設・本番データ投入のいずれも行っていない）。
+const CONCUR_EXPENSE_TYPE_MAPPINGS = [];
 
 // 質問フローのチャットUI本体。「どの会社の設定を、どうやって取得したか」は
 // 一切知らず、確定済みのconfig（config.json互換形式）とstatus（読み込み状態）を
@@ -524,6 +535,20 @@ export default function BotConversation({
                   <p>{renderTextWithLinks(resultNote)}</p>
                 </div>
               )}
+
+              {/* 領収書要否に関わらず（領収書不要の経費タイプでもOCRを経由しない
+                  分岐でも）到達できるよう、showReceiptOcr等の条件には依存させない。
+                  必要なデータが揃っていない場合はConcurRegistrationPanel.jsx自身が
+                  何も描画しない（null）ため、ここでは常にレンダリングを試みるだけで
+                  よい。 */}
+              <ConcurRegistrationPanel
+                company={config?.company}
+                result={result}
+                receiptData={receiptData}
+                mappings={CONCUR_EXPENSE_TYPE_MAPPINGS}
+                expenseTypeName={result.expenseType?.name}
+                policyName={showPolicySection ? policyName : null}
+              />
             </div>
           </ChatMessage>
         )}
