@@ -6,12 +6,21 @@ import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
 // config.json互換形式（buildConfigFromFlowの出力）への変換はここでは行わない。
 // あれは「公開」フェーズ専用の別の変換であり、下書きはあくまで編集しやすい
 // 正規のデータ（company/policies/expenseTypes/flowをそのまま）として保存する。
+//
+// concur_expense_type_mappings列は、この列がまだ存在しない古いSupabaseプロジェクト
+// （schema.sqlのPhase 11未適用）やnull値に対しても安全に動作するよう、配列でない
+// 場合は必ず空配列へ正規化する（既存会社の挙動を一切変えない）。
+function normalizeConcurExpenseTypeMappings(concurExpenseTypeMappings) {
+  return Array.isArray(concurExpenseTypeMappings) ? concurExpenseTypeMappings : [];
+}
+
 export function mapDraftRowToWorkspaceState(row) {
   return {
     company: row.company_settings,
     policies: row.policies,
     expenseTypes: row.expense_types,
     flow: row.flow,
+    concurExpenseTypeMappings: normalizeConcurExpenseTypeMappings(row.concur_expense_type_mappings),
   };
 }
 
@@ -21,6 +30,7 @@ export function mapWorkspaceStateToDraftRow(state) {
     policies: state.policies,
     expense_types: state.expenseTypes,
     flow: state.flow,
+    concur_expense_type_mappings: normalizeConcurExpenseTypeMappings(state.concurExpenseTypeMappings),
   };
 }
 

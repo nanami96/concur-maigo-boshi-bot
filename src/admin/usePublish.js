@@ -12,6 +12,20 @@ import {
   shouldAbortPublishAfterSaveAttempt,
 } from "./publishState";
 
+// editorState（useWorkspaceEditorの現在state）から、公開用のconfig_snapshotを
+// 組み立てる。DOM描画テスト基盤がこのプロジェクトに無いため、usePublish自体
+// （Reactフック）は直接ユニットテストできないが、この純粋関数だけを切り出すことで
+// 「workspace state → config_snapshot」の変換内容（concurExpenseTypeMappingsが
+// 正しく含まれることを含む）を検証できるようにする。
+export function buildConfigSnapshotForPublish(editorState) {
+  return buildConfigFromFlow(editorState.flow, {
+    company: editorState.company,
+    policies: editorState.policies,
+    expenseTypes: editorState.expenseTypes,
+    concurExpenseTypeMappings: editorState.concurExpenseTypeMappings,
+  });
+}
+
 // 下書き(useWorkspaceEditorの現在state)を正式公開する責務を持つフック。
 //
 // ・設定チェック（runConfigChecks）をリアルタイムに実行し、Errorが1件でもあれば
@@ -86,11 +100,7 @@ export function usePublish({ companyDbId, editorState, isDraftDirty, saveNow }) 
       }
     }
 
-    const configSnapshot = buildConfigFromFlow(editorState.flow, {
-      company: editorState.company,
-      policies: editorState.policies,
-      expenseTypes: editorState.expenseTypes,
-    });
+    const configSnapshot = buildConfigSnapshotForPublish(editorState);
 
     const { row, error } = await publishDraft({ companyDbId, configSnapshot });
 

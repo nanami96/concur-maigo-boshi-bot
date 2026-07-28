@@ -518,12 +518,17 @@ begin
     raise exception 'no draft found for this company' using errcode = 'P0002';
   end if;
 
+  -- Phase 11で追加：concur_expense_type_mappings列もdraft_configsからそのまま
+  -- コピーする（他の列と全く同じ「公開のたびに複製する」方式。config_snapshotの
+  -- 計算＝config.concur.expenseTypeMappingsへの反映は、他のconfig_snapshot項目と
+  -- 同様にアプリ側のbuildConfigFromFlow()が担当し、この関数はそれをそのまま受け取るだけ）。
   insert into published_versions (
-    company_id, company_settings, policies, expense_types, flow, config_snapshot, published_by
+    company_id, company_settings, policies, expense_types, flow, concur_expense_type_mappings,
+    config_snapshot, published_by
   )
   values (
     p_company_id, v_draft.company_settings, v_draft.policies, v_draft.expense_types, v_draft.flow,
-    p_config_snapshot, auth.uid()
+    v_draft.concur_expense_type_mappings, p_config_snapshot, auth.uid()
   )
   returning * into v_new_version;
 
@@ -1410,7 +1415,45 @@ revoke all on function delete_platform_company(uuid) from public;
 grant execute on function delete_platform_company(uuid) to authenticated;
 
 -- ============================================================================
--- ここまででPhase 9・10のスキーマも完成です。
+-- 11. Phase 11: Concur Expense Type mappingの保存・公開基盤
+-- ============================================================================
+--
+-- 目的：
+--   会社ごとのConcur Expense Type mapping（会社＋ポリシー＋Bot側経費タイプID→
+--   Concur側の識別子、という対応表）を、既存のdraft_configs/published_versionsと
+--   全く同じ「会社ごと1ドキュメントのJSON-blob」方式で保存できるようにする
+--   （設計調査・比較の詳細は完了報告を参照。正規化された専用mappingテーブルは
+--   意図的に作らない）。
+--
+--   今回のPhaseはあくまで保存・公開の「経路」を完成させるだけで、これを編集する
+--   管理画面UIはまだ無い（後続Commitで対応）。そのため実運用では、この列は
+--   当面ずっと空配列'[]'::jsonbのままになる。
+--
+-- 既存会社への影響：
+--   invite_code_hash（Phase 7）と同じ理由・同じ方式で、create table本体を
+--   書き換えず alter table ... add column if not exists で追加する
+--   （新規プロジェクトでも既存プロジェクトでも、このファイルを実行すれば
+--   同じ状態になる）。デフォルト値'[]'::jsonbにより、既存の全てのdraft_configs行・
+--   published_versions行は、この列が追加された時点で自動的に空配列を持つ
+--   （NOT NULLだが、既存行はPostgresがデフォルト値で埋めるため失敗しない）。
+--   アプリ側（buildConfigFromFlow()・draftConfigRepository.js）もmapping未設定を
+--   「空配列」として安全に扱う設計のため、Concurを導入していない会社・
+--   このPhase適用前に保存された下書きの挙動は一切変化しない。
+alter table draft_configs
+  add column if not exists concur_expense_type_mappings jsonb not null default '[]'::jsonb;
+alter table published_versions
+  add column if not exists concur_expense_type_mappings jsonb not null default '[]'::jsonb;
+
+comment on column draft_configs.concur_expense_type_mappings is
+  'Concur Expense Type mapping（{companyId, policyId, botExpenseTypeId, concurExpenseTypeId}の'
+  '配列）の下書き。編集UIはまだ無く、現状は常に[]で保存される想定（Phase 11完了報告参照）。';
+comment on column published_versions.concur_expense_type_mappings is
+  '公開時点のConcur Expense Type mapping（publish_company_draft()がdraft_configsから'
+  'そのままコピーする）。config_snapshot.concur.expenseTypeMappingsと同じ内容を、'
+  '他の列（policies・expense_types等）と同様に公開履歴として保持する。';
+
+-- ============================================================================
+-- ここまででPhase 9・10・11のスキーマも完成です。
 --
 -- 最初のplatform_admin登録について：
 --   platform_adminsへのINSERTは、company_membersの最初のadmin登録と同様、
@@ -1433,6 +1476,8 @@ grant execute on function delete_platform_company(uuid) to authenticated;
 --     過去のpublished_versions.idへ切り替えるだけで実現できる構造にはなっている）
 --   ・複数人同時編集の考慮
 --   ・get_public_config / list_public_companiesの呼び出し頻度制限・キャッシュ
+--   ・Concur Expense Type mapping（Phase 11）を管理画面から編集するCRUD UI、
+--     Excelからの取り込み、実際のConcur API送信（いずれも後続Commitでスコープ外）
 --
 -- 「下書き変更履歴（draft_config_versions・save_draft_with_history・
 -- restore_draft_version）」は一度Phase 5として実装したが、オーバースペックと

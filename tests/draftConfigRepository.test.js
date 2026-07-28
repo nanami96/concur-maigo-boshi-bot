@@ -52,13 +52,38 @@ describe("mapDraftRowToWorkspaceState / mapWorkspaceStateToDraftRow", () => {
       policies: [{ policy_id: "p1" }],
       expense_types: [{ expense_type_id: "e1" }],
       flow: { rootQuestionId: "q1", questions: {}, options: {} },
+      concur_expense_type_mappings: [
+        { companyId: "sample-company", policyId: "p1", botExpenseTypeId: "e1", concurExpenseTypeId: "TEST_E1" },
+      ],
     };
     expect(mapDraftRowToWorkspaceState(row)).toEqual({
       company: row.company_settings,
       policies: row.policies,
       expenseTypes: row.expense_types,
       flow: row.flow,
+      concurExpenseTypeMappings: row.concur_expense_type_mappings,
     });
+  });
+
+  it("concur_expense_type_mappings列が無い古いdraft（このPhase追加前）でも空配列になる", () => {
+    const row = {
+      company_settings: { company_id: "sample-company" },
+      policies: [],
+      expense_types: [],
+      flow: { rootQuestionId: null, questions: {}, options: {} },
+    };
+    expect(mapDraftRowToWorkspaceState(row).concurExpenseTypeMappings).toEqual([]);
+  });
+
+  it("concur_expense_type_mappingsがnull・配列以外の不正な値でも空配列になる（安全側）", () => {
+    const baseRow = {
+      company_settings: { company_id: "sample-company" },
+      policies: [],
+      expense_types: [],
+      flow: { rootQuestionId: null, questions: {}, options: {} },
+    };
+    expect(mapDraftRowToWorkspaceState({ ...baseRow, concur_expense_type_mappings: null }).concurExpenseTypeMappings).toEqual([]);
+    expect(mapDraftRowToWorkspaceState({ ...baseRow, concur_expense_type_mappings: "not-an-array" }).concurExpenseTypeMappings).toEqual([]);
   });
 
   it("編集state(camelCase)をDBの行(snake_case)へ変換する（逆変換）", () => {
@@ -67,13 +92,30 @@ describe("mapDraftRowToWorkspaceState / mapWorkspaceStateToDraftRow", () => {
       policies: [],
       expenseTypes: [],
       flow: { rootQuestionId: null, questions: {}, options: {} },
+      concurExpenseTypeMappings: [
+        { companyId: "sample-company", policyId: "p1", botExpenseTypeId: "e1", concurExpenseTypeId: "TEST_E1" },
+      ],
     };
     expect(mapWorkspaceStateToDraftRow(state)).toEqual({
       company_settings: state.company,
       policies: state.policies,
       expense_types: state.expenseTypes,
       flow: state.flow,
+      concur_expense_type_mappings: state.concurExpenseTypeMappings,
     });
+  });
+
+  it("concurExpenseTypeMappingsが無い・不正な編集stateでも空配列で保存する", () => {
+    const baseState = {
+      company: { company_id: "sample-company" },
+      policies: [],
+      expenseTypes: [],
+      flow: { rootQuestionId: null, questions: {}, options: {} },
+    };
+    expect(mapWorkspaceStateToDraftRow(baseState).concur_expense_type_mappings).toEqual([]);
+    expect(
+      mapWorkspaceStateToDraftRow({ ...baseState, concurExpenseTypeMappings: null }).concur_expense_type_mappings,
+    ).toEqual([]);
   });
 });
 
