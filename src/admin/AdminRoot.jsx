@@ -396,6 +396,7 @@ function CompanyEditor({ companyId, isPlatformAdmin, onPersistenceChange, jumpTo
       policies: config.policies || [],
       expenseTypes: config.expenseTypes || [],
       flow: buildFlowFromConfig(config).flow,
+      concurExpenseTypeMappings: config.concur?.expenseTypeMappings || [],
     };
   }, [config]);
 
@@ -489,6 +490,7 @@ function CompanyEditor({ companyId, isPlatformAdmin, onPersistenceChange, jumpTo
               policies: bundle.policies || [],
               expenseTypes: bundle.expenseTypes || [],
               flow: bundle.flow,
+              concurExpenseTypeMappings: bundle.concurExpenseTypeMappings || [],
             },
             initialSection: options.initialSection,
             initialSettingsTab: options.initialSettingsTab,
@@ -835,6 +837,7 @@ export default function AdminRoot() {
         policies: bundle.policies || [],
         expenseTypes: bundle.expenseTypes || [],
         flow: bundle.flow,
+        concurExpenseTypeMappings: bundle.concurExpenseTypeMappings || [],
       },
       initialSection: options.initialSection,
       initialSettingsTab: options.initialSettingsTab,

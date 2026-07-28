@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapBotExpenseTypeToConcur } from "../src/lib/concurExpenseTypeMapping.js";
+import { mapBotExpenseTypeToConcur, mappingMatchesKey } from "../src/lib/concurExpenseTypeMapping.js";
 
 function buildMappings(overrides = []) {
   return [
@@ -150,5 +150,32 @@ describe("mapBotExpenseTypeToConcur", () => {
         mappings: buildMappings(),
       }).error.type,
     ).toBe("policy_unknown");
+  });
+});
+
+describe("mappingMatchesKey", () => {
+  it("companyId・policyId・botExpenseTypeIdが全て一致すればtrue", () => {
+    const entry = { companyId: "company-a", policyId: "policy-x", botExpenseTypeId: "taxi", concurExpenseTypeId: "X" };
+    expect(
+      mappingMatchesKey(entry, { companyId: "company-a", policyId: "policy-x", botExpenseTypeId: "taxi" }),
+    ).toBe(true);
+  });
+
+  it("いずれか1つでも異なればfalse", () => {
+    const entry = { companyId: "company-a", policyId: "policy-x", botExpenseTypeId: "taxi", concurExpenseTypeId: "X" };
+    expect(
+      mappingMatchesKey(entry, { companyId: "company-b", policyId: "policy-x", botExpenseTypeId: "taxi" }),
+    ).toBe(false);
+    expect(
+      mappingMatchesKey(entry, { companyId: "company-a", policyId: "policy-y", botExpenseTypeId: "taxi" }),
+    ).toBe(false);
+    expect(
+      mappingMatchesKey(entry, { companyId: "company-a", policyId: "policy-x", botExpenseTypeId: "hotel" }),
+    ).toBe(false);
+  });
+
+  it("entry・keyがnull/undefinedでも例外にならずfalseになる", () => {
+    expect(mappingMatchesKey(null, { companyId: "a", policyId: "b", botExpenseTypeId: "c" })).toBe(false);
+    expect(mappingMatchesKey({ companyId: "a" }, undefined)).toBe(false);
   });
 });

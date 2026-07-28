@@ -20,6 +20,7 @@ export default function InitialSetupScreen({ onSetupComplete }) {
         policies: [],
         expenseTypes: [],
         flow: createEmptyFlow(),
+        concurExpenseTypeMappings: [],
       },
       { initialSection: "settings", initialSettingsTab: "policies" },
     );

@@ -20,11 +20,31 @@ export function detectCompanyIdMismatch({ parsedCompanyId, currentCompanyId }) {
 // 現在編集中の会社の下書き（useWorkspaceEditorのstate）としてそのまま
 // 使える形に変換する。company_idだけは常に現在の会社のものへ強制し、
 // Excel側の値では絶対に上書きしない。
-export function buildWorkspaceStateFromImport({ bundle, currentCompanyId }) {
+//
+// concurExpenseTypeMappings（07_Concurマッピング、任意シート）だけは、
+// policies/expenseTypes/flowとは異なる扱いをする。01_基本設定〜05_選択肢は
+// parseInitialSetupExcel.js側で必須シートとして扱われているため「シートが
+// 無い」という状態はそもそも発生せず、常に全体を置き換えて問題ない。しかし
+// 07_Concurマッピングは任意シートのため、「このシートを含めずに再インポート
+// した」場合にまで既存の下書きに保存済みのmappingを空へ消してしまうと、
+// Concur連携設定だけを触るつもりの無い通常のExcel再インポート（質問フローの
+// 修正等）のたびに、無関係なConcurマッピングが失われる事故になりかねない。
+// そのため、
+//   ・シートが無い（hasConcurMappingSheet=false） … 現在の下書きの値を維持する
+//   ・シートがある（空でも） … Excelの内容（空なら空配列）へ置き換える
+// という、「シートの有無＝そのシートを編集する意思の有無」という考え方で扱う。
+export function buildWorkspaceStateFromImport({
+  bundle,
+  currentCompanyId,
+  currentConcurExpenseTypeMappings = [],
+}) {
   return {
     company: { ...bundle.company, company_id: currentCompanyId },
     policies: bundle.policies || [],
     expenseTypes: bundle.expenseTypes || [],
     flow: bundle.flow,
+    concurExpenseTypeMappings: bundle.hasConcurMappingSheet
+      ? bundle.concurExpenseTypeMappings || []
+      : currentConcurExpenseTypeMappings || [],
   };
 }

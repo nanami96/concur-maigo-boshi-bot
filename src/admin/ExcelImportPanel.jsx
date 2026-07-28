@@ -102,6 +102,8 @@ export default function ExcelImportPanel({
               policies: parseResult.policies,
               expenseTypes: parseResult.expenseTypes,
               flow: parseResult.flow,
+              concurExpenseTypeMappings: parseResult.concurExpenseTypeMappings,
+              hasConcurMappingSheet: parseResult.hasConcurMappingSheet,
             })
           }
         />

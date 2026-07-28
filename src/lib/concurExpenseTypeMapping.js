@@ -37,6 +37,27 @@
 //   このコメントに残しておく。
 
 /**
+ * mapping1件が、指定された会社・ポリシー・Bot側経費タイプIDの組み合わせ
+ * （＝mappingの一意キー）と一致するかどうか。
+ *
+ * この関数は、実行時の解決（mapBotExpenseTypeToConcur、単一のbotExpenseTypeIdを
+ * 問い合わせる）と、初期設定Excelインポート時の重複検出
+ * （src/flow/parseInitialSetupExcel.js、mapping配列全体を走査して同じキーの
+ * 行が複数無いかを確認する）の両方から呼ばれる、「何をもって同じmappingと
+ * みなすか」の唯一の定義。判定ロジックを2箇所に別々実装しない。
+ *
+ * @param {{ companyId: string, policyId: string, botExpenseTypeId: string }} entry
+ * @param {{ companyId: string, policyId: string, botExpenseTypeId: string }} key
+ */
+export function mappingMatchesKey(entry, key) {
+  return (
+    entry?.companyId === key?.companyId &&
+    entry?.policyId === key?.policyId &&
+    entry?.botExpenseTypeId === key?.botExpenseTypeId
+  );
+}
+
+/**
  * 迷子防止Bot内部の経費タイプIDを、指定された会社・ポリシーの組み合わせにおける
  * Concur側の経費タイプ識別子（仮称：concurExpenseTypeId）へ変換する。
  *
@@ -86,7 +107,9 @@ export function mapBotExpenseTypeToConcur({ botExpenseTypeId, companyId, policyI
     };
   }
 
-  const matches = policyEntries.filter((entry) => entry?.botExpenseTypeId === botExpenseTypeId);
+  const matches = policyEntries.filter((entry) =>
+    mappingMatchesKey(entry, { companyId, policyId, botExpenseTypeId }),
+  );
 
   if (matches.length === 0) {
     return {

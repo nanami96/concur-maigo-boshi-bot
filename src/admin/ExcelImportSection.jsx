@@ -101,7 +101,13 @@ export default function ExcelImportSection({ editor, persistence, companyId }) {
   }
 
   function handleImportConfirm(bundle) {
-    editor.loadState(buildWorkspaceStateFromImport({ bundle, currentCompanyId: companyId }));
+    editor.loadState(
+      buildWorkspaceStateFromImport({
+        bundle,
+        currentCompanyId: companyId,
+        currentConcurExpenseTypeMappings: editor.concurExpenseTypeMappings,
+      }),
+    );
     setPhase("done");
   }
 
