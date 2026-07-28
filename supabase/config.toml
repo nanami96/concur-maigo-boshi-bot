@@ -28,3 +28,23 @@ project_id = "your-project-ref"
 # ここで明示的にtrueとしている。
 [functions.ocr-receipt]
 verify_jwt = true
+
+# create-concur-quick-expense：現時点ではConcur APIへの実通信・認証情報の
+# 取り扱いを一切行わない、スタブ応答のみのEdge Functionだが、Supabase
+# ユーザー認証はocr-receiptと同様に最初から必須にしている（実データを扱う
+# ようになってから追加するのではなく、公開時点から認証なしでは呼び出せない
+# 状態にするため）。
+#
+# ocr-receiptと同じ理由でtrueを明示する：関数内部（index.ts・
+# resolveQuickExpenseAuthorization.js）でもauth.getUser()による独立した
+# 二重チェックを行っているため、これを無効化しても最終的な安全性は失われない
+# 設計だが、暗黙のデフォルト（現行のSupabase CLIのscaffold結果はfalse）に
+# 依存しない・trueであることを保証するため、ここで明示的にtrueとしている。
+#
+# 既存のフロント（src/data/concurApi.jsのcreateQuickExpense()）は、呼び出し前に
+# ensureValidSession()でセッションを確認したうえでsupabase.functions.invoke()を
+# 使っており、ログイン中セッションのアクセストークンが自動的にAuthorization
+# ヘッダーへ付与される（ocrReceiptRepository.js・ocr-receiptと同じ仕組み）ため、
+# verify_jwt = true にしても既存の呼び出し方式との不整合は無い。
+[functions.create-concur-quick-expense]
+verify_jwt = true
