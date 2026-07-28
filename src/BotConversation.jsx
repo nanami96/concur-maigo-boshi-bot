@@ -4,19 +4,11 @@ import { renderTextWithLinks } from "./lib/linkifyText";
 import { shouldShowPolicySection } from "./lib/policyVisibility";
 import { shouldShowReceiptOcr } from "./lib/receiptOcrVisibility";
 import ReceiptOcrPanel from "./ReceiptOcrPanel";
+import ManualExpenseEntryPanel from "./ManualExpenseEntryPanel";
 import ConcurRegistrationPanel from "./ConcurRegistrationPanel";
+import { resolveConcurExpenseTypeMappings, resolveDefaultCurrencyCode } from "./lib/concurRegistrationConfig";
 import recommendedMedalIcon from "./assets/recommended-medal.png";
 import policyTagIcon from "./assets/policy-tag.png";
-
-// 実際のConcur Expense Type Codeはまだ未確定で、本番のマッピングデータも
-// まだ存在しない（Concur側の接続方式・認証確認待ち。src/lib/
-// concurExpenseTypeMapping.js参照）。空配列を渡した場合、
-// ConcurRegistrationPanel.jsxは「マッピングが見つからない」という扱いになり、
-// 登録前確認カード自体を表示しない（buildConcurRegistrationData()が
-// エラーを返すため）。マッピングデータの実際の保存場所・取得方法が決まり
-// 次第、ここをconfig経由の値などへ差し替える想定（現時点ではSupabase
-// テーブル新設・本番データ投入のいずれも行っていない）。
-const CONCUR_EXPENSE_TYPE_MAPPINGS = [];
 
 // 質問フローのチャットUI本体。「どの会社の設定を、どうやって取得したか」は
 // 一切知らず、確定済みのconfig（config.json互換形式）とstatus（読み込み状態）を
@@ -215,6 +207,21 @@ export default function BotConversation({
     enableReceiptOcr,
     receiptRequired: result?.expenseType?.receiptRequired,
   });
+  // 領収書「不要」（receiptRequired === falseの場合だけ、null/undefined＝
+  // 未設定は含めない）の経費タイプでは、OCRの代わりに利用日・金額等を
+  // 手入力できるようにする。showReceiptOcrの否定ではなく、receiptRequiredの
+  // 値を直接見て判定する（showReceiptOcrはenableReceiptOcr、つまり
+  // ローカル/デモモードかどうかにも左右されるため、それをそのまま使うと
+  // 「領収書必須なのにOCRが無効な環境だから手入力を出す」という、
+  // 領収書必須の経費タイプで手入力を許してしまう意図しない抜け道になる）。
+  // showReceiptOcrとは常に排他（片方がtrueならもう片方は必ずfalse）になる。
+  const showManualExpenseEntry = result?.expenseType?.receiptRequired === false;
+  // Concur Expense Type Codeのマッピング・登録前確認データの生成に必要な
+  // 設定値。本番データはまだ存在しないため、現時点ではどの会社でも空配列・
+  // "JPY"が返るだけで、既存の判定結果表示には一切影響しない
+  // （src/lib/concurRegistrationConfig.js参照）。
+  const concurExpenseTypeMappings = resolveConcurExpenseTypeMappings(config);
+  const concurDefaultCurrencyCode = resolveDefaultCurrencyCode(config);
 
   function handleSelect(answer) {
     if (!engine || !currentQuestion) {
@@ -490,7 +497,11 @@ export default function BotConversation({
                   ここでは.receiptSummary自体の共通スタイルは変更せず
                   （管理画面FlowPreview.jsxも同じクラスを使うため）、
                   end-user専用のラッパーでborder-bottomの位置だけ付け替える。 */}
-              <div className={`euReceiptSection${showReceiptOcr ? " euReceiptSectionHasOcr" : ""}`}>
+              <div
+                className={`euReceiptSection${
+                  showReceiptOcr || showManualExpenseEntry ? " euReceiptSectionHasOcr" : ""
+                }`}
+              >
                 <div className="receiptSummary">
                   <span className="receiptIcon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" focusable="false">
@@ -516,6 +527,14 @@ export default function BotConversation({
                     // signOut()後はonAuthStateChangeにより、AppAuthGateが自動的に
                     // ログイン画面へ切り替える（ここから直接遷移させる処理は書かない）。
                     onAuthExpired={onSignOut}
+                  />
+                )}
+
+                {showManualExpenseEntry && (
+                  <ManualExpenseEntryPanel
+                    key={result.expenseType?.id ?? result.rule?.id}
+                    onConfirm={setReceiptData}
+                    defaultCurrencyCode={concurDefaultCurrencyCode}
                   />
                 )}
               </div>
@@ -545,7 +564,7 @@ export default function BotConversation({
                 company={config?.company}
                 result={result}
                 receiptData={receiptData}
-                mappings={CONCUR_EXPENSE_TYPE_MAPPINGS}
+                mappings={concurExpenseTypeMappings}
                 expenseTypeName={result.expenseType?.name}
                 policyName={showPolicySection ? policyName : null}
               />
