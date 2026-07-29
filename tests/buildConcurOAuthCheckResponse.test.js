@@ -1,16 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { buildConcurOAuthCheckResponse } from "../supabase/functions/check-concur-oauth/buildConcurOAuthCheckResponse.js";
+import {
+  buildConcurOAuthCheckError,
+  classifyConcurOAuthCheckHttpStatus,
+  buildConcurOAuthCheckSuccessResponse,
+  buildConcurOAuthCheckErrorResponse,
+} from "../supabase/functions/check-concur-oauth/buildConcurOAuthCheckResponse.js";
 
-// 以下のトークン値はすべてテスト専用のダミー値であり、実際のConcur側の
-// トークンではない。
-
-describe("buildConcurOAuthCheckResponse（成功系）", () => {
-  it("rotated:falseの場合、connected:true・hasGeolocation・expiresInPresent・refreshTokenRotated:falseを返す", () => {
-    const response = buildConcurOAuthCheckResponse({
-      ok: true,
+describe("buildConcurOAuthCheckSuccessResponse", () => {
+  it("connected:true・hasGeolocation・expiresInPresent・refreshTokenRotatedを返す（200）", () => {
+    const response = buildConcurOAuthCheckSuccessResponse({
+      hasGeolocation: true,
+      expiresInPresent: true,
       rotated: false,
-      tokens: { accessToken: "dummy-access-token" },
-      logSummary: { ok: true, rotated: false, hasAccessToken: true, hasGeolocation: true, hasScope: false, expiresInPresent: true },
     });
 
     expect(response.status).toBe(200);
@@ -20,54 +21,43 @@ describe("buildConcurOAuthCheckResponse（成功系）", () => {
     });
   });
 
-  it("戻り値に実際のトークン値・geolocationの実URL・scopeの生値を一切含めない", () => {
-    const response = buildConcurOAuthCheckResponse({
-      ok: true,
-      rotated: false,
-      tokens: {
-        accessToken: "DUMMY_ACCESS_TOKEN_SHOULD_NOT_LEAK",
-        refreshToken: "DUMMY_REFRESH_TOKEN_SHOULD_NOT_LEAK",
-        geolocation: "https://dummy-geolocation-should-not-leak.example.test",
-        scope: "DUMMY_SCOPE_SHOULD_NOT_LEAK",
-      },
-      logSummary: { ok: true, rotated: false, hasAccessToken: true, hasGeolocation: true, hasScope: true, expiresInPresent: true },
+  it("rotated:trueの場合はrefreshTokenRotated:trueを返す（Vault保存成功後に呼ばれる想定）", () => {
+    const response = buildConcurOAuthCheckSuccessResponse({
+      hasGeolocation: false,
+      expiresInPresent: false,
+      rotated: true,
+    });
+
+    expect(response.body.result.refreshTokenRotated).toBe(true);
+  });
+
+  it("boolean以外の値が渡されても真偽値へ丸められる", () => {
+    const response = buildConcurOAuthCheckSuccessResponse({});
+
+    expect(response.body.result).toEqual({
+      connected: true,
+      hasGeolocation: false,
+      expiresInPresent: false,
+      refreshTokenRotated: false,
+    });
+  });
+
+  it("戻り値に実際のトークン値・geolocationの実URLを一切含めない", () => {
+    // このビルダーはtokens自体を受け取らない設計のため、呼び出し元が
+    // 真偽値だけを渡す限り、戻り値にトークン値が混入する余地が無いことを
+    // 明示的に確認する。
+    const response = buildConcurOAuthCheckSuccessResponse({
+      hasGeolocation: true,
+      expiresInPresent: true,
+      rotated: true,
     });
 
     const serialized = JSON.stringify(response);
-    expect(serialized).not.toContain("DUMMY_ACCESS_TOKEN_SHOULD_NOT_LEAK");
-    expect(serialized).not.toContain("DUMMY_REFRESH_TOKEN_SHOULD_NOT_LEAK");
-    expect(serialized).not.toContain("dummy-geolocation-should-not-leak");
-    expect(serialized).not.toContain("DUMMY_SCOPE_SHOULD_NOT_LEAK");
+    expect(serialized).not.toMatch(/access_token|refresh_token|geolocation.*:.*http/i);
   });
 });
 
-describe("buildConcurOAuthCheckResponse（Refresh Tokenローテーション）", () => {
-  it("rotated:trueの場合は成功として扱わず、concur_oauth_rotation_unsupportedを返す（409）", () => {
-    const response = buildConcurOAuthCheckResponse({
-      ok: true,
-      rotated: true,
-      tokens: { accessToken: "dummy-access-token", refreshToken: "dummy-new-refresh-token" },
-      logSummary: { ok: true, rotated: true, hasAccessToken: true, hasGeolocation: true, hasScope: false, expiresInPresent: true },
-    });
-
-    expect(response.status).toBe(409);
-    expect(response.body.result).toBeNull();
-    expect(response.body.error.code).toBe("concur_oauth_rotation_unsupported");
-  });
-
-  it("ローテーション時のエラー本文にも新しいrefresh_tokenの値を含めない", () => {
-    const response = buildConcurOAuthCheckResponse({
-      ok: true,
-      rotated: true,
-      tokens: { accessToken: "dummy-access-token", refreshToken: "DUMMY_NEW_REFRESH_TOKEN_SHOULD_NOT_LEAK" },
-      logSummary: { ok: true, rotated: true, hasAccessToken: true, hasGeolocation: false, hasScope: false, expiresInPresent: true },
-    });
-
-    expect(JSON.stringify(response)).not.toContain("DUMMY_NEW_REFRESH_TOKEN_SHOULD_NOT_LEAK");
-  });
-});
-
-describe("buildConcurOAuthCheckResponse（エラー系）", () => {
+describe("buildConcurOAuthCheckError / classifyConcurOAuthCheckHttpStatus", () => {
   it.each([
     ["concur_not_configured", 500],
     ["concur_oauth_timeout", 504],
@@ -76,16 +66,54 @@ describe("buildConcurOAuthCheckResponse（エラー系）", () => {
     ["concur_oauth_rate_limited", 429],
     ["concur_oauth_service_error", 502],
     ["concur_oauth_invalid_response", 502],
+    ["concur_oauth_not_connected", 503],
+    ["concur_oauth_completion_failed", 500],
+    ["concur_oauth_storage_failed", 500],
+    ["internal_error", 500],
   ])("%sは%iへ変換される", (code, expectedStatus) => {
-    const response = buildConcurOAuthCheckResponse({ ok: false, error: { code, message: "固定メッセージ" } });
-
-    expect(response.status).toBe(expectedStatus);
-    expect(response.body).toEqual({ result: null, error: { code, message: "固定メッセージ" } });
+    expect(classifyConcurOAuthCheckHttpStatus(code)).toBe(expectedStatus);
   });
 
-  it("未知のエラーコードでも例外にならず500へフォールバックする", () => {
-    const response = buildConcurOAuthCheckResponse({ ok: false, error: { code: "unknown_code", message: "固定メッセージ" } });
+  it("未知のコードでも例外にならず500へフォールバックする", () => {
+    expect(classifyConcurOAuthCheckHttpStatus("unknown_code")).toBe(500);
+  });
 
-    expect(response.status).toBe(500);
+  it.each(["concur_oauth_not_connected", "concur_oauth_completion_failed", "concur_oauth_storage_failed", "internal_error"])(
+    "%sは固定メッセージを持つ",
+    (code) => {
+      const error = buildConcurOAuthCheckError(code);
+      expect(error.code).toBe(code);
+      expect(typeof error.message).toBe("string");
+      expect(error.message.length).toBeGreaterThan(0);
+    },
+  );
+
+  it("concur_oauth_not_connectedとconcur_oauth_completion_failedは別々の固定メッセージを持つ（区別可能）", () => {
+    const notConnected = buildConcurOAuthCheckError("concur_oauth_not_connected");
+    const completionFailed = buildConcurOAuthCheckError("concur_oauth_completion_failed");
+
+    expect(notConnected.message).not.toBe(completionFailed.message);
+  });
+});
+
+describe("buildConcurOAuthCheckErrorResponse", () => {
+  it("エラーコードに応じたHTTPステータスとエラー本文を組み立てる", () => {
+    const response = buildConcurOAuthCheckErrorResponse({ code: "concur_oauth_rate_limited", message: "固定メッセージ" });
+
+    expect(response.status).toBe(429);
+    expect(response.body).toEqual({ result: null, error: { code: "concur_oauth_rate_limited", message: "固定メッセージ" } });
+  });
+
+  it("resultは常にnull（成功結果と混ざらない）", () => {
+    const response = buildConcurOAuthCheckErrorResponse({ code: "concur_oauth_storage_failed", message: "固定メッセージ" });
+
+    expect(response.body.result).toBeNull();
+  });
+
+  it("エラー本文に生のOAuthレスポンス相当の情報が含まれない（渡されたmessageをそのまま使うだけ）", () => {
+    const rawDetail = "invalid_grant: refresh token is expired (SHOULD_NOT_LEAK)";
+    const response = buildConcurOAuthCheckErrorResponse({ code: "concur_oauth_rejected", message: "固定メッセージ" });
+
+    expect(JSON.stringify(response)).not.toContain(rawDetail);
   });
 });

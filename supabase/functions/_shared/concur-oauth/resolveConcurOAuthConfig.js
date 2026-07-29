@@ -7,11 +7,18 @@
 // （supabase/functions/*/describeAuthHeaderForLogging.js等、このプロジェクト
 // 全体で踏襲している既存の方針と同じ）。
 //
+// 【重要・Refresh Tokenの扱い】Refresh Tokenはこの関数が読み取るSecretsには
+// 含まれない。Refresh TokenはSupabase Vaultへ保存し、専用のSECURITY DEFINER
+// RPC（get_concur_refresh_token_for_edge/complete_concur_oauth_refresh。
+// docs/supabase-setup.md Step 19参照）経由でのみ取得・更新する設計のため。
+// このモジュールは「設定読み込み責務」に徹し、Refresh Token自体は
+// refreshConcurAccessToken()の呼び出し元が明示的な引数として渡す
+// （responseTokenを config 経由で暗黙に取得させない）。
+//
 // 参照するSecret名（実値はこの関数の引数として渡されるだけで、このファイル
 // 自体はいかなる実値もハードコードしない）：
 //   - CONCUR_CLIENT_ID      （必須）
 //   - CONCUR_CLIENT_SECRET  （必須）
-//   - CONCUR_REFRESH_TOKEN  （必須）
 //   - CONCUR_TOKEN_URL      （必須。未設定の場合、既定URLへのフォールバックは
 //                             行わない。誤った本番/検証環境への通信を避けるため、
 //                             安全側でconfigured:falseとして失敗させる。加えて、
@@ -28,7 +35,6 @@
 const REQUIRED_ENV_KEYS = [
   ["clientId", "CONCUR_CLIENT_ID"],
   ["clientSecret", "CONCUR_CLIENT_SECRET"],
-  ["refreshToken", "CONCUR_REFRESH_TOKEN"],
   ["tokenUrl", "CONCUR_TOKEN_URL"],
 ];
 
@@ -51,7 +57,7 @@ function isValidHttpsUrl(value) {
 /**
  * @param {Record<string, string | undefined> | undefined} env
  *   CONCUR_CLIENT_ID等のSecret名をキーとした、解決済みの値の集合。
- * @returns {{ ok: true, config: { clientId: string, clientSecret: string, refreshToken: string, tokenUrl: string, scope?: string } } | { ok: false, missing: string[] }}
+ * @returns {{ ok: true, config: { clientId: string, clientSecret: string, tokenUrl: string, scope?: string } } | { ok: false, missing: string[] }}
  */
 export function resolveConcurOAuthConfig(env) {
   const missing = [];

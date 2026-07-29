@@ -805,8 +805,9 @@ begin
 
   if v_connection_id is null then
     -- 対象接続が存在しない、または他のリクエストがロック中（かつリース期限
-    -- 切れでない）。理由は区別せず0行を返す（呼び出し元はconcur_oauth_locked
-    -- 等、単一の安全なコードへまとめる）。期限切れ後の再取得では、WHERE句の
+    -- 切れでない）。理由は区別せず0行を返す（呼び出し元はconcur_oauth_not_
+    -- connected等、単一の安全なコードへまとめる。実装確定時の名称。★下記
+    -- 「実装状況」参照）。期限切れ後の再取得では、WHERE句の
     -- 「lock_expires_at < now()」が真になるため通常どおりUPDATEが成功し、
     -- v_lease_id（今回新しく生成した値）へ差し替わる＝再取得のたびに
     -- lease_idが変わる。
@@ -944,8 +945,10 @@ drop table if exists concur_oauth_connections;
 1. Edge Function（service_role専用クライアント。下記「クライアント分離」
    参照）が`get_concur_refresh_token_for_edge(company_id)`を呼び、現在の
    Refresh Tokenと、今回発行された`connection_id`・`lease_id`を取得する
-2. 取得できなければ（0行）、安全な固定コード（例：`concur_oauth_locked`）を
-   返して終了。token endpointへは通信しない
+2. 取得できなければ（0行）、安全な固定コード（実装確定値：
+   `concur_oauth_not_connected`。「未接続」と「他リクエストがロック中」を
+   区別すると接続の存在有無を推測されるリスクがあるため、単一コードへ統合
+   している）を返して終了。token endpointへは通信しない
 3. 取得できた場合のみ、token endpointへRefresh Token Grantを実行する
    （Access Token・新Refresh Tokenの有無はメモリ上でのみ扱う）
 4. token endpoint呼び出しが失敗した場合：
@@ -956,12 +959,15 @@ drop table if exists concur_oauth_connections;
    を呼ぶ（rotated:falseなら`new_refresh_token`はnullのまま呼び、リースの
    解放と`last_refreshed_at`更新だけを行う）
 6. **DB更新（Vaultへの書き込み）が成功して初めて`connected:true`を返す。**
-   DB更新自体が失敗した場合は、新しいRefresh Tokenの値をどこにも保存せずに
-   破棄し、専用の安全なエラー（例：`concur_oauth_storage_failed`）を返す
-7. `complete_concur_oauth_refresh()`が`false`を返した場合（lease_id不一致。
-   通常は起こらないはずだが、想定外に遅延した呼び出し等）は、リースは
-   既に他の処理によって解放・引き継ぎ済みのため、二重に状態を変更しようと
-   せず、安全な内部エラー（例：`concur_oauth_lease_lost`）として扱う
+   DB更新自体（`complete_concur_oauth_refresh()`の呼び出し自体が例外を
+   投げた場合）が失敗した場合は、新しいRefresh Tokenの値をどこにも保存せずに
+   破棄し、専用の安全なエラー（実装確定値：`concur_oauth_storage_failed`）を
+   返す
+7. `complete_concur_oauth_refresh()`が例外を投げず`false`を返した場合
+   （lease_id不一致。通常は起こらないはずだが、想定外に遅延した呼び出し等）は、
+   リースは既に他の処理によって解放・引き継ぎ済みのため、二重に状態を変更
+   しようとせず、安全な内部エラー（実装確定値：`concur_oauth_completion_failed`）
+   として扱う
 
 ### Edge Function側のクライアント分離（設計方針）
 
@@ -1029,7 +1035,14 @@ Vault関連RPCへ到達する経路」がコード上そもそも存在しなく
 - Refresh Tokenを`company_settings`や`config_snapshot`（既存のJSONB列）へ
   保存することは、今回もこの設計でも一切行わない
 
-### テスト設計（追加分。今回はコード未実装のため設計のみ）
+### テスト設計（追加分）
+
+**下記の項目のうち、SQL・RPCの実際の並行実行・行ロック挙動を要するものは、
+ローカルにPostgres/Docker環境が無いため実DBでは未検証です**（静的なSQL
+レビューのみ実施）。Edge Function側の分岐ロジック（安全ゲート・認可・
+completeの呼び出しタイミング・エラーコードのマッピング等）は
+`tests/handleConcurOAuthCheckRequest.test.js`等でNode側のモックにより
+自動テスト済みです。詳細は完了報告の「SQLテスト／構文検証結果」参照。
 
 - 同時に2件のリクエストが`get_concur_refresh_token_for_edge()`を呼んだ場合、
   片方だけが行を取得し、もう片方は0行を受け取る
@@ -1057,14 +1070,82 @@ Vault関連RPCへ到達する経路」がコード上そもそも存在しなく
 - service_role専用クライアント経由でのみ成功する
 - rollback用SQL（テーブル・関数の`drop`）が実行可能である
 
-### schema.sqlへの反映案（未適用）
+### 実装状況（このコミット時点）
 
-実際に適用する際は、`supabase/schema.sql`のPhase 8（platform_admins）の後に新しい
-節（例：「Phase 9: Concur OAuth Vault連携」）として、上記のテーブル・index・RPC・
-grant/revoke・commentをそのまま追記する案とする。この移行が完了し安定稼働した後、
-`check-concur-oauth`側のコード（`handleConcurOAuthCheckRequest.js`等）を、
-Refresh TokenをSecrets（`CONCUR_REFRESH_TOKEN`）ではなく上記2つのRPCから取得・
-更新するように変更する（このコード変更は今回行っていない）。
+上記の設計は、以下のとおり実装済みです。**ただし本番Supabaseプロジェクトへの
+適用（migration実行）はまだ行っていません。**
+
+| 項目 | 状態 |
+|---|---|
+| Migrationファイル（`supabase/migrations/20260729115405_concur_oauth_vault.sql`） | 作成済み。**本番未適用**（`supabase db push`していない） |
+| `supabase/schema.sql`のPhase 12（このMigrationと同一内容） | 反映済み（このファイル自体はSQL Editorへ未貼り付け） |
+| `get_concur_refresh_token_for_edge` / `complete_concur_oauth_refresh` RPC | コード上は定義済みだが、Migration未適用のため実際のDBには存在しない |
+| `check-concur-oauth`のコード（クライアント分離・RPC呼び出し） | 実装済み。上記RPCを呼ぶ構造になっているが、RPC自体が無いため実際には呼び出せない（安全な状態） |
+| `resolveConcurOAuthConfig.js` | `CONCUR_REFRESH_TOKEN`をSecretsから読まなくなった（Vault RPC経由に変更） |
+| Vaultへの実際のRefresh Token登録（`vault.create_secret()`） | 未実施。Migration適用後の手作業とする |
+| `CONCUR_OAUTH_CHECK_ENABLED`の有効化 | 未実施（未設定＝無効のまま） |
+| Edge Function側ロジックの自動テスト | 実装済み（Node/vitestのモックテスト） |
+| SQL・RPCの実DB（Postgres）テスト | 未実施（ローカルDocker/Postgres環境が無いため。静的レビューのみ） |
+| `status`/`lease_id`/`lock_expires_at`の状態整合性CHECK制約 | 追加済み（rotating中だけ両方非NULL、それ以外は両方NULLを強制） |
+| `last_error_code`の長さ制限CHECK制約 | 追加済み（100文字以内。内部固定コードのみを想定した保険的な制限） |
+
+### Migration履歴に関する注意（このプロジェクト初のmigrationファイル）
+
+このプロジェクトはこれまで`supabase/migrations/`を使わず、`supabase/schema.sql`
+をSQL Editorへ直接貼り付ける方式で運用してきました（本項執筆時点で
+`supabase/migrations/`配下には`20260729115405_concur_oauth_vault.sql`
+**1ファイルだけ**が存在し、他にはありません）。そのため、リモートの
+Supabaseプロジェクト側に、CLIのmigration適用履歴
+（`supabase_migrations.schema_migrations`）が全く記録されていない可能性が
+あります。
+
+**今回のセッションではリモートDBへ一切通信していないため、実際の履歴状態は
+未確認です。** `supabase db push`等でこのファイルを適用する前に、必ず以下を
+確認してください。
+
+- `supabase migration list`で、ローカル（このファイル1件）とリモート側の
+  適用履歴を突き合わせる
+- 今回の想定は「このファイル1件だけが新規に適用される」ことであり、
+  他に未適用のmigrationファイルが無いことを確認する
+- もしリモート側に何らかの既存migration履歴が記録されている場合は、その
+  内容と`supabase/schema.sql`の実際の状態（これまでSQL Editor経由で反映
+  されてきた内容）が矛盾しないかを確認してから適用する
+
+### check-concur-oauthを有効化する前の手順
+
+1. 本Migration（`20260729115405_concur_oauth_vault.sql`）をレビューし、可能であれば
+   一時的な検証環境で動作確認する
+2. 本番Supabaseプロジェクトへ適用する（`supabase db push`、またはSQL Editorへ
+   `supabase/schema.sql`のPhase 12部分を貼り付け）
+3. Concur側で実際のRefresh Tokenを確認できたら、`vault.create_secret()`で
+   Vaultへ登録し、返ってきたUUIDを`concur_oauth_connections.vault_secret_id`へ
+   持つ行を1件作成する（`company_id`は現時点では`null`のままでよい）
+4. `CONCUR_CLIENT_ID`・`CONCUR_CLIENT_SECRET`・`CONCUR_TOKEN_URL`をSupabase
+   Secretsへ登録する（`CONCUR_REFRESH_TOKEN`はもう登録しない）
+5. `check-concur-oauth`をdeployする
+6. `CONCUR_OAUTH_CHECK_ENABLED`を`"true"`に設定する
+7. platform_adminとして一度だけ呼び出し、`connected: true`が返ることを確認する
+
+### 外部通信とVault保存間の残存リスク（実装後も変わらず残る）
+
+「現Refresh Tokenの取得」「外部token endpointへの通信」「新Refresh Tokenの
+Vault保存」という3つの処理は、外部HTTP通信を挟むため単一のPostgresトランザク
+ションにはできない。`lease_id`は**同時実行による上書き**は防ぐが、「Concur側で
+新しいRefresh Tokenが発行済みなのに、Edge FunctionがVaultへ保存する前に
+クラッシュ・タイムアウトした」場合は自動復旧できない。この場合、Concur側の
+実装次第では旧Refresh Tokenが既に失効している可能性があり、次回以降の疎通
+確認も失敗し続け、Company Request Tokenからの手動再認証が必要になることがある。
+
+### ロールバック手順
+
+1. `check-concur-oauth`を無効化したい場合は`CONCUR_OAUTH_CHECK_ENABLED`を
+   未設定または`"false"`に戻す（deploy不要、Secrets変更のみ）
+2. Migration自体を取り消す場合は、`supabase/migrations/20260729115405_concur_
+   oauth_vault.sql`末尾のrollbackブロック（コメントアウト済み）を有効化して
+   実行する：`complete_concur_oauth_refresh`→`get_concur_refresh_token_for_edge`
+   →`concur_oauth_connections`の順に`drop`する
+3. `vault.secrets`内の実際のシークレット行は上記rollbackで削除されない
+   （削除するかどうかは別途手動判断とする）
 
 ## 生成AI（ChatGPT等）へ顧客情報を入力する場合の注意
 

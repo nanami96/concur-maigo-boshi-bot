@@ -29,15 +29,28 @@
 //      forbiddenとする。フロントから送られたrole相当の値は一切受け取らない・
 //      信用しない（このFunctionはrequest bodyそのものを読み取らない設計。
 //      handleConcurOAuthCheckRequest.js参照）。
-//   service_role キーは一切使わない（既存の全Edge Functionと同じ方針、
-//   呼び出し元のJWTをそのままAuthorizationへ上書きしたクライアントで
-//   auth.getUser()・rpc()を呼ぶ）。
+//
+// 【重要・クライアントの分離（Vault対応で追加）】
+// このFunctionはSupabaseクライアントを用途ごとに2つ明確に分ける。
+//   A. 呼び出し元JWTクライアント（buildAuthAdapters）：auth.getUser()・
+//      is_platform_admin()の確認だけに使う。既存の全Edge Functionと同じ方針
+//      （service_roleは使わず、呼び出し元のJWTをそのままAuthorizationへ
+//      上書きしたクライアントを使う）。
+//   B. service_role専用クライアント（buildVaultAdapters）：
+//      get_concur_refresh_token_for_edge / complete_concur_oauth_refresh
+//      というVault関連の2 RPCだけに使う。この2 RPCはSQL側でservice_role
+//      以外へのEXECUTE権限を持たない（supabase/schema.sql Phase 12参照）ため、
+//      呼び出し元JWTクライアント（A）から呼んでも失敗する。コード構造上も
+//      Aのクライアントからこれらを呼び出す経路を作らない（二重の防御）。
+//   service_role key（SUPABASE_SERVICE_ROLE_KEY）はEdge Functionへ自動注入
+//   済みの環境変数であり、新たなSecret登録は不要。フロントへ返す・ログへ
+//   出すことは一切行わない。
 //
 // ログについて：Authorizationヘッダー・JWT・リクエスト本文・Secrets
-// （Client ID/Secret・Access/Refresh Token・token endpoint URL）・OAuthサーバー
-// の生レスポンスは一切ログへ出さない。ヘッダーの有無・形式・トークンの
-// 文字数、認証・認可の成否、OAuth checkが有効かどうか、最終的な内部コード
-// だけを記録する。
+// （Client ID/Secret・Access/Refresh Token・token endpoint URL・service role
+// key）・OAuthサーバーの生レスポンスは一切ログへ出さない。ヘッダーの有無・
+// 形式・トークンの文字数、認証・認可の成否、OAuth checkが有効かどうか、
+// 最終的な内部コードだけを記録する。
 import { handleConcurOAuthCheckRequest } from "./handleConcurOAuthCheckRequest.js";
 import { describeAuthHeaderForLogging } from "./describeAuthHeaderForLogging.js";
 import { isConcurOAuthCheckEnabled } from "./isConcurOAuthCheckEnabled.js";
@@ -85,9 +98,7 @@ function resolveProjectApiKey() {
 // 同じ役割（呼び出し元のAuthorizationヘッダーをそのまま上書きしたSupabase
 // クライアントを作り、auth.getUser()・rpc("is_platform_admin")をRLS/
 // SECURITY DEFINER任せで行う。service_roleは使わない）。
-async function buildAuthAdapters(authHeader, log) {
-  const { createClient } = await import("npm:@supabase/supabase-js@2");
-
+function buildAuthAdapters(createClient, authHeader, log) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const projectApiKey = resolveProjectApiKey();
 
@@ -127,12 +138,75 @@ async function buildAuthAdapters(authHeader, log) {
 
 function buildConcurEnv() {
   return {
+    // CONCUR_REFRESH_TOKENはここに含めない。Refresh TokenはSupabase Vaultに
+    // 保存されており、buildVaultAdapters()経由のRPC呼び出しでのみ取得する
+    // （resolveConcurOAuthConfig.js・refreshConcurAccessToken.js冒頭コメント参照）。
     CONCUR_CLIENT_ID: Deno.env.get("CONCUR_CLIENT_ID"),
     CONCUR_CLIENT_SECRET: Deno.env.get("CONCUR_CLIENT_SECRET"),
-    CONCUR_REFRESH_TOKEN: Deno.env.get("CONCUR_REFRESH_TOKEN"),
     CONCUR_TOKEN_URL: Deno.env.get("CONCUR_TOKEN_URL"),
     CONCUR_SCOPE: Deno.env.get("CONCUR_SCOPE"),
     CONCUR_OAUTH_CHECK_ENABLED: Deno.env.get("CONCUR_OAUTH_CHECK_ENABLED"),
+  };
+}
+
+// service_role専用クライアント（クライアント分離のB。ファイル冒頭コメント
+// 参照）。Vault関連の2 RPCだけに使う。呼び出し元のAuthorizationヘッダーは
+// 一切使わない・上書きしない（service role keyそのものが権限の根拠となる）。
+function buildServiceRoleClient(createClient) {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+}
+
+// get_concur_refresh_token_for_edge / complete_concur_oauth_refresh
+// （supabase/schema.sql Phase 12）を、handleConcurOAuthCheckRequest.jsが
+// 期待するDeno非依存のインターフェースへ変換するアダプタ。
+function buildVaultAdapters(serviceClient, log) {
+  return {
+    getRefreshTokenForEdge: async ({ companyId }) => {
+      const { data, error } = await serviceClient.rpc("get_concur_refresh_token_for_edge", {
+        p_company_id: companyId ?? null,
+      });
+
+      if (error) {
+        // RPCのエラーコード（例："42501" 権限不足等）だけを記録し、詳細な
+        // メッセージ・値は出さない。
+        log(`Vault Token取得エラー (code=${error.code ?? "?"})`);
+        throw error;
+      }
+
+      // returns table(...) の関数はsupabase-jsから配列で返る（0行の場合は
+      // 空配列。get_my_public_config()等、既存の他RPCと同じ扱い）。
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) {
+        return null;
+      }
+
+      return {
+        connectionId: row.connection_id,
+        leaseId: row.lease_id,
+        refreshToken: row.refresh_token,
+      };
+    },
+    completeOAuthRefresh: async ({ connectionId, leaseId, success, newRefreshToken, errorCode }) => {
+      const { data, error } = await serviceClient.rpc("complete_concur_oauth_refresh", {
+        p_connection_id: connectionId,
+        p_lease_id: leaseId,
+        p_success: success,
+        p_new_refresh_token: newRefreshToken ?? null,
+        p_error_code: errorCode ?? null,
+      });
+
+      if (error) {
+        log(`Vault Token完了処理エラー (code=${error.code ?? "?"})`);
+        throw error;
+      }
+
+      return data === true;
+    },
   };
 }
 
@@ -159,8 +233,16 @@ Deno.serve(async (req) => {
   log(`認証情報 (${describeAuthHeaderForLogging(authHeader)})`);
 
   let authAdapters;
+  let vaultAdapters;
   try {
-    authAdapters = await buildAuthAdapters(authHeader, log);
+    const { createClient } = await import("npm:@supabase/supabase-js@2");
+    authAdapters = buildAuthAdapters(createClient, authHeader, log);
+    // service_role専用クライアントはplatform_admin確認の成否に関わらずここで
+    // 用意するが（既存の他Edge Functionのbuild*Adapters()と同じ「アダプタは
+    // 常に用意し、実際に使うかどうかはハンドラー内部のロジックに委ねる」構成）、
+    // 実際にVault RPCが呼ばれるのは、handleConcurOAuthCheckRequest.js内部で
+    // platform_admin確認・安全ゲート確認の両方を通過した場合だけである。
+    vaultAdapters = buildVaultAdapters(buildServiceRoleClient(createClient), log);
   } catch (caughtError) {
     console.error("auth client setup failed", caughtError?.message);
     log("失敗 (internal_error: auth setup)");
@@ -179,6 +261,9 @@ Deno.serve(async (req) => {
     fetchUser: authAdapters.fetchUser,
     isPlatformAdmin: authAdapters.isPlatformAdmin,
     env,
+    companyId: null, // 現時点では単一の既定接続のみ（複数会社対応は将来の拡張）。
+    getRefreshTokenForEdge: vaultAdapters.getRefreshTokenForEdge,
+    completeOAuthRefresh: vaultAdapters.completeOAuthRefresh,
   });
 
   log(`終了 (status=${status}, errorCode=${body?.error?.code ?? "none"})`);

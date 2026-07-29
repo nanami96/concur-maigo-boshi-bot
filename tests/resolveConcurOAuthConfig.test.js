@@ -8,23 +8,22 @@ function buildValidEnv(overrides = {}) {
   return {
     CONCUR_CLIENT_ID: "dummy-client-id",
     CONCUR_CLIENT_SECRET: "dummy-client-secret",
-    CONCUR_REFRESH_TOKEN: "dummy-refresh-token",
     CONCUR_TOKEN_URL: "https://example-dummy.concursolutions.test/oauth2/v0/token",
     ...overrides,
   };
 }
 
 describe("resolveConcurOAuthConfig", () => {
-  it("必須Secretsが全てあればok:trueで値を返す", () => {
+  it("必須Secretsが全てあればok:trueで値を返す（refreshTokenはSecretsに含めない）", () => {
     const result = resolveConcurOAuthConfig(buildValidEnv());
 
     expect(result.ok).toBe(true);
     expect(result.config).toEqual({
       clientId: "dummy-client-id",
       clientSecret: "dummy-client-secret",
-      refreshToken: "dummy-refresh-token",
       tokenUrl: "https://example-dummy.concursolutions.test/oauth2/v0/token",
     });
+    expect(result.config).not.toHaveProperty("refreshToken");
   });
 
   it("任意のCONCUR_SCOPEが無くても成立する（scopeキー自体が付かない）", () => {
@@ -61,16 +60,6 @@ describe("resolveConcurOAuthConfig", () => {
     expect(result.missing).toContain("CONCUR_CLIENT_SECRET");
   });
 
-  it("CONCUR_REFRESH_TOKENが無い場合はok:falseでmissingに含まれる", () => {
-    const env = buildValidEnv();
-    delete env.CONCUR_REFRESH_TOKEN;
-
-    const result = resolveConcurOAuthConfig(env);
-
-    expect(result.ok).toBe(false);
-    expect(result.missing).toContain("CONCUR_REFRESH_TOKEN");
-  });
-
   it("CONCUR_TOKEN_URLが無い場合はok:falseでmissingに含まれる（既定URLへフォールバックしない）", () => {
     const env = buildValidEnv();
     delete env.CONCUR_TOKEN_URL;
@@ -88,13 +77,9 @@ describe("resolveConcurOAuthConfig", () => {
 
     expect(result.ok).toBe(false);
     expect(result.missing).toEqual(
-      expect.arrayContaining([
-        "CONCUR_CLIENT_ID",
-        "CONCUR_CLIENT_SECRET",
-        "CONCUR_REFRESH_TOKEN",
-        "CONCUR_TOKEN_URL",
-      ]),
+      expect.arrayContaining(["CONCUR_CLIENT_ID", "CONCUR_CLIENT_SECRET", "CONCUR_TOKEN_URL"]),
     );
+    expect(result.missing).not.toContain("CONCUR_REFRESH_TOKEN");
   });
 
   it("空文字・空白のみの値は未設定として扱う", () => {

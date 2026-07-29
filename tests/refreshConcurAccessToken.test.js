@@ -8,11 +8,13 @@ import { refreshConcurAccessToken } from "../supabase/functions/_shared/concur-o
 const DUMMY_CLIENT_SECRET = "DUMMY_CLIENT_SECRET_SHOULD_NOT_LEAK";
 const DUMMY_CURRENT_REFRESH_TOKEN = "DUMMY_CURRENT_REFRESH_TOKEN_SHOULD_NOT_LEAK";
 
+// CONCUR_REFRESH_TOKENはSecretsに含めない（Refresh TokenはVault RPC経由で
+// 取得し、refreshConcurAccessToken()へ明示的な引数として渡す設計のため。
+// resolveConcurOAuthConfig.test.jsも参照）。
 function buildEnv(overrides = {}) {
   return {
     CONCUR_CLIENT_ID: "dummy-client-id",
     CONCUR_CLIENT_SECRET: DUMMY_CLIENT_SECRET,
-    CONCUR_REFRESH_TOKEN: DUMMY_CURRENT_REFRESH_TOKEN,
     CONCUR_TOKEN_URL: "https://example-dummy.concursolutions.test/oauth2/v0/token",
     ...overrides,
   };
@@ -33,7 +35,7 @@ describe("refreshConcurAccessToken（設定不足）", () => {
       return { status: 200, json: async () => ({}) };
     };
 
-    const result = await refreshConcurAccessToken({ env: {}, fetchImpl });
+    const result = await refreshConcurAccessToken({ env: {}, refreshToken: DUMMY_CURRENT_REFRESH_TOKEN, fetchImpl });
 
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe("concur_not_configured");
@@ -49,12 +51,37 @@ describe("refreshConcurAccessToken（設定不足）", () => {
 
     const result = await refreshConcurAccessToken({
       env: buildEnv({ CONCUR_TOKEN_URL: "http://example-dummy.concursolutions.test/oauth2/v0/token" }),
+      refreshToken: DUMMY_CURRENT_REFRESH_TOKEN,
       fetchImpl,
     });
 
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe("concur_not_configured");
     expect(fetchCalled).toBe(false);
+  });
+
+  it("refreshTokenが指定されていない場合はconcur_not_configuredで失敗し、fetchは呼ばれない", async () => {
+    let fetchCalled = false;
+    const fetchImpl = async () => {
+      fetchCalled = true;
+      return { status: 200, json: async () => ({}) };
+    };
+
+    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl });
+
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe("concur_not_configured");
+    expect(fetchCalled).toBe(false);
+  });
+
+  it("refreshTokenが空文字・空白のみの場合もconcur_not_configuredで失敗する", async () => {
+    const fetchImpl = async () => ({ status: 200, json: async () => ({}) });
+
+    const empty = await refreshConcurAccessToken({ env: buildEnv(), refreshToken: "", fetchImpl });
+    const blank = await refreshConcurAccessToken({ env: buildEnv(), refreshToken: "   ", fetchImpl });
+
+    expect(empty.error.code).toBe("concur_not_configured");
+    expect(blank.error.code).toBe("concur_not_configured");
   });
 });
 
@@ -67,7 +94,7 @@ describe("refreshConcurAccessToken（成功系）", () => {
       token_type: "Bearer",
     });
 
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl });
+    const result = await refreshConcurAccessToken({ env: buildEnv(), refreshToken: DUMMY_CURRENT_REFRESH_TOKEN, fetchImpl });
 
     expect(result.ok).toBe(true);
     expect(result.tokens.accessToken).toBe("dummy-access-token");
@@ -85,7 +112,7 @@ describe("refreshConcurAccessToken（成功系）", () => {
       refresh_token: "DUMMY_NEW_REFRESH_TOKEN",
     });
 
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl });
+    const result = await refreshConcurAccessToken({ env: buildEnv(), refreshToken: DUMMY_CURRENT_REFRESH_TOKEN, fetchImpl });
 
     expect(result.ok).toBe(true);
     expect(result.rotated).toBe(true);
@@ -95,19 +122,19 @@ describe("refreshConcurAccessToken（成功系）", () => {
   it("refresh_tokenが返らない場合はrotated: false", async () => {
     const fetchImpl = jsonFetch(200, { access_token: "dummy-access-token" });
 
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl });
+    const result = await refreshConcurAccessToken({ env: buildEnv(), refreshToken: DUMMY_CURRENT_REFRESH_TOKEN, fetchImpl });
 
     expect(result.ok).toBe(true);
     expect(result.rotated).toBe(false);
   });
 
-  it("返されたrefresh_tokenが今回使ったrefresh_tokenと同じ場合はrotated: false", async () => {
+  it("返されたrefresh_tokenが今回使ったrefreshToken引数と同じ場合はrotated: false", async () => {
     const fetchImpl = jsonFetch(200, {
       access_token: "dummy-access-token",
       refresh_token: DUMMY_CURRENT_REFRESH_TOKEN,
     });
 
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl });
+    const result = await refreshConcurAccessToken({ env: buildEnv(), refreshToken: DUMMY_CURRENT_REFRESH_TOKEN, fetchImpl });
 
     expect(result.ok).toBe(true);
     expect(result.rotated).toBe(false);
@@ -116,10 +143,12 @@ describe("refreshConcurAccessToken（成功系）", () => {
   it("scopeが返る場合・返らない場合の両方が正常に扱われる", async () => {
     const withScope = await refreshConcurAccessToken({
       env: buildEnv(),
+      refreshToken: DUMMY_CURRENT_REFRESH_TOKEN,
       fetchImpl: jsonFetch(200, { access_token: "dummy-access-token", scope: "dummy.scope" }),
     });
     const withoutScope = await refreshConcurAccessToken({
       env: buildEnv(),
+      refreshToken: DUMMY_CURRENT_REFRESH_TOKEN,
       fetchImpl: jsonFetch(200, { access_token: "dummy-access-token" }),
     });
 
@@ -137,7 +166,7 @@ describe("refreshConcurAccessToken（成功系）", () => {
       scope: "DUMMY_SCOPE_SHOULD_NOT_LEAK",
     });
 
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl });
+    const result = await refreshConcurAccessToken({ env: buildEnv(), refreshToken: DUMMY_CURRENT_REFRESH_TOKEN, fetchImpl });
 
     const serializedSummary = JSON.stringify(result.logSummary);
     expect(serializedSummary).not.toContain("DUMMY_ACCESS_TOKEN_SHOULD_NOT_LEAK");
@@ -160,7 +189,12 @@ describe("refreshConcurAccessToken（異常系）", () => {
         });
       });
 
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl, timeoutMs: 20 });
+    const result = await refreshConcurAccessToken({
+      env: buildEnv(),
+      refreshToken: DUMMY_CURRENT_REFRESH_TOKEN,
+      fetchImpl,
+      timeoutMs: 20,
+    });
 
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe("concur_oauth_timeout");
@@ -171,40 +205,61 @@ describe("refreshConcurAccessToken（異常系）", () => {
       throw new Error("dummy connection refused");
     };
 
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl });
+    const result = await refreshConcurAccessToken({ env: buildEnv(), refreshToken: DUMMY_CURRENT_REFRESH_TOKEN, fetchImpl });
 
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe("concur_oauth_network_error");
   });
 
   it("400はconcur_oauth_rejected", async () => {
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl: jsonFetch(400, {}) });
+    const result = await refreshConcurAccessToken({
+      env: buildEnv(),
+      refreshToken: DUMMY_CURRENT_REFRESH_TOKEN,
+      fetchImpl: jsonFetch(400, {}),
+    });
     expect(result.error.code).toBe("concur_oauth_rejected");
   });
 
   it("401はconcur_oauth_rejected", async () => {
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl: jsonFetch(401, {}) });
+    const result = await refreshConcurAccessToken({
+      env: buildEnv(),
+      refreshToken: DUMMY_CURRENT_REFRESH_TOKEN,
+      fetchImpl: jsonFetch(401, {}),
+    });
     expect(result.error.code).toBe("concur_oauth_rejected");
   });
 
   it("429はconcur_oauth_rate_limited", async () => {
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl: jsonFetch(429, {}) });
+    const result = await refreshConcurAccessToken({
+      env: buildEnv(),
+      refreshToken: DUMMY_CURRENT_REFRESH_TOKEN,
+      fetchImpl: jsonFetch(429, {}),
+    });
     expect(result.error.code).toBe("concur_oauth_rate_limited");
   });
 
   it("500はconcur_oauth_service_error", async () => {
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl: jsonFetch(500, {}) });
+    const result = await refreshConcurAccessToken({
+      env: buildEnv(),
+      refreshToken: DUMMY_CURRENT_REFRESH_TOKEN,
+      fetchImpl: jsonFetch(500, {}),
+    });
     expect(result.error.code).toBe("concur_oauth_service_error");
   });
 
   it("403はconcur_oauth_rejected（invalid_responseとは区別しない）", async () => {
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl: jsonFetch(403, {}) });
+    const result = await refreshConcurAccessToken({
+      env: buildEnv(),
+      refreshToken: DUMMY_CURRENT_REFRESH_TOKEN,
+      fetchImpl: jsonFetch(403, {}),
+    });
     expect(result.error.code).toBe("concur_oauth_rejected");
   });
 
   it("expires_inが0の場合はconcur_oauth_invalid_response（有効期限として無意味なため拒否）", async () => {
     const result = await refreshConcurAccessToken({
       env: buildEnv(),
+      refreshToken: DUMMY_CURRENT_REFRESH_TOKEN,
       fetchImpl: jsonFetch(200, { access_token: "dummy-access-token", expires_in: 0 }),
     });
 
@@ -220,21 +275,29 @@ describe("refreshConcurAccessToken（異常系）", () => {
       },
     });
 
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl });
+    const result = await refreshConcurAccessToken({ env: buildEnv(), refreshToken: DUMMY_CURRENT_REFRESH_TOKEN, fetchImpl });
 
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe("concur_oauth_invalid_response");
   });
 
   it("2xxだがaccess_tokenが無い場合はconcur_oauth_invalid_response", async () => {
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl: jsonFetch(200, { expires_in: 3600 }) });
+    const result = await refreshConcurAccessToken({
+      env: buildEnv(),
+      refreshToken: DUMMY_CURRENT_REFRESH_TOKEN,
+      fetchImpl: jsonFetch(200, { expires_in: 3600 }),
+    });
 
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe("concur_oauth_invalid_response");
   });
 
   it("access_tokenの型が不正（数値等）な場合はconcur_oauth_invalid_response", async () => {
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl: jsonFetch(200, { access_token: 12345 }) });
+    const result = await refreshConcurAccessToken({
+      env: buildEnv(),
+      refreshToken: DUMMY_CURRENT_REFRESH_TOKEN,
+      fetchImpl: jsonFetch(200, { access_token: 12345 }),
+    });
 
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe("concur_oauth_invalid_response");
@@ -246,7 +309,7 @@ describe("refreshConcurAccessToken（異常系）", () => {
       throw new Error(secretLikeMessage);
     };
 
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl });
+    const result = await refreshConcurAccessToken({ env: buildEnv(), refreshToken: DUMMY_CURRENT_REFRESH_TOKEN, fetchImpl });
 
     expect(JSON.stringify(result)).not.toContain(secretLikeMessage);
   });
@@ -259,7 +322,7 @@ describe("refreshConcurAccessToken（セキュリティ）", () => {
       error_description: `client_secret ${DUMMY_CLIENT_SECRET} was rejected`,
     });
 
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl });
+    const result = await refreshConcurAccessToken({ env: buildEnv(), refreshToken: DUMMY_CURRENT_REFRESH_TOKEN, fetchImpl });
 
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain(DUMMY_CLIENT_SECRET);
@@ -273,7 +336,7 @@ describe("refreshConcurAccessToken（セキュリティ）", () => {
     const rawBodyMarker = "RAW_RESPONSE_BODY_SHOULD_NOT_LEAK";
     const fetchImpl = jsonFetch(500, { debug: rawBodyMarker });
 
-    const result = await refreshConcurAccessToken({ env: buildEnv(), fetchImpl });
+    const result = await refreshConcurAccessToken({ env: buildEnv(), refreshToken: DUMMY_CURRENT_REFRESH_TOKEN, fetchImpl });
 
     expect(JSON.stringify(result)).not.toContain(rawBodyMarker);
   });

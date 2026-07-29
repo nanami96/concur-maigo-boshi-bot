@@ -29,10 +29,20 @@
 //
 // 【Refresh Tokenローテーションについて】
 // レスポンスに含まれるrefresh_tokenが、今回リクエストに使ったrefresh_token
-// （config.refreshToken）と異なる場合、rotated: trueを返す。ただし今回は
-// Supabase Secretsの自動更新・DB保存・古いRefresh Tokenの上書きは一切
-// 行わない（呼び出し元へrotatedという事実だけを安全に伝える設計に留め、
-// 実際の保存方法は実通信を始める別工程で決定する）。
+// （引数のrefreshToken）と異なる場合、rotated: trueを返す。この関数自体は
+// 新しいRefresh Tokenの保存を一切行わない（rotatedという事実と新しい値を
+// 呼び出し元へ返すだけに留める）。実際の保存（Supabase Vaultへの書き戻し）は
+// 呼び出し元（check-concur-oauthのcomplete_concur_oauth_refresh() RPC呼び出し）
+// の責務であり、このモジュールの関知するところではない。
+//
+// 【refreshTokenの取得元について・重要】
+// この関数はrefreshTokenをSecrets（resolveConcurOAuthConfig()）からではなく、
+// 呼び出し元から明示的な引数として受け取る。Refresh Token本体はSupabase
+// Vaultに保存されており（docs/supabase-setup.md Step 19参照）、
+// resolveConcurOAuthConfig()はclientId/clientSecret/tokenUrl/scopeという
+// 「Secretsから読む設定」だけを解決する責務に限定している。呼び出し元
+// （check-concur-oauthのhandleConcurOAuthCheckRequest.js）が、Vault RPC
+// （get_concur_refresh_token_for_edge）から取得した値をここへ渡す。
 import { resolveConcurOAuthConfig } from "./resolveConcurOAuthConfig.js";
 import { buildConcurRefreshTokenRequest } from "./buildConcurRefreshTokenRequest.js";
 import { fetchConcurTokenResponse } from "./fetchConcurTokenResponse.js";
@@ -49,9 +59,15 @@ function failure(code) {
   };
 }
 
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim() !== "";
+}
+
 /**
  * @param {object} [input]
  * @param {Record<string, string | undefined>} [input.env] CONCUR_CLIENT_ID等のSecret名をキーとした値の集合。
+ * @param {string} [input.refreshToken] Vault RPC（get_concur_refresh_token_for_edge）から
+ *   取得した現在のRefresh Token。Secretsからは取得しない（ファイル冒頭コメント参照）。
  * @param {typeof fetch} [input.fetchImpl] テスト用の差し替え。既定はグローバルfetch。
  * @param {number} [input.timeoutMs] token endpointへのfetchのタイムアウト（ミリ秒）。
  * @returns {Promise<
@@ -59,13 +75,19 @@ function failure(code) {
  *   | { ok: false, error: { code: string, message: string }, logSummary: object }
  * >}
  */
-export async function refreshConcurAccessToken({ env, fetchImpl, timeoutMs } = {}) {
+export async function refreshConcurAccessToken({ env, refreshToken, fetchImpl, timeoutMs } = {}) {
   const configResult = resolveConcurOAuthConfig(env);
   if (!configResult.ok) {
     return failure("concur_not_configured");
   }
 
-  const request = buildConcurRefreshTokenRequest(configResult.config);
+  // refreshTokenは呼び出し元（Vault RPC経由）から渡される必須の値。Secretsに
+  // 含まれないため、resolveConcurOAuthConfig()の結果とは別に検証する。
+  if (!isNonEmptyString(refreshToken)) {
+    return failure("concur_not_configured");
+  }
+
+  const request = buildConcurRefreshTokenRequest({ ...configResult.config, refreshToken });
 
   const fetchResult = await fetchConcurTokenResponse({
     request,
@@ -100,7 +122,7 @@ export async function refreshConcurAccessToken({ env, fetchImpl, timeoutMs } = {
   }
 
   const { tokens } = validation;
-  const rotated = Boolean(tokens.refreshToken) && tokens.refreshToken !== configResult.config.refreshToken;
+  const rotated = Boolean(tokens.refreshToken) && tokens.refreshToken !== refreshToken;
 
   return {
     ok: true,

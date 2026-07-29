@@ -259,12 +259,13 @@ Supabase運用モードでログイン中の利用者は、経費申請前に領
 - Quick Expense作成用のSupabase Edge Function `create-concur-quick-expense`（`supabase/functions/create-concur-quick-expense/`）：Supabaseユーザー認証（JWT検証＋会社所属確認）、公開済み経費タイプ一覧との照合＋経費タイプID移行フラグの確認（`verifyExpenseTypeForQuickExpense.js`）、入力検証、共通エラー形式までを実装済み
 - フロントエンド（`src/data/concurApi.js`）から上記Edge Functionを呼び出す`createQuickExpense()`
 - Concur OAuth2「Refresh Token Grant」でAccess Tokenを更新するモジュール一式（`refreshConcurAccessToken.js`ほか、`supabase/functions/_shared/concur-oauth/`。複数Edge Functionから再利用できるよう共有ディレクトリへ配置）。既存の`create-concur-quick-expense`（Quick Expense作成処理）とは未接続で、token endpointへの実通信も行っていない
-- **`check-concur-oauth`（`supabase/functions/check-concur-oauth/`）**：上記OAuthモジュールの疎通確認だけを行う、**platform_admin専用**のEdge Function。既存の「Concurに登録」ボタン・`create-concur-quick-expense`とは未接続。通常は無効で、`CONCUR_OAUTH_CHECK_ENABLED`というSecretが厳密に文字列`"true"`である場合だけtoken endpointへの実通信を許可する（詳細は[Supabaseセットアップガイド Step 18](docs/supabase-setup.md)参照）。トークン本体（access_token/refresh_token等）は成功時も一切レスポンスへ返さず、`connected`・`hasGeolocation`・`expiresInPresent`・`refreshTokenRotated`といった真偽値だけを返す。**Refresh Tokenローテーション（Concur側から新しいRefresh Tokenが返るケース）の安全な保存方式が未整備のため、その状態が発生した場合は新しいRefresh Tokenを保存せずそのまま破棄し、成功扱いにせず「認証情報の更新が必要」という固定エラー（`concur_oauth_rotation_unsupported`）を返す。保存方式が整備されるまで`CONCUR_OAUTH_CHECK_ENABLED`は有効化しないこと**
+- **`check-concur-oauth`（`supabase/functions/check-concur-oauth/`）**：上記OAuthモジュールの疎通確認だけを行う、**platform_admin専用**のEdge Function。既存の「Concurに登録」ボタン・`create-concur-quick-expense`とは未接続。通常は無効で、`CONCUR_OAUTH_CHECK_ENABLED`というSecretが厳密に文字列`"true"`である場合だけtoken endpointへの実通信を許可する（詳細は[Supabaseセットアップガイド Step 18・19](docs/supabase-setup.md)参照）。トークン本体（access_token/refresh_token等）は成功時も一切レスポンスへ返さず、`connected`・`hasGeolocation`・`expiresInPresent`・`refreshTokenRotated`といった真偽値だけを返す
+- **Refresh TokenのSupabase Vault保存（`supabase/migrations/20260729115405_concur_oauth_vault.sql`・`supabase/schema.sql` Phase 12）**：Refresh Token本体はSupabase Secretsではなく、SQL関数から読み書きできる暗号化ストア（Vault）へ保存する設計・コードが完成済み。`get_concur_refresh_token_for_edge`/`complete_concur_oauth_refresh`という2つのSECURITY DEFINER RPC（`service_role`のみEXECUTE可、`anon`/`authenticated`は不可）経由でのみ取得・更新し、`lease_id`により同時実行時の二重ローテーションを防ぐ。**ただしこのMigrationはまだ本番Supabaseプロジェクトへ適用していない**（下記「未実装」参照）ため、`check-concur-oauth`は現時点でもRefresh Tokenを取得できず、`CONCUR_OAUTH_CHECK_ENABLED`を有効化しても機能しない
 
 未実装（今後の対応が必要）:
 
 - 上記OAuthモジュールをQuick Expense作成処理へ実際に組み込むこと、Concur APIへの実際のHTTPリクエスト、Identity API経由のuserID解決（`create-concur-quick-expense`は現在**固定のスタブ応答**を返すのみです）
-- 新しいRefresh Tokenのローテーション時の安全な保存方式（Supabase Secretsの自動更新・DB保存等）。これが整備されるまで、`check-concur-oauth`の`CONCUR_OAUTH_CHECK_ENABLED`は有効化しない方針とする
+- Concur OAuth Vault移行Migrationの本番適用（`supabase/migrations/20260729115405_concur_oauth_vault.sql`。レビュー・検証環境での確認が先）、Vaultへの実際のRefresh Token登録（`vault.create_secret()`、Migration適用後の手作業）
 - Concur側の認証情報（Client ID/Secret等）の登録（Supabase Secretsへの登録は未実施）
 - 領収書画像のConcurへのアップロード連携
 - 経費タイプID移行フラグ（`concurExpenseTypeIdMode`）を安全に有効化するための管理画面UI（現状はconfigへの直接設定のみ）

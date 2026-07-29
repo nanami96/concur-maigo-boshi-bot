@@ -1,27 +1,29 @@
-// refreshConcurAccessToken()（supabase/functions/_shared/concur-oauth/）の
-// 戻り値を、利用者（platform_admin）へ実際に返してよい安全な形へ変換する
-// 純粋関数。ここを通過した後のbodyだけが、そのままHTTPレスポンスとして
-// 返される想定であるため、この関数の戻り値に実際のトークン値・Secrets・
-// token endpoint URL・OAuthサーバーの生レスポンスが含まれないことが、
-// この関数全体の安全性の根拠になる。
+// check-concur-oauthが実際にHTTPレスポンスへ変換する部分を切り出した純粋関数群。
+// ここを通過した後のbodyだけがそのままレスポンスとして返される想定のため、
+// 実際のトークン値・Secrets・token endpoint URL・OAuthサーバーの生レスポンスが
+// 一切含まれないことが、この関数群全体の安全性の根拠になる。
 //
-// 【Refresh Tokenローテーションについて・重要】
-// oauthResult.rotatedがtrueの場合、成功として扱わない。理由：現時点では
-// 新しいRefresh Tokenを保存する仕組みが無く（isConcurOAuthCheckEnabled.js
-// 冒頭コメント参照）、ここでconnected: trueを返すと、実際には新しい
-// Refresh Tokenが破棄されたままになっていることが呼び出し元から見えなくなる。
-// 「認証情報の更新が必要」という固定状態（concur_oauth_rotation_unsupported）
-// を返し、成功扱いにしない。
+// 【Vault保存対応後の位置づけ】
+// 以前はrotated:trueを常に「保存できないため失敗」として扱っていたが、
+// Vaultへの保存（complete_concur_oauth_refresh RPC）に対応したことに伴い、
+// 実際に保存が成功した場合はconnected:trueを返せるようになった。代わりに、
+// 「保存の実行そのもの」が失敗した場合（complete RPCがfalseを返す＝リースが
+// 既に無効、または例外＝Vault更新自体が失敗）を新しく区別する必要がある
+// （concur_oauth_completion_failed / concur_oauth_storage_failed）。
 //
-// 【残るリスク（最終報告にも明記）】
-// この分岐は「ローテーションを検知して安全に失敗させる」だけであり、
-// Concur側で実際に新しいRefresh Tokenへの切り替えが行われた場合、
-// 古いRefresh Token（Supabase Secretsに設定済みの値）がConcur側の実装次第で
-// 失効している可能性がある。その場合、次回以降の疎通確認もconcur_oauth_rejected
-// 等で失敗し続け、再度Concur側で手動の認証情報再取得（Company Request Token
-// 発行からのやり直し）が必要になる。この安全ゲート自体は「気づかないまま
-// 誤った成功を返す」ことを防ぐものであり、再認証の手間そのものを無くすもの
-// ではない。
+// 【concur_oauth_lockedを個別に公開しない理由】
+// 「対象の接続が存在しない」場合と「他のリクエストが処理中でロックされている」
+// 場合を外部レスポンスで区別すると、呼び出し元（platform_admin）以外の何者かが
+// 応答の違いから接続の存在有無を推測できてしまう（オラクル化）リスクがある。
+// そのため、get_concur_refresh_token_for_edge()が0行を返した場合は理由を
+// 区別せず、単一のconcur_oauth_not_connectedへ統合する。
+const LOCAL_ERROR_MESSAGES = {
+  concur_oauth_not_connected: "現在Concurとの接続情報を利用できません。",
+  concur_oauth_completion_failed: "処理を確定できませんでした。もう一度お試しください。",
+  concur_oauth_storage_failed: "認証情報の保存に失敗しました。もう一度お試しください。",
+  internal_error: "処理中にエラーが発生しました。",
+};
+
 const ERROR_HTTP_STATUS = {
   concur_not_configured: 500,
   concur_oauth_timeout: 504,
@@ -30,41 +32,55 @@ const ERROR_HTTP_STATUS = {
   concur_oauth_rate_limited: 429,
   concur_oauth_service_error: 502,
   concur_oauth_invalid_response: 502,
+  concur_oauth_not_connected: 503,
+  concur_oauth_completion_failed: 500,
+  concur_oauth_storage_failed: 500,
+  internal_error: 500,
 };
 
-const ROTATION_UNSUPPORTED_MESSAGE =
-  "Concur側でRefresh Tokenが更新されましたが、保存する仕組みが未実装のため処理を中断しました。認証情報の更新が必要です。";
+/**
+ * ローカル（check-concur-oauth固有）のエラーコードに対する固定メッセージを
+ * 返す。共有OAuthモジュール由来のコード（concur_oauth_timeout等、既に
+ * {code, message}の形でmessageが決まっている）はこの関数を通さず、
+ * そのまま使うこと。
+ * @param {string} code
+ * @returns {{ code: string, message: string }}
+ */
+export function buildConcurOAuthCheckError(code) {
+  return { code, message: LOCAL_ERROR_MESSAGES[code] ?? "処理中にエラーが発生しました。" };
+}
 
 /**
- * @param {Awaited<ReturnType<typeof import("../_shared/concur-oauth/refreshConcurAccessToken.js").refreshConcurAccessToken>>} oauthResult
- * @returns {{ status: number, body: { result: object|null, error: { code: string, message: string }|null } }}
+ * @param {string} code
+ * @returns {number}
  */
-export function buildConcurOAuthCheckResponse(oauthResult) {
-  if (!oauthResult.ok) {
-    const status = ERROR_HTTP_STATUS[oauthResult.error.code] ?? 500;
-    return { status, body: { result: null, error: oauthResult.error } };
-  }
+export function classifyConcurOAuthCheckHttpStatus(code) {
+  return ERROR_HTTP_STATUS[code] ?? 500;
+}
 
-  if (oauthResult.rotated) {
-    return {
-      status: 409,
-      body: {
-        result: null,
-        error: { code: "concur_oauth_rotation_unsupported", message: ROTATION_UNSUPPORTED_MESSAGE },
-      },
-    };
-  }
-
+/**
+ * @param {{ hasGeolocation?: boolean, expiresInPresent?: boolean, rotated?: boolean }} input
+ * @returns {{ status: number, body: { result: object, error: null } }}
+ */
+export function buildConcurOAuthCheckSuccessResponse({ hasGeolocation, expiresInPresent, rotated }) {
   return {
     status: 200,
     body: {
       result: {
         connected: true,
-        hasGeolocation: Boolean(oauthResult.logSummary?.hasGeolocation),
-        expiresInPresent: Boolean(oauthResult.logSummary?.expiresInPresent),
-        refreshTokenRotated: false,
+        hasGeolocation: Boolean(hasGeolocation),
+        expiresInPresent: Boolean(expiresInPresent),
+        refreshTokenRotated: Boolean(rotated),
       },
       error: null,
     },
   };
+}
+
+/**
+ * @param {{ code: string, message: string }} error
+ * @returns {{ status: number, body: { result: null, error: { code: string, message: string } } }}
+ */
+export function buildConcurOAuthCheckErrorResponse(error) {
+  return { status: classifyConcurOAuthCheckHttpStatus(error.code), body: { result: null, error } };
 }

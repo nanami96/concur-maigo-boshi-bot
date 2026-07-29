@@ -1,0 +1,332 @@
+-- ============================================================================
+-- 【未適用】Concur Refresh TokenのSupabase Vault保存（Phase 12）
+-- ============================================================================
+-- このファイルはこのプロジェクトで最初のsupabase/migrations/配下のファイルです。
+-- これまでこのプロジェクトはsupabase/schema.sqlをSQL Editorへ直接貼り付けて
+-- 適用する方式を採っており（supabase/config.toml冒頭コメント参照）、CLIの
+-- `supabase migration new`によるmigrationディレクトリは存在しませんでした。
+-- 本ファイルは、Supabase CLIの標準命名規則（<タイムスタンプ>_<説明>.sql）に
+-- 従って新規に作成した、このプロジェクト最初のmigrationファイルです。
+--
+-- 設計はdocs/supabase-setup.md Step 19（commit e4e0419で確定・その後lease_id
+-- 対応へ改訂）を実装可能な形に落とし込んだものです。
+--
+-- 重要：このファイルは本番Supabaseプロジェクトへまだ適用していません
+-- （`supabase db push`等は実行していません）。適用前に必ずレビューし、
+-- 可能であれば一時的な検証環境で動作確認してから、本番へ適用してください。
+--
+-- 重要：supabase/migrations/配下にはこのファイル1件だけが存在し、他には
+-- ありません。適用前に`supabase migration list`等でリモート側のmigration
+-- 適用履歴（このプロジェクトはこれまでCLI migrationを使っていないため、
+-- 履歴が空である可能性が高い）とschema.sqlの実際の状態が矛盾しないかを
+-- 必ず確認してください（詳細はdocs/supabase-setup.md Step 19
+-- 「Migration履歴に関する注意」参照）。
+--
+-- 含めていないもの（意図的）：
+--   - Refresh Token・Client Secretの実値
+--   - vault.create_secret()による実際のシークレット登録
+--     （登録は本migration適用後の手作業とする。docs/supabase-setup.md参照）
+--   - 既存テーブルへのDROP COLUMN等、破壊的な変更
+--
+-- 冪等性：本ファイルは`if not exists`・`create or replace`・`revoke`/`grant`
+-- （すべて再実行しても同じ最終状態になる）で構成しており、複数回適用しても
+-- 安全です。
+
+-- ----------------------------------------------------------------------------
+-- 1. Vault extensionについて（検討結果：本migrationでは有効化文を実行しない）
+-- ----------------------------------------------------------------------------
+-- 公式ドキュメント（https://supabase.com/docs/guides/database/vault、
+-- https://github.com/supabase/vault/blob/main/README.md）によれば、
+-- 「Vault拡張はSupabaseホスティング環境では既定で有効」であり、セルフホスト等の
+-- 場合のみ `create extension supabase_vault cascade;` で有効化するとされています。
+--
+-- このプロジェクトの実際のリンク先Supabaseプロジェクトは通常のSupabase
+-- ホスティング環境（無料/Pro等のクラウドプロジェクト）であり、セルフホストでは
+-- ないため、`create extension`文は本migrationには含めません。
+--
+-- 含めなかった理由（推測で追加しなかった理由）：
+--   (a) 公式ドキュメント上、ホスティング環境では既定で有効であることが
+--       明記されており、追加の有効化操作自体が不要と判断できる。
+--   (b) `create extension if not exists ...` は冪等ではあるものの、
+--       拡張の有効化にはSQL Editorの実行ロールの権限次第で成否が変わりうる
+--       （このセッションでは実際のロール・権限を確認していない）。不要な
+--       操作を含めることで、意図しない権限エラーによりmigration全体が
+--       失敗するリスクを増やしたくない。
+--
+-- もし実際に適用する環境がセルフホスト、またはVaultが無効な特殊環境で
+-- あることが判明した場合は、この節を以下のように有効化した上で、
+-- 拡張の有効化権限を持つロールで実行してください（今回は未検証・未適用）。
+--
+-- create extension if not exists supabase_vault cascade;
+
+-- ----------------------------------------------------------------------------
+-- 2. メタデータテーブル（Refresh Token本体・平文は一切持たない）
+-- ----------------------------------------------------------------------------
+-- vault_secret_idについて（検討結果：外部キー制約は付けない）：
+-- vault.secretsは通常のテーブル（id uuid primary key default gen_random_uuid()）
+-- であり、技術的にはFKを張ることは可能である
+-- （https://github.com/supabase/vault/blob/main/sql/supabase_vault--0.3.0.sql
+-- で実際のCREATE TABLE文を確認済み）。しかし、
+--   (a) vault.secretsはVault拡張が管理する内部実装の一部であり、公式の
+--       利用インターフェースはvault.create_secret()/vault.update_secret()/
+--       vault.decrypted_secretsに限定されている（直接のDML・外部制約は
+--       想定された使い方ではない）。
+--   (b) 拡張の将来のバージョンアップ（Supabaseプラットフォームが管理する）で
+--       vault.secretsの構造が変わった場合、アプリ側のFK制約が予期せず
+--       壊れるリスクがある。
+-- という理由から、vault_secret_idは「不透明なUUID参照」として保持し、
+-- FK制約は付けない。存在確認は各RPC内でvault.decrypted_secretsへの
+-- 問い合わせ結果（0行かどうか）によって行う。
+create table if not exists concur_oauth_connections (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid references public.companies (id) on delete cascade,
+  vault_secret_id uuid not null,
+  status text not null default 'inactive'
+    check (status in ('inactive', 'active', 'rotating', 'error')),
+  lease_id uuid,
+  lock_expires_at timestamptz,
+  last_refreshed_at timestamptz,
+  last_error_code text
+    check (last_error_code is null or char_length(last_error_code) <= 100),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  -- rotating中だけlease_id・lock_expires_atが非NULLになる、という不変条件を
+  -- DB側でも強制する（get_concur_refresh_token_for_edge()・
+  -- complete_concur_oauth_refresh()の両方の遷移がこの条件を満たすことを確認
+  -- 済み。既定値'inactive'・lease_id無し・lock_expires_at無しの初期状態も含め、
+  -- 矛盾する遷移は存在しない）。
+  check (
+    (status = 'rotating' and lease_id is not null and lock_expires_at is not null)
+    or
+    (status <> 'rotating' and lease_id is null and lock_expires_at is null)
+  )
+);
+
+comment on table concur_oauth_connections is
+  'Concur OAuth接続ごとのメタデータ。Refresh Token本体は持たない。実体は'
+  'vault.secretsにあり、vault_secret_idで参照する（FK制約は意図的に付けない。'
+  '本ファイル冒頭のコメント参照）。';
+comment on column concur_oauth_connections.company_id is
+  '将来の複数会社対応用。現時点では単一の既定接続のためnullを許容する'
+  '（下の部分unique indexで、company_idがnullの行は最大1件に制限）。'
+  'public.companies.idと同じuuid型（supabase/schema.sqlのcompanies定義を'
+  '確認済み）。';
+comment on column concur_oauth_connections.vault_secret_id is
+  'vault.secrets.idへの参照（外部キー制約なし。本ファイル冒頭コメント参照）。'
+  '呼び出し元（Edge Function）からこの値を直接指定させることはせず、RPC内部で'
+  'この列に保存された値だけを使う。';
+comment on column concur_oauth_connections.status is
+  'inactive=未接続、active=正常、rotating=ローテーション処理中の一時的な'
+  'リース状態、error=直近の疎通確認が失敗。';
+comment on column concur_oauth_connections.lease_id is
+  'get_concur_refresh_token_for_edge()がリースを獲得するたびに新しく発行する'
+  'ランダムUUID。complete_concur_oauth_refresh()は、この列の現在値と呼び'
+  '出し元が提示したp_lease_idが完全一致する場合だけ処理を実行する（同時実行時の'
+  '二重ローテーション・古い処理による上書きを防ぐ）。';
+comment on column concur_oauth_connections.lock_expires_at is
+  'rotating状態のリース期限。Edge Function側の異常終了時にリースが永久に'
+  '残らないよう、期限切れ後は他のリクエストが新しいlease_idでリースを'
+  '奪えるようにする（30秒。get_concur_refresh_token_for_edge()参照）。';
+comment on column concur_oauth_connections.last_error_code is
+  '直近の疎通確認・完了処理で記録された内部エラーコードのみ（OAuthサーバーの'
+  'error_description・生レスポンス・Token値は一切保存しない）。';
+
+-- 3. unique index：会社ごとに1件、かつ「既定接続」(company_id is null)も
+--    全体で最大1件に制限する。
+--    通常のunique(company_id)制約だけでは、PostgreSQLはNULL同士を「異なる値」
+--    として扱うため、company_id is null の行を何件登録しても制約違反になら
+--    ない。そのため、company_id is not null の行専用と、company_id is null
+--    の行専用（定数式(true)へのunique index、という一般的なテクニック）の
+--    2本の部分unique indexへ分けて、それぞれ独立に「最大1件」を強制する。
+create unique index if not exists concur_oauth_connections_company_id_key
+  on concur_oauth_connections (company_id)
+  where company_id is not null;
+create unique index if not exists concur_oauth_connections_default_key
+  on concur_oauth_connections ((true))
+  where company_id is null;
+
+-- 4. RLS・権限
+--    updated_atについて：このプロジェクトのsupabase/schema.sqlには既存の
+--    updated_at自動更新トリガーが存在しない（各テーブルのUPDATE文で毎回
+--    updated_at = now()を明示的に設定する方式。事前に確認済み）。既存設計との
+--    整合性を優先し、本テーブル・本RPCも同じ方式（トリガーを新設せず、各
+--    UPDATE文でupdated_at = now()を明示する）を踏襲する。
+alter table concur_oauth_connections enable row level security;
+revoke all on concur_oauth_connections from anon, authenticated, public;
+-- 意図的にRLSポリシーを1件も作らない：anon/authenticated（platform_admin
+-- 本人の通常ログインセッションを含む）はこのテーブルへ一切アクセスできない。
+-- アクセスは service_role 権限のEdge Functionが、下記のSECURITY DEFINER
+-- RPC経由でのみ行う。
+
+revoke all on vault.decrypted_secrets from anon, authenticated, public;
+-- Vault拡張の既定権限がどうであっても、明示的に再確認する（公式ドキュメントの
+-- 「decrypted_secretsビューへのアクセスは適切なSQL権限で常に保護すること」
+-- という警告への対応）。vault.decrypted_secretsそのものをPostgREST等から
+-- 直接公開することは行わない（db.schemasへvaultを追加しない）。
+
+-- ----------------------------------------------------------------------------
+-- 5. RPC: 現在のRefresh Tokenを取得し、同時にローテーション用のリースを
+--    新しいlease_idで獲得する（Edge Function専用。service_roleだけがEXECUTE
+--    可能）。単一のUPDATE ... RETURNINGで「WHERE条件の確認」と「リースの
+--    獲得」を1つの原子的な操作として行うため、2つの呼び出しが同時に実行
+--    されても、Postgresの行ロックにより片方だけがこのUPDATEに成功し、
+--    もう片方は0行を受け取る（Tokenを同時に2件が取得することはない）。
+-- ----------------------------------------------------------------------------
+create or replace function get_concur_refresh_token_for_edge(
+  p_company_id uuid default null
+)
+returns table (connection_id uuid, lease_id uuid, refresh_token text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_connection_id uuid;
+  v_vault_secret_id uuid;
+  v_lease_id uuid := gen_random_uuid();
+begin
+  update concur_oauth_connections c
+    set status = 'rotating',
+        lease_id = v_lease_id,
+        lock_expires_at = now() + interval '30 seconds',
+        updated_at = now()
+    where (
+        (p_company_id is null and c.company_id is null)
+        or c.company_id = p_company_id
+      )
+      and (c.status <> 'rotating' or c.lock_expires_at < now())
+    returning c.id, c.vault_secret_id into v_connection_id, v_vault_secret_id;
+
+  if v_connection_id is null then
+    -- 対象接続が存在しない、または他のリクエストがロック中（かつリース期限
+    -- 切れでない）。理由は区別せず0行を返す（呼び出し元はconcur_oauth_not_
+    -- connected等、単一の安全なコードへまとめる）。期限切れ後の再取得では、
+    -- WHERE句の「lock_expires_at < now()」が真になるため通常どおりUPDATEが
+    -- 成功し、v_lease_id（今回新しく生成した値）へ差し替わる＝再取得のたびに
+    -- lease_idが変わる。
+    return;
+  end if;
+
+  return query
+    select v_connection_id, v_lease_id, vs.decrypted_secret
+    from vault.decrypted_secrets vs
+    where vs.id = v_vault_secret_id;
+  -- vault_secret_idに対応する行がvault.secretsに存在しない・復号できない
+  -- 場合、上のSELECTは0行を返す（例外にならない）。この場合、呼び出し元は
+  -- refresh_tokenを受け取れないため、Tokenを一切返さないという安全な既定
+  -- 動作になる。ただしこの時点で既にリース（status='rotating'）は獲得済み
+  -- のままになる点に注意：呼び出し元（Edge Function）はrefresh_tokenが
+  -- 空/欠落の場合、必ずcomplete_concur_oauth_refresh(success:false)を呼んで
+  -- リースを解放すること（handleConcurOAuthCheckRequest.js参照）。
+end;
+$$;
+
+revoke all on function get_concur_refresh_token_for_edge(uuid) from public, anon, authenticated;
+grant execute on function get_concur_refresh_token_for_edge(uuid) to service_role;
+
+comment on function get_concur_refresh_token_for_edge(uuid) is
+  'Edge Function専用（service_roleのみEXECUTE可）。指定した会社（またはNULLで'
+  '既定接続）の現在のRefresh Tokenを復号して返すと同時に、新しいlease_idで'
+  'ローテーション用のリース（status=rotating、30秒）を獲得する。ロック中・'
+  '接続なし・Vault Secretが存在しない場合は0行（またはrefresh_tokenを含まない'
+  '行）を返す。呼び出し元はconnection_id・lease_idを保持し、成功・失敗いずれの'
+  '場合も必ずcomplete_concur_oauth_refresh()へその両方を渡してリースを'
+  '解放すること。Token値をRAISE・NOTICE・ログへ出さないこと。';
+
+-- ----------------------------------------------------------------------------
+-- 6. RPC: ローテーション結果を確定し、リースを解放する。
+--    p_connection_id・p_lease_idの両方が現在のリースと完全一致する場合だけ
+--    実行する。古いlease_id・別connectionのlease_id流用・既に解放済み
+--    （二重実行）のいずれも「対象0件」として安全に失敗し、falseを返すだけで、
+--    現在のToken・status・（他のリクエストが獲得した）新しいリースへは
+--    一切触れない。
+-- ----------------------------------------------------------------------------
+create or replace function complete_concur_oauth_refresh(
+  p_connection_id uuid,
+  p_lease_id uuid,
+  p_success boolean,
+  p_new_refresh_token text default null,
+  p_error_code text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_vault_secret_id uuid;
+begin
+  -- vault_secret_idは呼び出し元から受け取らず、常にこの行に保存されている
+  -- 値だけを使う（呼び出し元が任意のvault_secret_idを指定してvault.update_
+  -- secret()を呼べてしまう経路を作らないため）。
+  select vault_secret_id into v_vault_secret_id
+    from concur_oauth_connections
+    where id = p_connection_id
+      and lease_id = p_lease_id
+      and status = 'rotating'
+      and lock_expires_at is not null
+    for update;
+
+  if v_vault_secret_id is null then
+    -- 古いlease_id・別connection_idへのlease_id流用・二重実行のいずれも
+    -- ここで0行になる（現在のlease_idと一致しないため）。例外は投げず、
+    -- falseを返すだけにする（呼び出し元のログにToken関連の値を含む例外
+    -- メッセージが残らないようにするため）。
+    return false;
+  end if;
+
+  if p_success then
+    if p_new_refresh_token is not null and length(p_new_refresh_token) > 0 then
+      -- Vaultの更新と、直後のメタデータ更新は同じ関数呼び出し＝同じ
+      -- トランザクション内で行われるため、途中で例外が発生すれば
+      -- vault.update_secret()の効果も含めてロールバックされる（原子性）。
+      perform vault.update_secret(v_vault_secret_id, p_new_refresh_token);
+    end if;
+
+    update concur_oauth_connections
+      set status = 'active',
+          lease_id = null,
+          lock_expires_at = null,
+          last_refreshed_at = now(),
+          last_error_code = null,
+          updated_at = now()
+      where id = p_connection_id
+        and lease_id = p_lease_id;
+  else
+    update concur_oauth_connections
+      set status = 'error',
+          lease_id = null,
+          lock_expires_at = null,
+          last_error_code = p_error_code,
+          updated_at = now()
+      where id = p_connection_id
+        and lease_id = p_lease_id;
+  end if;
+
+  return true;
+end;
+$$;
+
+revoke all on function complete_concur_oauth_refresh(uuid, uuid, boolean, text, text) from public, anon, authenticated;
+grant execute on function complete_concur_oauth_refresh(uuid, uuid, boolean, text, text) to service_role;
+
+comment on function complete_concur_oauth_refresh(uuid, uuid, boolean, text, text) is
+  'Edge Function専用（service_roleのみEXECUTE可）。get_concur_refresh_token_for_edge()'
+  'が発行したlease_idと完全一致する場合だけ、リースを解放する。p_success='
+  'trueかつp_new_refresh_tokenが非null・非空文字の場合のみvault.update_secret()'
+  'で実際にRefresh Tokenを更新する（rotated:falseの場合はp_new_refresh_token'
+  'をnullのまま呼び、リースの解放とlast_refreshed_at更新だけを行う）。'
+  'p_success=falseの場合はToken値を一切受け取らず、last_error_codeだけを'
+  '記録する。lease_id不一致（古いlease_id・他のconnection_idへの流用・'
+  '二重実行）はfalseを返すだけで、例外・状態変更のいずれも起こさない。'
+  'Vault更新（vault.update_secret）とメタデータ更新は同一トランザクション内。';
+
+-- ----------------------------------------------------------------------------
+-- rollback（未適用・案。実行が必要になった場合にこのブロックだけを使う）
+-- ----------------------------------------------------------------------------
+-- drop function if exists complete_concur_oauth_refresh(uuid, uuid, boolean, text, text);
+-- drop function if exists get_concur_refresh_token_for_edge(uuid);
+-- drop table if exists concur_oauth_connections;
+-- -- vault.secrets内の実際のシークレット行は、このrollbackでは削除しない
+-- -- （ロールバックは「メタデータ層の後始末」に留め、実データの削除有無は
+-- -- 別途手動判断とする）。
