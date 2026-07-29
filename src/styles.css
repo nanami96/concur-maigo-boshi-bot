@@ -3317,6 +3317,17 @@ textarea.resultFieldInput {
   gap: 14px;
 }
 
+.settingsPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settingsPanelHeader h2 {
+  margin: 0;
+}
+
 .settingsTextInput {
   padding: 8px 10px;
   border: 1px solid #c7d2e0;

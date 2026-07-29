@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import OptionMenu from "./OptionMenu";
 import ConfirmDialog from "./ConfirmDialog";
 import EditableText from "./EditableText";
@@ -312,6 +312,17 @@ export default function ExpenseTypeSettings({ editor }) {
   const [statusFilter, setStatusFilter] = useState("");
   const [receiptFilter, setReceiptFilter] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  // 経費タイプ登録フォームは一覧の最下部に表示されるため、上部の「＋ 経費タイプを追加」
+  // リンクから開いた場合、一覧が長いとフォームが画面外になり、リンクが消えただけで
+  // 何も起きなかったように見えてしまう。isAddingがtrueになったタイミングで
+  // フォームの位置まで自然にスクロールし、開いたことが必ず見えるようにする。
+  const addFormRef = useRef(null);
+
+  useEffect(() => {
+    if (isAdding) {
+      addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [isAdding]);
 
   const filtered = useMemo(() => {
     return editor.expenseTypes.filter((expenseType) => {
@@ -341,7 +352,14 @@ export default function ExpenseTypeSettings({ editor }) {
 
   return (
     <div className="settingsPanel">
-      <h2>経費タイプ</h2>
+      <div className="settingsPanelHeader">
+        <h2>経費タイプ</h2>
+        {!isAdding && (
+          <button type="button" className="flowAddOptionButton" onClick={() => setIsAdding(true)}>
+            ＋ 経費タイプを追加
+          </button>
+        )}
+      </div>
 
       {isEmpty && !isAdding && <p className="flowEmptyOptionsHint">経費タイプがまだありません。</p>}
 
@@ -423,13 +441,15 @@ export default function ExpenseTypeSettings({ editor }) {
         </div>
       )}
 
-      {isAdding ? (
-        <AddExpenseTypeForm editor={editor} policies={editor.policies} onDone={() => setIsAdding(false)} />
-      ) : (
-        <button type="button" className="flowAddOptionButton" onClick={() => setIsAdding(true)}>
-          {isEmpty ? "＋ 最初の経費タイプを追加" : "＋ 経費タイプを追加"}
-        </button>
-      )}
+      <div ref={addFormRef}>
+        {isAdding ? (
+          <AddExpenseTypeForm editor={editor} policies={editor.policies} onDone={() => setIsAdding(false)} />
+        ) : (
+          <button type="button" className="flowAddOptionButton" onClick={() => setIsAdding(true)}>
+            {isEmpty ? "＋ 最初の経費タイプを追加" : "＋ 経費タイプを追加"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
