@@ -8,8 +8,13 @@ const DUMMY_GEOLOCATION = "https://example-dummy.concursolutions.test";
 const DUMMY_USER_NAME = "user@example.com";
 const VALID_USER_ID = "3df11695-e8bb-40ff-8e98-c85913ab2789";
 
-function jsonFetch(status, body) {
-  return async () => ({ status, json: async () => body });
+function jsonFetch(status, body, headersMap = {}) {
+  return async () => ({
+    status,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+    headers: { get: (name) => (Object.prototype.hasOwnProperty.call(headersMap, name) ? headersMap[name] : null) },
+  });
 }
 
 function listResponse(resources) {
@@ -176,6 +181,240 @@ describe("lookupConcurUser（HTTP異常系）", () => {
       fetchImpl: jsonFetch(500, {}),
     });
     expect(result.error.code).toBe("concur_identity_service_error");
+  });
+});
+
+// 【一時的なデバッグログ・要削除】concur_identity_rejected（401/403）発生時
+// だけ、許可リストで抽出・サニタイズ済みの安全な情報（status・errorCode等）を
+// 構造化オブジェクトとしてlog()へ渡す挙動のテスト。生レスポンス本文全体は
+// 一切ログへ出さない。
+describe("lookupConcurUser（一時デバッグログ：concur_identity_rejectedのみ・安全な構造化情報のみ）", () => {
+  it("401の場合、logへstatusと安全なerrorCodeだけを構造化オブジェクトで渡す", async () => {
+    const calls = [];
+
+    await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl: jsonFetch(401, { error: "invalid_token" }),
+      log: (message, details) => calls.push({ message, details }),
+    });
+
+    expect(calls.length).toBe(1);
+    expect(calls[0].details).toEqual({
+      stage: "identity_rejected",
+      status: 401,
+      errorCode: "invalid_token",
+      responseJsonParsed: true,
+      requestIdPresent: false,
+      requestId: null,
+    });
+  });
+
+  it("403の場合も同様に構造化オブジェクトで渡す", async () => {
+    const calls = [];
+
+    await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl: jsonFetch(403, { code: "insufficient_scope" }),
+      log: (message, details) => calls.push({ message, details }),
+    });
+
+    expect(calls.length).toBe(1);
+    expect(calls[0].details.status).toBe(403);
+    expect(calls[0].details.errorCode).toBe("insufficient_scope");
+  });
+
+  it("JSONでない本文の場合はresponseJsonParsed:false・errorCode:unknownだけを渡し、本文自体は含まない", async () => {
+    const calls = [];
+    const fetchImpl = async () => ({
+      status: 401,
+      json: async () => { throw new Error("not json"); },
+      text: async () => "<html>SECRET_INTERNAL_HTML_BODY</html>",
+      headers: { get: () => null },
+    });
+
+    await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl,
+      log: (message, details) => calls.push({ message, details }),
+    });
+
+    expect(calls.length).toBe(1);
+    expect(calls[0].details.responseJsonParsed).toBe(false);
+    expect(calls[0].details.errorCode).toBe("unknown");
+    expect(JSON.stringify(calls[0])).not.toContain("SECRET_INTERNAL_HTML_BODY");
+  });
+
+  it("request ID系ヘッダーが存在する場合、requestIdPresentとrequestIdを渡す", async () => {
+    const calls = [];
+
+    await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl: jsonFetch(401, { error: "invalid_token" }, { "x-request-id": "req-123" }),
+      log: (message, details) => calls.push({ message, details }),
+    });
+
+    expect(calls[0].details.requestIdPresent).toBe(true);
+    expect(calls[0].details.requestId).toBe("req-123");
+  });
+
+  it("error_description・message・userName・メールアドレス・userIDをログへ含めない", async () => {
+    const calls = [];
+    const rejectionBody = {
+      error: "invalid_token",
+      error_description: "token expired for taro.yamada@example.com (id 3df11695-e8bb-40ff-8e98-c85913ab2789)",
+      message: "full message body should not leak",
+      userName: DUMMY_USER_NAME,
+    };
+
+    await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl: jsonFetch(401, rejectionBody),
+      log: (message, details) => calls.push({ message, details }),
+    });
+
+    const serialized = JSON.stringify(calls);
+    expect(serialized).not.toContain("error_description");
+    expect(serialized).not.toContain("taro.yamada@example.com");
+    expect(serialized).not.toContain("full message body should not leak");
+    expect(serialized).not.toContain(DUMMY_USER_NAME);
+    expect(serialized).not.toContain("3df11695-e8bb-40ff-8e98-c85913ab2789");
+    expect(calls[0].details.errorCode).toBe("invalid_token");
+  });
+
+  it("不正な型のerrorCode候補はunknownになる", async () => {
+    const calls = [];
+
+    await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl: jsonFetch(401, { error: { nested: "object" } }),
+      log: (message, details) => calls.push({ message, details }),
+    });
+
+    expect(calls[0].details.errorCode).toBe("unknown");
+  });
+
+  it("長すぎるerrorCode候補はunknownになる", async () => {
+    const calls = [];
+
+    await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl: jsonFetch(401, { error: "x".repeat(200) }),
+      log: (message, details) => calls.push({ message, details }),
+    });
+
+    expect(calls[0].details.errorCode).toBe("unknown");
+  });
+
+  it("制御文字を含むerrorCode候補は安全化される（改行等を除去）", async () => {
+    const calls = [];
+
+    await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl: jsonFetch(401, { error: "invalid\ntoken" }),
+      log: (message, details) => calls.push({ message, details }),
+    });
+
+    expect(calls[0].details.errorCode).not.toContain("\n");
+  });
+
+  it("concur_identity_rejected以外（429・500・timeout・network等）ではこの一時ログを呼ばない", async () => {
+    const calls = [];
+    const logFn = (message, details) => calls.push({ message, details });
+
+    await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl: jsonFetch(429, {}),
+      log: logFn,
+    });
+    await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl: jsonFetch(500, {}),
+      log: logFn,
+    });
+    await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl: jsonFetch(200, listResponse([{ id: VALID_USER_ID }])),
+      log: logFn,
+    });
+
+    expect(calls.length).toBe(0);
+  });
+
+  it("logを渡さない場合も例外にならない（既定の呼び出しとの後方互換）", async () => {
+    const result = await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl: jsonFetch(401, {}),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe("concur_identity_rejected");
+  });
+
+  it("レスポンス本文が読み取れない場合（text()が例外）でも処理は継続し、安全にconcur_identity_rejectedを返す", async () => {
+    const calls = [];
+    const fetchImpl = async () => ({
+      status: 401,
+      json: async () => { throw new Error("not json"); },
+      text: async () => { throw new Error("body already consumed"); },
+      headers: { get: () => null },
+    });
+
+    const result = await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl,
+      log: (message, details) => calls.push({ message, details }),
+    });
+
+    expect(result.error.code).toBe("concur_identity_rejected");
+    expect(calls.length).toBe(1);
+    expect(calls[0].details.status).toBe(401);
+    expect(calls[0].details.responseJsonParsed).toBe(false);
+    expect(calls[0].details.errorCode).toBe("unknown");
+  });
+
+  it("logへ渡される内容にAccess Token・Refresh Token・Client Secretの値が一切含まれない", async () => {
+    const calls = [];
+    const DUMMY_REFRESH_TOKEN = "DUMMY_REFRESH_TOKEN_SHOULD_NOT_LEAK";
+    const DUMMY_CLIENT_SECRET = "DUMMY_CLIENT_SECRET_SHOULD_NOT_LEAK";
+
+    await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl: jsonFetch(401, { error: "invalid_token" }),
+      log: (message, details) => calls.push({ message, details }),
+    });
+
+    const serialized = JSON.stringify(calls);
+    expect(serialized).not.toContain(DUMMY_ACCESS_TOKEN);
+    expect(serialized).not.toContain(DUMMY_REFRESH_TOKEN);
+    expect(serialized).not.toContain(DUMMY_CLIENT_SECRET);
   });
 });
 

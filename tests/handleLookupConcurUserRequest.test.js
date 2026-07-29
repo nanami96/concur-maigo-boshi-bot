@@ -410,6 +410,28 @@ describe("handleLookupConcurUserRequest（Identity API連携・保存成功後�
     );
   });
 
+  // 【一時的なデバッグログ・要削除】concur_identity_rejected発生時の調査用。
+  it("logパラメータが指定された場合、lookupUserへそのまま渡す（デバッグ用。デバッグ終了後に削除予定）", async () => {
+    const lookupUser = vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID });
+    const log = vi.fn();
+
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      body: { userName: DUMMY_USER_NAME },
+      env: buildEnv(),
+      getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
+      refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser,
+      log,
+    });
+
+    expect(lookupUser).toHaveBeenCalledWith(
+      expect.objectContaining({ log }),
+    );
+  });
+
   it("1件ヒット（成功）した場合、found:true・hasUserId:true・multipleMatches:falseを返す", async () => {
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",

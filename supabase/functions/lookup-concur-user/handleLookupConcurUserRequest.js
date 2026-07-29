@@ -114,6 +114,9 @@ async function safeCompleteFailure(completeOAuthRefresh, connectionId, leaseId, 
  * @param {typeof refreshConcurAccessToken} [input.refreshAccessToken]
  * @param {typeof lookupConcurUser} [input.lookupUser]
  * @param {typeof fetch} [input.fetchImpl] テスト用の差し替え（refreshAccessToken・lookupUserへ素通しする）。
+ * @param {(message: string, details?: object) => void} [input.log] 【一時的なデバッグログ・要削除】
+ *   concur_identity_rejected発生時の調査用。lookupUser()へそのまま渡すだけで、
+ *   この関数自身はログ出力しない（detailsは許可リスト済みの安全な構造化情報のみ）。
  * @returns {Promise<{ status: number, body: { result: object|null, error: object|null } }>}
  */
 export async function handleLookupConcurUserRequest({
@@ -130,6 +133,7 @@ export async function handleLookupConcurUserRequest({
   refreshAccessToken = refreshConcurAccessToken,
   lookupUser = lookupConcurUser,
   fetchImpl,
+  log,
 }) {
   if (method !== "POST") {
     return { status: 405, body: { result: null, error: { code: "method_not_allowed", message: "許可されていないメソッドです。" } } };
@@ -210,7 +214,10 @@ export async function handleLookupConcurUserRequest({
 
   let lookupResult;
   try {
-    lookupResult = await lookupUser({ geolocation, accessToken, userName, fetchImpl });
+    // logは【一時的なデバッグログ・要削除】concur_identity_rejected発生時の
+    // 調査用にlookupUser()内部だけで使われる（ここではAccess Token等を
+    // 一切渡していない）。
+    lookupResult = await lookupUser({ geolocation, accessToken, userName, fetchImpl, log });
   } catch {
     return respondWithLocalCode("internal_error");
   }
