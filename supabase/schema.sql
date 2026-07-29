@@ -1446,7 +1446,8 @@ alter table published_versions
 
 comment on column draft_configs.concur_expense_type_mappings is
   'Concur Expense Type mapping（{companyId, policyId, botExpenseTypeId, concurExpenseTypeId}の'
-  '配列）の下書き。編集UIはまだ無く、現状は常に[]で保存される想定（Phase 11完了報告参照）。';
+  '配列）の下書き。管理画面「Concurマッピング」タブでの追加・編集・削除、および初期設定Excel'
+  '（07_Concurマッピングシート）からの取り込みに対応している（Concur APIへの実際の送信は未実装）。';
 comment on column published_versions.concur_expense_type_mappings is
   '公開時点のConcur Expense Type mapping（publish_company_draft()がdraft_configsから'
   'そのままコピーする）。config_snapshot.concur.expenseTypeMappingsと同じ内容を、'
