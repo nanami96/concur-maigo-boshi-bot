@@ -37,16 +37,18 @@ function isNonEmptyString(value) {
 
 // 【一時的なデバッグログ・要削除】concur_identity_rejected（Identity APIが
 // 401/403を返した場合）の原因調査のためだけに、buildSafeIdentityRejectedDebugLog.js
-// で組み立てた「許可リスト済みの安全な情報だけ」を構造化オブジェクトとして
-// ログへ渡す。デバッグが終わったら、この関数呼び出し箇所ごと削除すること
-// （下記lookupConcurUser()内の呼び出し箇所、およびこの関数自体）。
+// で組み立てた「error・error_descriptionの2フィールドだけを安全に抽出した情報」
+// を構造化オブジェクトとしてログへ渡す。デバッグが終わったら、この関数呼び出し
+// 箇所ごと削除すること（下記lookupConcurUser()内の呼び出し箇所、およびこの
+// 関数自体）。
 //
 // 【安全性について】ここで渡すのはstatus・bodyTextだけであり、こちらが送信した
 // Access Token・Refresh Token・Client Secret・Authorizationヘッダーの値は
 // 引数として一切渡していない・参照していない。bodyText自体（レスポンス本文の
 // 生の値）はログへは出さず、buildSafeIdentityRejectedDebugLog.js内部で
-// JSON解析・許可リストによる抽出・サニタイズにのみ使い、抽出後の安全な値
-// （errorCode等）だけをログへ渡す。
+// JSON解析・error/error_descriptionフィールドの抽出・サニタイズ（メール
+// アドレス・UUID・長いトークンらしい部分文字列のredact等）にのみ使い、
+// 抽出後の安全な値だけをログへ渡す。
 function logRejectedIdentityLookupForDebug(log, status, bodyText, headers) {
   if (typeof log !== "function") {
     return;
@@ -67,8 +69,8 @@ function logRejectedIdentityLookupForDebug(log, status, bodyText, headers) {
  * @param {typeof fetch} [input.fetchImpl] テスト用の差し替え。既定はグローバルfetch。
  * @param {number} [input.timeoutMs] token endpointへのfetchのタイムアウト（ミリ秒）。
  * @param {(message: string, details?: object) => void} [input.log] 【一時的なデバッグログ・要削除】
- *   concur_identity_rejected発生時に、許可リストで抽出・サニタイズ済みの
- *   安全な情報（status・errorCode等。buildSafeIdentityRejectedDebugLog.js参照）
+ *   concur_identity_rejected発生時に、安全に抽出・サニタイズ済みの情報
+ *   （status・error・errorDescription等。buildSafeIdentityRejectedDebugLog.js参照）
  *   だけを構造化オブジェクトとして記録するために使う。指定しない場合は
  *   何もログ出力しない。
  * @returns {Promise<

@@ -431,7 +431,174 @@ describe("handleLookupConcurUserRequest（Identity API連携・保存成功後�
       expect.objectContaining({ log }),
     );
   });
+});
 
+// 【一時的なデバッグログ・要削除】concur_identity_rejected（401）の原因切り分けの
+// ため、OAuth Tokenのscopeにidentity.user.ids.readが含まれるかどうかの真偽値だけを
+// logへ記録する挙動のテスト。scopeの生値・他のscope名はログへ出さない。
+describe("handleLookupConcurUserRequest（一時デバッグログ：concur_oauth_scope_diagnostic）", () => {
+  it("scopeにidentity.user.ids.readを含む場合、logへhasIdentityUserIdsRead:trueを渡す", async () => {
+    const calls = [];
+    const log = (message, details) => calls.push({ message, details });
+
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      body: { userName: DUMMY_USER_NAME },
+      env: buildEnv(),
+      getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
+      refreshAccessToken: vi.fn().mockResolvedValue(
+        buildSuccessfulOAuthResult({ tokens: { accessToken: DUMMY_ACCESS_TOKEN, refreshToken: null, geolocation: DUMMY_GEOLOCATION, scope: "identity.user.ids.read expense.report.read" } }),
+      ),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+      log,
+    });
+
+    const diagnosticCall = calls.find((call) => call.details?.stage === "concur_oauth_scope_diagnostic");
+    expect(diagnosticCall).toBeTruthy();
+    expect(diagnosticCall.details).toEqual({
+      stage: "concur_oauth_scope_diagnostic",
+      scopePresent: true,
+      hasIdentityUserIdsRead: true,
+    });
+  });
+
+  it("scopeにidentity.user.ids.readを含まない場合、hasIdentityUserIdsRead:falseを渡す", async () => {
+    const calls = [];
+    const log = (message, details) => calls.push({ message, details });
+
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      body: { userName: DUMMY_USER_NAME },
+      env: buildEnv(),
+      getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
+      refreshAccessToken: vi.fn().mockResolvedValue(
+        buildSuccessfulOAuthResult({ tokens: { accessToken: DUMMY_ACCESS_TOKEN, refreshToken: null, geolocation: DUMMY_GEOLOCATION, scope: "expense.report.read" } }),
+      ),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+      log,
+    });
+
+    const diagnosticCall = calls.find((call) => call.details?.stage === "concur_oauth_scope_diagnostic");
+    expect(diagnosticCall.details.scopePresent).toBe(true);
+    expect(diagnosticCall.details.hasIdentityUserIdsRead).toBe(false);
+  });
+
+  it("scopeが部分一致（identity.user.ids.read.extra等）の場合はfalse", async () => {
+    const calls = [];
+    const log = (message, details) => calls.push({ message, details });
+
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      body: { userName: DUMMY_USER_NAME },
+      env: buildEnv(),
+      getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
+      refreshAccessToken: vi.fn().mockResolvedValue(
+        buildSuccessfulOAuthResult({ tokens: { accessToken: DUMMY_ACCESS_TOKEN, refreshToken: null, geolocation: DUMMY_GEOLOCATION, scope: "identity.user.ids.read.extra" } }),
+      ),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+      log,
+    });
+
+    const diagnosticCall = calls.find((call) => call.details?.stage === "concur_oauth_scope_diagnostic");
+    expect(diagnosticCall.details.hasIdentityUserIdsRead).toBe(false);
+  });
+
+  it("token応答にscopeが無い場合、scopePresent:falseを渡す", async () => {
+    const calls = [];
+    const log = (message, details) => calls.push({ message, details });
+
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      body: { userName: DUMMY_USER_NAME },
+      env: buildEnv(),
+      getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
+      refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+      log,
+    });
+
+    const diagnosticCall = calls.find((call) => call.details?.stage === "concur_oauth_scope_diagnostic");
+    expect(diagnosticCall.details.scopePresent).toBe(false);
+    expect(diagnosticCall.details.hasIdentityUserIdsRead).toBe(false);
+  });
+
+  it("scopeの生値・他のscope名がログへ一切含まれない", async () => {
+    const calls = [];
+    const log = (message, details) => calls.push({ message, details });
+
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      body: { userName: DUMMY_USER_NAME },
+      env: buildEnv(),
+      getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
+      refreshAccessToken: vi.fn().mockResolvedValue(
+        buildSuccessfulOAuthResult({ tokens: { accessToken: DUMMY_ACCESS_TOKEN, refreshToken: null, geolocation: DUMMY_GEOLOCATION, scope: "identity.user.ids.read expense.report.read company.secret.scope" } }),
+      ),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+      log,
+    });
+
+    const serialized = JSON.stringify(calls);
+    expect(serialized).not.toContain("expense.report.read");
+    expect(serialized).not.toContain("company.secret.scope");
+    expect(serialized).not.toContain("identity.user.ids.read ");
+  });
+
+  it("Access Token・Refresh Token・Client Secret・userName・userIDがログへ含まれない", async () => {
+    const calls = [];
+    const log = (message, details) => calls.push({ message, details });
+    const DUMMY_CLIENT_SECRET = "DUMMY_CLIENT_SECRET_SHOULD_NOT_LEAK";
+
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      body: { userName: DUMMY_USER_NAME },
+      env: buildEnv({ CONCUR_CLIENT_SECRET: DUMMY_CLIENT_SECRET }),
+      getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
+      refreshAccessToken: vi.fn().mockResolvedValue(
+        buildSuccessfulOAuthResult({ tokens: { accessToken: DUMMY_ACCESS_TOKEN, refreshToken: DUMMY_NEW_REFRESH_TOKEN, geolocation: DUMMY_GEOLOCATION, scope: "identity.user.ids.read" } }),
+      ),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+      log,
+    });
+
+    const diagnosticCall = calls.find((call) => call.details?.stage === "concur_oauth_scope_diagnostic");
+    const serialized = JSON.stringify(diagnosticCall);
+    expect(serialized).not.toContain(DUMMY_ACCESS_TOKEN);
+    expect(serialized).not.toContain(DUMMY_NEW_REFRESH_TOKEN);
+    expect(serialized).not.toContain(DUMMY_CLIENT_SECRET);
+    expect(serialized).not.toContain(DUMMY_USER_NAME);
+    expect(serialized).not.toContain(VALID_USER_ID);
+  });
+
+  it("logを渡さない場合も例外にならない", async () => {
+    const { status } = await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      body: { userName: DUMMY_USER_NAME },
+      env: buildEnv(),
+      getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
+      refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+    });
+
+    expect(status).toBe(200);
+  });
+});
+
+describe("handleLookupConcurUserRequest（Identity API連携・保存成功後にのみ進む・続き）", () => {
   it("1件ヒット（成功）した場合、found:true・hasUserId:true・multipleMatches:falseを返す", async () => {
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",

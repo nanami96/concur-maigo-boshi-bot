@@ -5,29 +5,43 @@ function headersFrom(map) {
   return { get: (name) => (Object.prototype.hasOwnProperty.call(map, name) ? map[name] : null) };
 }
 
-describe("buildSafeIdentityRejectedDebugLog（正常系）", () => {
-  it("JSON本文からerrorCode候補を安全に抽出する", () => {
+describe("buildSafeIdentityRejectedDebugLog（正常系：error/error_descriptionの抽出）", () => {
+  it("JSON本文からerror・error_descriptionを安全に抽出する", () => {
     const result = buildSafeIdentityRejectedDebugLog({
       status: 403,
-      bodyText: JSON.stringify({ error: "insufficient_scope" }),
+      bodyText: JSON.stringify({ error: "insufficient_scope", error_description: "The token does not have the required scope." }),
     });
 
     expect(result).toEqual({
       stage: "identity_rejected",
       status: 403,
-      errorCode: "insufficient_scope",
+      error: "insufficient_scope",
+      errorDescription: "The token does not have the required scope.",
       responseJsonParsed: true,
       requestIdPresent: false,
       requestId: null,
     });
   });
 
-  it("candidate優先順位: error → code → errorCode", () => {
+  it("error_descriptionが無い場合はnull", () => {
+    const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify({ error: "invalid_token" }) });
+    expect(result.error).toBe("invalid_token");
+    expect(result.errorDescription).toBeNull();
+  });
+
+  it("errorが無い場合はnull", () => {
+    const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify({ error_description: "expired" }) });
+    expect(result.error).toBeNull();
+    expect(result.errorDescription).toBe("expired");
+  });
+
+  it("code・errorCode等、error/error_description以外のフィールド名は抽出しない", () => {
     const result = buildSafeIdentityRejectedDebugLog({
       status: 401,
-      bodyText: JSON.stringify({ code: "invalid_token", errorCode: "should_not_be_used" }),
+      bodyText: JSON.stringify({ code: "invalid_token", errorCode: "invalid_token" }),
     });
-    expect(result.errorCode).toBe("invalid_token");
+    expect(result.error).toBeNull();
+    expect(result.errorDescription).toBeNull();
   });
 
   it("request ID系ヘッダーが存在する場合、requestIdPresentとrequestIdを返す", () => {
@@ -59,83 +73,151 @@ describe("buildSafeIdentityRejectedDebugLog（正常系）", () => {
 });
 
 describe("buildSafeIdentityRejectedDebugLog（本文がJSONでない・欠落）", () => {
-  it("JSONとして解析できない本文はresponseJsonParsed:false、errorCode:unknownで、本文自体を含まない", () => {
+  it("JSONとして解析できない本文はresponseJsonParsed:false、error/errorDescription:nullで、本文自体を含まない", () => {
     const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: "<html>not json</html>" });
 
     expect(result.responseJsonParsed).toBe(false);
-    expect(result.errorCode).toBe("unknown");
+    expect(result.error).toBeNull();
+    expect(result.errorDescription).toBeNull();
     expect(JSON.stringify(result)).not.toContain("not json");
   });
 
-  it("bodyTextが未指定（読み取り失敗）の場合もresponseJsonParsed:false・errorCode:unknownで安全に扱う", () => {
+  it("bodyTextが未指定（読み取り失敗）の場合もresponseJsonParsed:falseで安全に扱う", () => {
     const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: undefined });
 
     expect(result.responseJsonParsed).toBe(false);
-    expect(result.errorCode).toBe("unknown");
+    expect(result.error).toBeNull();
+    expect(result.errorDescription).toBeNull();
   });
 
   it("空文字の本文もresponseJsonParsed:false", () => {
     const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: "   " });
     expect(result.responseJsonParsed).toBe(false);
-    expect(result.errorCode).toBe("unknown");
   });
 
-  it("Resources配列など想定外の構造（配列そのもの）はerrorCode:unknown", () => {
+  it("配列そのもの等、想定外の構造はerror/errorDescriptionともnull", () => {
     const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify([1, 2, 3]) });
-    expect(result.errorCode).toBe("unknown");
-  });
-
-  it("errorCode候補フィールドが無い場合はunknown", () => {
-    const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify({ message: "invalid_token", error_description: "detail" }) });
-    expect(result.errorCode).toBe("unknown");
+    expect(result.error).toBeNull();
+    expect(result.errorDescription).toBeNull();
   });
 });
 
-describe("buildSafeIdentityRejectedDebugLog（errorCodeのサニタイズ）", () => {
-  it("非文字列のerrorCode候補はunknown", () => {
+describe("buildSafeIdentityRejectedDebugLog（errorのサニタイズ）", () => {
+  it("非文字列のerrorはnull", () => {
     const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify({ error: 12345 }) });
-    expect(result.errorCode).toBe("unknown");
+    expect(result.error).toBeNull();
   });
 
-  it("100文字を超えるerrorCodeはunknownへ丸める", () => {
+  it("100文字を超えるerrorはnullへ丸める", () => {
     const longValue = "a".repeat(101);
     const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify({ error: longValue }) });
-    expect(result.errorCode).toBe("unknown");
+    expect(result.error).toBeNull();
   });
 
-  it("制御文字・改行を含むerrorCodeは安全化される", () => {
+  it("制御文字・改行を含むerrorは安全化される", () => {
     const result = buildSafeIdentityRejectedDebugLog({
       status: 401,
       bodyText: JSON.stringify({ error: "invalid\ntoken\r\n\x00value" }),
     });
-    expect(result.errorCode).toBe("invalidtokenvalue");
+    expect(result.error).toBe("invalidtokenvalue");
   });
 
-  it("メールアドレスらしい値はunknownへ丸める", () => {
+  it("メールアドレスらしい値はnullへ丸める", () => {
     const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify({ error: "user@example.com" }) });
-    expect(result.errorCode).toBe("unknown");
+    expect(result.error).toBeNull();
   });
 
-  it("JWTらしい値（ドット区切り3セグメント）はunknownへ丸める", () => {
+  it("JWTらしい値（ドット区切り3セグメント）はnullへ丸める", () => {
     const jwtLike = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
     const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify({ error: jwtLike }) });
-    expect(result.errorCode).toBe("unknown");
+    expect(result.error).toBeNull();
   });
 
-  it("長いトークンらしい値（40文字超のトークン文字集合）はunknownへ丸める", () => {
+  it("長いトークンらしい値（40文字超のトークン文字集合）はnullへ丸める", () => {
     const tokenLike = "A".repeat(50);
     const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify({ error: tokenLike }) });
-    expect(result.errorCode).toBe("unknown");
+    expect(result.error).toBeNull();
   });
 
-  it("空文字・空白のみのerrorCodeはunknown", () => {
+  it("空文字・空白のみのerrorはnull", () => {
     const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify({ error: "   " }) });
-    expect(result.errorCode).toBe("unknown");
+    expect(result.error).toBeNull();
   });
 
   it("短い定型的なOAuthエラーコードはそのまま通す", () => {
     const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify({ error: "invalid_token" }) });
-    expect(result.errorCode).toBe("invalid_token");
+    expect(result.error).toBe("invalid_token");
+  });
+});
+
+describe("buildSafeIdentityRejectedDebugLog（error_descriptionのサニタイズ）", () => {
+  it("非文字列のerror_descriptionはnull", () => {
+    const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify({ error_description: { nested: true } }) });
+    expect(result.errorDescription).toBeNull();
+  });
+
+  it("空文字・空白のみのerror_descriptionはnull", () => {
+    const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify({ error_description: "   " }) });
+    expect(result.errorDescription).toBeNull();
+  });
+
+  it("制御文字・改行を除去する", () => {
+    const result = buildSafeIdentityRejectedDebugLog({
+      status: 401,
+      bodyText: JSON.stringify({ error_description: "token\nexpired\r\n\x00now" }),
+    });
+    expect(result.errorDescription).toBe("tokenexpirednow");
+  });
+
+  it("200文字を超える場合は切り詰めて末尾に…を付与する", () => {
+    // トークンらしい連続文字列としてredactされないよう、スペース区切りの
+    // 通常の英文らしい形にする（各単語は24文字未満）。
+    const longValue = "word ".repeat(60).trim();
+    const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify({ error_description: longValue }) });
+    expect(result.errorDescription.length).toBe(201);
+    expect(result.errorDescription.endsWith("…")).toBe(true);
+  });
+
+  it("埋め込まれたメールアドレスを[redacted-email]へ置換する", () => {
+    const result = buildSafeIdentityRejectedDebugLog({
+      status: 401,
+      bodyText: JSON.stringify({ error_description: "token expired for taro.yamada@example.com" }),
+    });
+    expect(result.errorDescription).toBe("token expired for [redacted-email]");
+    expect(result.errorDescription).not.toContain("@");
+  });
+
+  it("埋め込まれたUUID（userIDの形式）を[redacted-id]へ置換する", () => {
+    const result = buildSafeIdentityRejectedDebugLog({
+      status: 401,
+      bodyText: JSON.stringify({ error_description: "no user found with id 3df11695-e8bb-40ff-8e98-c85913ab2789" }),
+    });
+    expect(result.errorDescription).toBe("no user found with id [redacted-id]");
+  });
+
+  it("埋め込まれた長いトークンらしい文字列を[redacted-token]へ置換する", () => {
+    const result = buildSafeIdentityRejectedDebugLog({
+      status: 401,
+      bodyText: JSON.stringify({ error_description: "invalid token: DUMMY_ACCESS_TOKEN_SHOULD_NOT_LEAK" }),
+    });
+    expect(result.errorDescription).toBe("invalid token: [redacted-token]");
+    expect(result.errorDescription).not.toContain("DUMMY_ACCESS_TOKEN_SHOULD_NOT_LEAK");
+  });
+
+  it("文字列全体が長いトークンらしい場合は丸ごと[redacted-token]に置換される", () => {
+    const result = buildSafeIdentityRejectedDebugLog({
+      status: 401,
+      bodyText: JSON.stringify({ error_description: "DUMMY_ACCESS_TOKEN_SHOULD_NOT_LEAK_1234567890" }),
+    });
+    expect(result.errorDescription).toBe("[redacted-token]");
+  });
+
+  it("通常の短い説明文はそのまま通す", () => {
+    const result = buildSafeIdentityRejectedDebugLog({
+      status: 401,
+      bodyText: JSON.stringify({ error_description: "The access token expired" }),
+    });
+    expect(result.errorDescription).toBe("The access token expired");
   });
 });
 
@@ -173,7 +255,7 @@ describe("buildSafeIdentityRejectedDebugLog（requestIdのサニタイズ）", (
 });
 
 describe("buildSafeIdentityRejectedDebugLog（非露出の確認）", () => {
-  it("error_description・message・userName・メールアドレス・userID・Access Token等が結果に一切含まれない", () => {
+  it("message・userName・メールアドレス・userID・Access Token等が結果に一切含まれない", () => {
     const dangerousBody = {
       error: "invalid_token",
       error_description: "The access token abcdefgh-secret expired for user taro.yamada@example.com (id 3df11695-e8bb-40ff-8e98-c85913ab2789)",
@@ -185,11 +267,12 @@ describe("buildSafeIdentityRejectedDebugLog（非露出の確認）", () => {
     const result = buildSafeIdentityRejectedDebugLog({ status: 401, bodyText: JSON.stringify(dangerousBody) });
     const serialized = JSON.stringify(result);
 
-    expect(serialized).not.toContain("error_description");
     expect(serialized).not.toContain("taro.yamada@example.com");
     expect(serialized).not.toContain("DUMMY_ACCESS_TOKEN_SHOULD_NOT_LEAK");
     expect(serialized).not.toContain("3df11695-e8bb-40ff-8e98-c85913ab2789");
     expect(serialized).not.toContain("identity.user.ids.read");
-    expect(result.errorCode).toBe("invalid_token");
+    expect(result.error).toBe("invalid_token");
+    expect(result.errorDescription).not.toContain("@");
+    expect(result.errorDescription).not.toContain("3df11695-e8bb-40ff-8e98-c85913ab2789");
   });
 });

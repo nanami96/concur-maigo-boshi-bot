@@ -185,18 +185,18 @@ describe("lookupConcurUser（HTTP異常系）", () => {
 });
 
 // 【一時的なデバッグログ・要削除】concur_identity_rejected（401/403）発生時
-// だけ、許可リストで抽出・サニタイズ済みの安全な情報（status・errorCode等）を
-// 構造化オブジェクトとしてlog()へ渡す挙動のテスト。生レスポンス本文全体は
-// 一切ログへ出さない。
-describe("lookupConcurUser（一時デバッグログ：concur_identity_rejectedのみ・安全な構造化情報のみ）", () => {
-  it("401の場合、logへstatusと安全なerrorCodeだけを構造化オブジェクトで渡す", async () => {
+// だけ、Concurのレスポンス本文からerror・error_descriptionの2フィールドだけを
+// 安全に抽出した構造化オブジェクトをlog()へ渡す挙動のテスト。生レスポンス本文
+// 全体は一切ログへ出さない。
+describe("lookupConcurUser（一時デバッグログ：concur_identity_rejectedのみ・error/error_descriptionのみ）", () => {
+  it("401の場合、logへstatus・error・error_descriptionを構造化オブジェクトで渡す", async () => {
     const calls = [];
 
     await lookupConcurUser({
       geolocation: DUMMY_GEOLOCATION,
       accessToken: DUMMY_ACCESS_TOKEN,
       userName: DUMMY_USER_NAME,
-      fetchImpl: jsonFetch(401, { error: "invalid_token" }),
+      fetchImpl: jsonFetch(401, { error: "invalid_token", error_description: "The access token expired" }),
       log: (message, details) => calls.push({ message, details }),
     });
 
@@ -204,7 +204,8 @@ describe("lookupConcurUser（一時デバッグログ：concur_identity_rejected
     expect(calls[0].details).toEqual({
       stage: "identity_rejected",
       status: 401,
-      errorCode: "invalid_token",
+      error: "invalid_token",
+      errorDescription: "The access token expired",
       responseJsonParsed: true,
       requestIdPresent: false,
       requestId: null,
@@ -218,16 +219,17 @@ describe("lookupConcurUser（一時デバッグログ：concur_identity_rejected
       geolocation: DUMMY_GEOLOCATION,
       accessToken: DUMMY_ACCESS_TOKEN,
       userName: DUMMY_USER_NAME,
-      fetchImpl: jsonFetch(403, { code: "insufficient_scope" }),
+      fetchImpl: jsonFetch(403, { error: "insufficient_scope" }),
       log: (message, details) => calls.push({ message, details }),
     });
 
     expect(calls.length).toBe(1);
     expect(calls[0].details.status).toBe(403);
-    expect(calls[0].details.errorCode).toBe("insufficient_scope");
+    expect(calls[0].details.error).toBe("insufficient_scope");
+    expect(calls[0].details.errorDescription).toBeNull();
   });
 
-  it("JSONでない本文の場合はresponseJsonParsed:false・errorCode:unknownだけを渡し、本文自体は含まない", async () => {
+  it("JSONでない本文の場合はresponseJsonParsed:false・error/errorDescription:nullだけを渡し、本文自体は含まない", async () => {
     const calls = [];
     const fetchImpl = async () => ({
       status: 401,
@@ -246,7 +248,8 @@ describe("lookupConcurUser（一時デバッグログ：concur_identity_rejected
 
     expect(calls.length).toBe(1);
     expect(calls[0].details.responseJsonParsed).toBe(false);
-    expect(calls[0].details.errorCode).toBe("unknown");
+    expect(calls[0].details.error).toBeNull();
+    expect(calls[0].details.errorDescription).toBeNull();
     expect(JSON.stringify(calls[0])).not.toContain("SECRET_INTERNAL_HTML_BODY");
   });
 
@@ -265,7 +268,7 @@ describe("lookupConcurUser（一時デバッグログ：concur_identity_rejected
     expect(calls[0].details.requestId).toBe("req-123");
   });
 
-  it("error_description・message・userName・メールアドレス・userIDをログへ含めない", async () => {
+  it("message・userName・メールアドレス・userIDをログへ含めない（error_description内に埋め込まれていてもredactされる）", async () => {
     const calls = [];
     const rejectionBody = {
       error: "invalid_token",
@@ -283,15 +286,15 @@ describe("lookupConcurUser（一時デバッグログ：concur_identity_rejected
     });
 
     const serialized = JSON.stringify(calls);
-    expect(serialized).not.toContain("error_description");
     expect(serialized).not.toContain("taro.yamada@example.com");
     expect(serialized).not.toContain("full message body should not leak");
     expect(serialized).not.toContain(DUMMY_USER_NAME);
     expect(serialized).not.toContain("3df11695-e8bb-40ff-8e98-c85913ab2789");
-    expect(calls[0].details.errorCode).toBe("invalid_token");
+    expect(calls[0].details.error).toBe("invalid_token");
+    expect(calls[0].details.errorDescription).toBe("token expired for [redacted-email] (id [redacted-id])");
   });
 
-  it("不正な型のerrorCode候補はunknownになる", async () => {
+  it("不正な型のerror候補はnullになる", async () => {
     const calls = [];
 
     await lookupConcurUser({
@@ -302,10 +305,10 @@ describe("lookupConcurUser（一時デバッグログ：concur_identity_rejected
       log: (message, details) => calls.push({ message, details }),
     });
 
-    expect(calls[0].details.errorCode).toBe("unknown");
+    expect(calls[0].details.error).toBeNull();
   });
 
-  it("長すぎるerrorCode候補はunknownになる", async () => {
+  it("長すぎるerror候補はnullになる", async () => {
     const calls = [];
 
     await lookupConcurUser({
@@ -316,10 +319,10 @@ describe("lookupConcurUser（一時デバッグログ：concur_identity_rejected
       log: (message, details) => calls.push({ message, details }),
     });
 
-    expect(calls[0].details.errorCode).toBe("unknown");
+    expect(calls[0].details.error).toBeNull();
   });
 
-  it("制御文字を含むerrorCode候補は安全化される（改行等を除去）", async () => {
+  it("制御文字を含むerror候補は安全化される（改行等を除去）", async () => {
     const calls = [];
 
     await lookupConcurUser({
@@ -330,7 +333,23 @@ describe("lookupConcurUser（一時デバッグログ：concur_identity_rejected
       log: (message, details) => calls.push({ message, details }),
     });
 
-    expect(calls[0].details.errorCode).not.toContain("\n");
+    expect(calls[0].details.error).not.toContain("\n");
+  });
+
+  it("Access Token・Refresh Token・Client Secretらしい長い文字列がerror_descriptionに埋め込まれていてもredactされる", async () => {
+    const calls = [];
+    const DUMMY_REFRESH_TOKEN_LIKE = "DUMMY_REFRESH_TOKEN_SHOULD_NOT_LEAK_VALUE";
+
+    await lookupConcurUser({
+      geolocation: DUMMY_GEOLOCATION,
+      accessToken: DUMMY_ACCESS_TOKEN,
+      userName: DUMMY_USER_NAME,
+      fetchImpl: jsonFetch(401, { error: "invalid_token", error_description: `refresh token ${DUMMY_REFRESH_TOKEN_LIKE} was rejected` }),
+      log: (message, details) => calls.push({ message, details }),
+    });
+
+    expect(calls[0].details.errorDescription).not.toContain(DUMMY_REFRESH_TOKEN_LIKE);
+    expect(calls[0].details.errorDescription).toContain("[redacted-token]");
   });
 
   it("concur_identity_rejected以外（429・500・timeout・network等）ではこの一時ログを呼ばない", async () => {
@@ -395,7 +414,8 @@ describe("lookupConcurUser（一時デバッグログ：concur_identity_rejected
     expect(calls.length).toBe(1);
     expect(calls[0].details.status).toBe(401);
     expect(calls[0].details.responseJsonParsed).toBe(false);
-    expect(calls[0].details.errorCode).toBe("unknown");
+    expect(calls[0].details.error).toBeNull();
+    expect(calls[0].details.errorDescription).toBeNull();
   });
 
   it("logへ渡される内容にAccess Token・Refresh Token・Client Secretの値が一切含まれない", async () => {
