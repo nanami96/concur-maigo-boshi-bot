@@ -90,75 +90,16 @@ describe("buildWorkspaceStateFromImport", () => {
     expect(result.flow).toBe(flow);
   });
 
-  // mappingの値はすべてテスト専用のダミー値であり、実際のConcur側のコードではない。
-  describe("concurExpenseTypeMappings（07_Concurマッピングシートの有無で扱いが変わる）", () => {
-    const baseBundle = {
+  it("結果にconcurExpenseTypeMappingsは含まれない（経費タイプID＝Concur EXP_KEYという設計により廃止済み）", () => {
+    const bundle = {
       company: { company_id: "excel-company-id", company_name: "テスト会社" },
       policies: [],
       expenseTypes: [],
       flow: { questions: {}, options: {}, rootQuestionId: null },
     };
-    const existingMappings = [
-      { companyId: "sample-company", policyId: "p1", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI_EXISTING" },
-    ];
-    const importedMappings = [
-      { companyId: "sample-company", policyId: "p1", botExpenseTypeId: "train_local", concurExpenseTypeId: "TEST_TRAIN_NEW" },
-    ];
 
-    it("07_Concurマッピングシートが無いExcelを再インポートしても、既存のmappingは変更されない", () => {
-      const bundle = { ...baseBundle, hasConcurMappingSheet: false, concurExpenseTypeMappings: [] };
+    const result = buildWorkspaceStateFromImport({ bundle, currentCompanyId: "sample-company" });
 
-      const result = buildWorkspaceStateFromImport({
-        bundle,
-        currentCompanyId: "sample-company",
-        currentConcurExpenseTypeMappings: existingMappings,
-      });
-
-      expect(result.concurExpenseTypeMappings).toBe(existingMappings);
-    });
-
-    it("07_Concurマッピングシートがある場合は、Excelの内容へ置き換える", () => {
-      const bundle = { ...baseBundle, hasConcurMappingSheet: true, concurExpenseTypeMappings: importedMappings };
-
-      const result = buildWorkspaceStateFromImport({
-        bundle,
-        currentCompanyId: "sample-company",
-        currentConcurExpenseTypeMappings: existingMappings,
-      });
-
-      expect(result.concurExpenseTypeMappings).toBe(importedMappings);
-    });
-
-    it("07_Concurマッピングシートがあっても空（データ行なし）の場合は、空配列へ置き換える（既存mappingは残らない）", () => {
-      const bundle = { ...baseBundle, hasConcurMappingSheet: true, concurExpenseTypeMappings: [] };
-
-      const result = buildWorkspaceStateFromImport({
-        bundle,
-        currentCompanyId: "sample-company",
-        currentConcurExpenseTypeMappings: existingMappings,
-      });
-
-      expect(result.concurExpenseTypeMappings).toEqual([]);
-    });
-
-    it("currentConcurExpenseTypeMappings省略時・シート無しでも例外にならず空配列になる", () => {
-      const bundle = { ...baseBundle, hasConcurMappingSheet: false, concurExpenseTypeMappings: [] };
-
-      const result = buildWorkspaceStateFromImport({ bundle, currentCompanyId: "sample-company" });
-
-      expect(result.concurExpenseTypeMappings).toEqual([]);
-    });
-
-    it("hasConcurMappingSheet自体が無い古い呼び出し方（bundleにフィールドが無い）でも既存mappingを維持する", () => {
-      const bundle = { ...baseBundle };
-
-      const result = buildWorkspaceStateFromImport({
-        bundle,
-        currentCompanyId: "sample-company",
-        currentConcurExpenseTypeMappings: existingMappings,
-      });
-
-      expect(result.concurExpenseTypeMappings).toBe(existingMappings);
-    });
+    expect(result).not.toHaveProperty("concurExpenseTypeMappings");
   });
 });

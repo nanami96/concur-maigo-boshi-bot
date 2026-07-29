@@ -15,14 +15,12 @@ import {
 // editorState（useWorkspaceEditorの現在state）から、公開用のconfig_snapshotを
 // 組み立てる。DOM描画テスト基盤がこのプロジェクトに無いため、usePublish自体
 // （Reactフック）は直接ユニットテストできないが、この純粋関数だけを切り出すことで
-// 「workspace state → config_snapshot」の変換内容（concurExpenseTypeMappingsが
-// 正しく含まれることを含む）を検証できるようにする。
+// 「workspace state → config_snapshot」の変換内容を検証できるようにする。
 export function buildConfigSnapshotForPublish(editorState) {
   return buildConfigFromFlow(editorState.flow, {
     company: editorState.company,
     policies: editorState.policies,
     expenseTypes: editorState.expenseTypes,
-    concurExpenseTypeMappings: editorState.concurExpenseTypeMappings,
   });
 }
 
@@ -38,13 +36,7 @@ export function usePublish({ companyDbId, editorState, isDraftDirty, saveNow }) 
   const { errors, warnings } = useMemo(
     () => runConfigChecks(editorState),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      editorState.company,
-      editorState.policies,
-      editorState.expenseTypes,
-      editorState.flow,
-      editorState.concurExpenseTypeMappings,
-    ],
+    [editorState.company, editorState.policies, editorState.expenseTypes, editorState.flow],
   );
 
   const [publishStatus, setPublishStatus] = useState("idle"); // idle | publishing | error

@@ -11,21 +11,8 @@ const HISTORY_LIMIT = 50;
 //
 // flow系のAPI（addOption, deleteOption 等）は名称・挙動とも従来のuseFlowEditorと
 // 完全互換なので、FlowOutlineEditor / QuestionCard / OptionRow 等の既存コードは無改修で動く。
-//
-// concurExpenseTypeMappingsは、Concur Expense Type mapping（会社＋ポリシー＋Bot経費タイプID→
-// Concur側識別子の対応表）をこのワークスペースstateの一部として保持するために追加した。
-// 今回はまだ管理画面に編集UI（追加・更新・削除）が無いため、addExpenseType等に相当する
-// 専用の操作関数は用意していない（将来Commitで管理画面から編集できるようになった時点で追加する）。
-// initialStateがこのフィールドを持たない場合（既存の静的config.json・既存のExcelインポート・
-// このPhase追加前に保存された古いdraft等）でも必ず空配列から始まるようにし、
-// 既存会社を開いてもエラーにならないようにする。
 export function useWorkspaceEditor(initialState) {
-  const [state, setState] = useState({
-    ...initialState,
-    concurExpenseTypeMappings: Array.isArray(initialState?.concurExpenseTypeMappings)
-      ? initialState.concurExpenseTypeMappings
-      : [],
-  });
+  const [state, setState] = useState(initialState);
   const [history, setHistory] = useState([]);
   const [undoMessage, setUndoMessage] = useState(null);
 
@@ -241,71 +228,11 @@ export function useWorkspaceEditor(initialState) {
     [state.expenseTypes, apply],
   );
 
-  const computePolicyConcurMappingUsage = useCallback(
-    (policyId) => masterDataMutations.countConcurMappingsUsingPolicy(state.concurExpenseTypeMappings, policyId),
-    [state.concurExpenseTypeMappings],
-  );
-
-  const computeExpenseTypeConcurMappingUsage = useCallback(
-    (expenseTypeId) =>
-      masterDataMutations.countConcurMappingsUsingExpenseType(state.concurExpenseTypeMappings, expenseTypeId),
-    [state.concurExpenseTypeMappings],
-  );
-
-  // --- Concurマッピング -----------------------------------------------------
-
-  const addConcurExpenseTypeMapping = useCallback(
-    (mapping) => {
-      apply(
-        {
-          concurExpenseTypeMappings: masterDataMutations.addConcurExpenseTypeMapping(
-            state.concurExpenseTypeMappings,
-            mapping,
-          ),
-        },
-        null,
-      );
-    },
-    [state.concurExpenseTypeMappings, apply],
-  );
-
-  const updateConcurExpenseTypeMapping = useCallback(
-    (targetKey, patch) => {
-      apply(
-        {
-          concurExpenseTypeMappings: masterDataMutations.updateConcurExpenseTypeMapping(
-            state.concurExpenseTypeMappings,
-            targetKey,
-            patch,
-          ),
-        },
-        null,
-      );
-    },
-    [state.concurExpenseTypeMappings, apply],
-  );
-
-  const deleteConcurExpenseTypeMapping = useCallback(
-    (targetKey) => {
-      apply(
-        {
-          concurExpenseTypeMappings: masterDataMutations.deleteConcurExpenseTypeMapping(
-            state.concurExpenseTypeMappings,
-            targetKey,
-          ),
-        },
-        "Concurマッピングを削除しました。",
-      );
-    },
-    [state.concurExpenseTypeMappings, apply],
-  );
-
   return {
     company: state.company,
     policies: state.policies,
     expenseTypes: state.expenseTypes,
     flow: state.flow,
-    concurExpenseTypeMappings: state.concurExpenseTypeMappings,
 
     canUndo: history.length > 0,
     undo,
@@ -337,11 +264,5 @@ export function useWorkspaceEditor(initialState) {
     updateExpenseType,
     deleteExpenseType,
     computeExpenseTypeUsage,
-    computePolicyConcurMappingUsage,
-    computeExpenseTypeConcurMappingUsage,
-
-    addConcurExpenseTypeMapping,
-    updateConcurExpenseTypeMapping,
-    deleteConcurExpenseTypeMapping,
   };
 }

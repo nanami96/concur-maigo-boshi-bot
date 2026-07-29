@@ -7,9 +7,10 @@
 // そのまま rule.conditions として復元することで、既存のQuestionEngineがそのまま使える
 // 判定ルールを自動生成する。
 //
-// concurExpenseTypeMappingsも同様にbaseData経由でそのまま素通しするが、questions/rulesの
-// ようにflowから合成するのではなく、config.concur.expenseTypeMappingsという固定の場所へ
-// 配置するだけ（値の生成・変換は一切行わない）。
+// 経費タイプID＝Concur EXP_KEYという設計への正式リファクタリングにより、
+// 以前ここで組み立てていたconfig.concur.expenseTypeMappings（Bot経費タイプID→
+// Concur識別子の独立したマッピング表）は廃止した。expenseTypes[].idそのものが
+// Concur側の識別子であるため、別表を持つ必要が無い。
 
 function collectQuestionOrder(flow) {
   const order = [];
@@ -68,16 +69,8 @@ function buildConditionsForLeaf(parentOf, questionId, optionId) {
   return conditions;
 }
 
-// concurExpenseTypeMappingsは、まだ管理画面に編集UIが無いため常に[]で渡ってくる想定だが、
-// 呼び出し元（静的config.json由来のbaseData等）がこのフィールド自体を持たない場合や、
-// 万一不正な値が渡された場合でも、config.concur.expenseTypeMappingsは必ず安全な配列に
-// 正規化する（既存会社の挙動を一切変えない）。
-function normalizeConcurExpenseTypeMappings(concurExpenseTypeMappings) {
-  return Array.isArray(concurExpenseTypeMappings) ? concurExpenseTypeMappings : [];
-}
-
 export function buildConfigFromFlow(flow, baseData = {}) {
-  const { company, policies, expenseTypes, concurExpenseTypeMappings } = baseData;
+  const { company, policies, expenseTypes } = baseData;
   const questionOrder = collectQuestionOrder(flow);
   const parentOf = buildParentMap(flow, questionOrder);
 
@@ -142,8 +135,5 @@ export function buildConfigFromFlow(flow, baseData = {}) {
     expenseTypes,
     questions,
     rules,
-    concur: {
-      expenseTypeMappings: normalizeConcurExpenseTypeMappings(concurExpenseTypeMappings),
-    },
   };
 }

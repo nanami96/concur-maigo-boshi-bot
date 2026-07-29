@@ -2409,15 +2409,5 @@
       "warningMessage": "該当する出張経費タイプがない理由と内容を具体的に記載してください。",
       "active": true
     }
-  ],
-  "concur": {
-    "expenseTypeMappings": [
-      {
-        "companyId": "sample-company",
-        "policyId": "normal_expense",
-        "botExpenseTypeId": "train_local",
-        "concurExpenseTypeId": "TEST_TRAIN_LOCAL"
-      }
-    ]
-  }
+  ]
 }

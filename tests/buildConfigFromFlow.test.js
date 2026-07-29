@@ -1,9 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildConfigFromFlow } from "../src/flow/buildConfigFromFlow";
 
-// mappingはすべてテスト専用のダミー値であり、実際のConcur Expense Type
-// Codeではない。
-
 function buildMinimalFlow() {
   return {
     rootQuestionId: "q1",
@@ -42,40 +39,19 @@ function buildBaseData(overrides = {}) {
   };
 }
 
-describe("buildConfigFromFlow - concurExpenseTypeMappings", () => {
-  it("baseData.concurExpenseTypeMappingsが、そのままconfig.concur.expenseTypeMappingsへ載る", () => {
-    const mappings = [
-      { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI" },
-    ];
-
-    const config = buildConfigFromFlow(buildMinimalFlow(), buildBaseData({ concurExpenseTypeMappings: mappings }));
-
-    expect(config.concur).toEqual({ expenseTypeMappings: mappings });
-  });
-
-  it("concurExpenseTypeMappingsを渡さない場合は空配列になる（既存会社はこれに該当）", () => {
+describe("buildConfigFromFlow", () => {
+  it("config.concurは生成しない（経費タイプID＝Concur EXP_KEYという設計により、独立したmapping表は廃止済み）", () => {
     const config = buildConfigFromFlow(buildMinimalFlow(), buildBaseData());
 
-    expect(config.concur).toEqual({ expenseTypeMappings: [] });
+    expect(config).not.toHaveProperty("concur");
   });
 
-  it("concurExpenseTypeMappingsが配列でない不正な値でも空配列になる（安全側）", () => {
-    const config = buildConfigFromFlow(
-      buildMinimalFlow(),
-      buildBaseData({ concurExpenseTypeMappings: "not-an-array" }),
-    );
-
-    expect(config.concur).toEqual({ expenseTypeMappings: [] });
-  });
-
-  it("baseDataを一切渡さない場合も例外にならず空配列になる", () => {
-    const config = buildConfigFromFlow(buildMinimalFlow());
-
-    expect(config.concur).toEqual({ expenseTypeMappings: [] });
+  it("baseDataを一切渡さなくても例外にならない", () => {
+    expect(() => buildConfigFromFlow(buildMinimalFlow())).not.toThrow();
   });
 
   it("company/policies/expenseTypesはこれまで通り素通しされる（回帰確認）", () => {
-    const baseData = buildBaseData({ concurExpenseTypeMappings: [] });
+    const baseData = buildBaseData();
     const config = buildConfigFromFlow(buildMinimalFlow(), baseData);
 
     expect(config.company).toBe(baseData.company);
@@ -83,24 +59,12 @@ describe("buildConfigFromFlow - concurExpenseTypeMappings", () => {
     expect(config.expenseTypes).toBe(baseData.expenseTypes);
   });
 
-  it("questions/rulesの生成結果は、concurExpenseTypeMappingsの有無に関わらず一切変わらない", () => {
+  it("questions/rulesの生成結果はこれまで通り（回帰確認）", () => {
     const flow = buildMinimalFlow();
+    const config = buildConfigFromFlow(flow, buildBaseData());
 
-    const withMappings = buildConfigFromFlow(
-      flow,
-      buildBaseData({
-        concurExpenseTypeMappings: [
-          { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI" },
-        ],
-      }),
-    );
-    const withoutMappings = buildConfigFromFlow(flow, buildBaseData());
-
-    expect(withMappings.questions).toEqual(withoutMappings.questions);
-    expect(withMappings.rules).toEqual(withoutMappings.rules);
-
-    expect(withoutMappings.questions).toHaveLength(1);
-    expect(withoutMappings.rules).toHaveLength(2);
-    expect(withoutMappings.rules.map((rule) => rule.resultExpenseTypeId)).toEqual(["taxi", "other"]);
+    expect(config.questions).toHaveLength(1);
+    expect(config.rules).toHaveLength(2);
+    expect(config.rules.map((rule) => rule.resultExpenseTypeId)).toEqual(["taxi", "other"]);
   });
 });

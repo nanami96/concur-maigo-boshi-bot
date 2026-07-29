@@ -39,7 +39,6 @@ export default function ImportPreview({
   companyIdWarning = null,
 }) {
   const { company, policies, expenseTypes, flow, errors, warnings } = parseResult;
-  const concurExpenseTypeMappings = parseResult.concurExpenseTypeMappings || [];
 
   const questionCount = flow ? Object.keys(flow.questions).length : 0;
   const optionValues = flow ? Object.values(flow.options) : [];
@@ -83,10 +82,6 @@ export default function ImportPreview({
         <div className="importSummaryItem">
           <span>最終結果</span>
           <strong>{resultCount}件</strong>
-        </div>
-        <div className="importSummaryItem">
-          <span>Concurマッピング</span>
-          <strong>{concurExpenseTypeMappings.length}件</strong>
         </div>
       </div>
 

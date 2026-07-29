@@ -13,20 +13,14 @@
 // 単に無視される＝他の必須列さえ揃っていれば正常にインポートできる）。
 import * as XLSX from "xlsx";
 import { generateNextId } from "./idGenerator";
-import { mappingMatchesKey } from "../lib/concurExpenseTypeMapping";
 
 const REQUIRED_SHEETS = ["01_基本設定", "02_ポリシー", "03_経費タイプ", "04_質問", "05_選択肢"];
-
-// 07_Concurマッピングは他の5シートと違い任意シートである（Concur連携を使わない
-// 会社では存在しなくてよい）。そのためREQUIRED_SHEETS/SHEET_COLUMNSには含めず、
-// 専用の定数・専用のパース関数で扱う（「シート無し＝エラーにせず空配列」という
-// 挙動を、必須シートの一括チェックと混在させないため）。
-const CONCUR_MAPPING_SHEET = "07_Concurマッピング";
-const CONCUR_MAPPING_COLUMNS = ["会社ID", "ポリシーID", "経費タイプID", "Concur Expense Type Code"];
 
 const SHEET_COLUMNS = {
   "01_基本設定": ["会社ID", "会社名"],
   "02_ポリシー": ["ポリシーID", "ポリシー名", "使用有無"],
+  // 経費タイプID＝Concur EXP_KEY（正式リファクタリング）。値は文字列として
+  // そのまま読み取る（先頭ゼロを保持するため、Number()・parseInt()は使わない）。
   "03_経費タイプ": ["経費タイプID", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
   "04_質問": ["質問キー", "質問文", "質問形式", "質問の表示順"],
   "05_選択肢": [
@@ -689,142 +683,6 @@ function checkUnusedExpenseTypes(flow, expenseTypes, warnings) {
   });
 }
 
-// --- 07_Concurマッピング（任意シート） ---------------------------------------------------
-//
-// Concur Expense Type Code（Concur側の内部識別子。表示名では絶対に紐付けない）を、
-// 会社ID・ポリシーID・経費タイプID（いずれも既存シートの安定したID）と組にして
-// 読み取る。シート自体が無い会社（Concur未導入）は、エラーにせず空配列を返す。
-//
-// 実際のConcurコードの形式（数字限定・桁数固定・prefix必須等）はまだ確定して
-// いないため、ここでは「非空文字列であること」以上のvalidationは行わない
-// （Concur API仕様が確定するまで、形式を推測したvalidationは追加しない）。
-function parseConcurExpenseTypeMappings(workbook, company, policies, expenseTypes, errors) {
-  if (!workbook.Sheets[CONCUR_MAPPING_SHEET]) {
-    return [];
-  }
-
-  const headers = getHeaders(workbook, CONCUR_MAPPING_SHEET);
-  const missingColumns = CONCUR_MAPPING_COLUMNS.filter((column) => !headers.includes(column));
-  if (missingColumns.length > 0) {
-    missingColumns.forEach((column) => {
-      errors.push(
-        issue(
-          "error",
-          `missing-column-${CONCUR_MAPPING_SHEET}-${column}`,
-          `${CONCUR_MAPPING_SHEET}シートに必須列「${column}」が見つかりません。`,
-        ),
-      );
-    });
-    return [];
-  }
-
-  const rows = readSheetRows(workbook, CONCUR_MAPPING_SHEET);
-  // policyId・botExpenseTypeIdの存在確認は、02_ポリシー・03_経費タイプを
-  // パースした結果（policies/expenseTypes）にそのまま対して行う。
-  // parseExpenseTypes()のポリシー参照チェック・parseOptionsAndBuildFlow()の
-  // 経費タイプ参照チェックと同じ「Setに対する存在確認」という考え方を再利用し、
-  // 別のvalidationの仕組みを新設しない。
-  const policyIds = new Set(policies.map((policy) => policy.policy_id));
-  const expenseTypeIds = new Set(expenseTypes.map((expenseType) => expenseType.id));
-  const currentCompanyId = text(company?.company_id);
-  const mappings = [];
-
-  rows.forEach((row, index) => {
-    const line = index + 2;
-    const rowCompanyId = text(row["会社ID"]);
-    const policyId = text(row["ポリシーID"]);
-    const botExpenseTypeId = text(row["経費タイプID"]);
-    const concurExpenseTypeId = text(row["Concur Expense Type Code"]);
-
-    if (!rowCompanyId) {
-      errors.push(
-        issue("error", `concur-mapping-company-required-${line}`, `${CONCUR_MAPPING_SHEET} ${line}行目: 会社IDが入力されていません。`),
-      );
-      return;
-    }
-    // company（01_基本設定）が既に解析できている場合のみ突き合わせる。
-    // company自体にエラーがある場合（会社名未入力等）は、ここで二重にエラーを
-    // 積み増さない（detectCompanyIdMismatchと同じ「どちらかが空なら不一致とは
-    // 判定しない」という考え方）。
-    if (currentCompanyId && rowCompanyId !== currentCompanyId) {
-      errors.push(
-        issue(
-          "error",
-          `concur-mapping-company-mismatch-${line}`,
-          `${CONCUR_MAPPING_SHEET} ${line}行目: 会社ID「${rowCompanyId}」が01_基本設定の会社ID「${currentCompanyId}」と一致しません。`,
-        ),
-      );
-      return;
-    }
-
-    if (!policyId) {
-      errors.push(
-        issue("error", `concur-mapping-policy-required-${line}`, `${CONCUR_MAPPING_SHEET} ${line}行目: ポリシーIDが入力されていません。`),
-      );
-      return;
-    }
-    if (!policyIds.has(policyId)) {
-      errors.push(
-        issue(
-          "error",
-          `concur-mapping-policy-missing-${line}`,
-          `${CONCUR_MAPPING_SHEET} ${line}行目: ポリシーID「${policyId}」が02_ポリシーに存在しません。`,
-        ),
-      );
-      return;
-    }
-
-    if (!botExpenseTypeId) {
-      errors.push(
-        issue("error", `concur-mapping-expense-required-${line}`, `${CONCUR_MAPPING_SHEET} ${line}行目: 経費タイプIDが入力されていません。`),
-      );
-      return;
-    }
-    if (!expenseTypeIds.has(botExpenseTypeId)) {
-      errors.push(
-        issue(
-          "error",
-          `concur-mapping-expense-missing-${line}`,
-          `${CONCUR_MAPPING_SHEET} ${line}行目: 経費タイプID「${botExpenseTypeId}」が03_経費タイプに存在しません。`,
-        ),
-      );
-      return;
-    }
-
-    if (!concurExpenseTypeId) {
-      errors.push(
-        issue(
-          "error",
-          `concur-mapping-code-required-${line}`,
-          `${CONCUR_MAPPING_SHEET} ${line}行目: Concur Expense Type Codeが入力されていません。`,
-        ),
-      );
-      return;
-    }
-
-    const candidate = { companyId: rowCompanyId, policyId, botExpenseTypeId, concurExpenseTypeId };
-
-    // 重複（会社ID＋ポリシーID＋経費タイプIDの3つ組）は、
-    // src/lib/concurExpenseTypeMapping.jsのmappingMatchesKey()と同じ定義で判定する
-    // （実行時のmapBotExpenseTypeToConcur()が検出するmultiple_mappings_foundと
-    // 同じ「何をもって同じmappingとみなすか」を、インポート時点で早期に検出する）。
-    if (mappings.some((existing) => mappingMatchesKey(existing, candidate))) {
-      errors.push(
-        issue(
-          "error",
-          `concur-mapping-dup-${line}`,
-          `${CONCUR_MAPPING_SHEET} ${line}行目: 会社ID「${rowCompanyId}」・ポリシーID「${policyId}」・経費タイプID「${botExpenseTypeId}」の組み合わせが既に別の行に存在します（Concur側の識別子が一意に決まりません）。`,
-        ),
-      );
-      return;
-    }
-
-    mappings.push(candidate);
-  });
-
-  return mappings;
-}
-
 // --- エントリポイント ---------------------------------------------------
 
 export function parseInitialSetupExcel(workbook) {
@@ -841,8 +699,6 @@ export function parseInitialSetupExcel(workbook) {
       policies: [],
       expenseTypes: [],
       flow: null,
-      concurExpenseTypeMappings: [],
-      hasConcurMappingSheet: Boolean(workbook.Sheets[CONCUR_MAPPING_SHEET]),
       errors,
       warnings,
     };
@@ -868,8 +724,6 @@ export function parseInitialSetupExcel(workbook) {
       policies: [],
       expenseTypes: [],
       flow: null,
-      concurExpenseTypeMappings: [],
-      hasConcurMappingSheet: Boolean(workbook.Sheets[CONCUR_MAPPING_SHEET]),
       errors,
       warnings,
     };
@@ -880,7 +734,6 @@ export function parseInitialSetupExcel(workbook) {
   const expenseTypes = parseExpenseTypes(workbook, policies, errors, warnings);
   const questions = parseQuestions(workbook, errors);
   const { flow, questionKeyMap } = parseOptionsAndBuildFlow(workbook, questions, expenseTypes, errors, warnings);
-  const concurExpenseTypeMappings = parseConcurExpenseTypeMappings(workbook, company, policies, expenseTypes, errors);
 
   if (flow) {
     checkUnusedExpenseTypes(flow, expenseTypes, warnings);
@@ -891,8 +744,6 @@ export function parseInitialSetupExcel(workbook) {
     policies,
     expenseTypes,
     flow,
-    concurExpenseTypeMappings,
-    hasConcurMappingSheet: Boolean(workbook.Sheets[CONCUR_MAPPING_SHEET]),
     questionKeyMap,
     errors,
     warnings,

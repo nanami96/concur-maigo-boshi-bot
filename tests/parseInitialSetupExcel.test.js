@@ -377,22 +377,20 @@ describe("parseInitialSetupExcel: sample-company実データテンプレート�
     expect(result.warnings.some((w) => w.id.startsWith("question-unreachable"))).toBe(false);
   });
 
-  it("07_Concurマッピングシートが追加されており、ヘッダーのみ（データ行無し）で安全に空配列になる", () => {
+  it("07_Concurマッピングシートは廃止済み（経費タイプID＝Concur EXP_KEYという設計により不要）", () => {
     const templatePath = path.resolve(
       __dirname,
       "../excel/templates/initial-setup-template.xlsx",
     );
     const workbook = XLSX.readFile(templatePath);
 
-    expect(workbook.SheetNames).toContain("07_Concurマッピング");
+    expect(workbook.SheetNames).not.toContain("07_Concurマッピング");
 
     const result = parseInitialSetupExcel(workbook);
 
     expect(result.errors).toEqual([]);
-    expect(result.hasConcurMappingSheet).toBe(true);
-    expect(result.concurExpenseTypeMappings).toEqual([]);
-    // 07_Concurマッピングを追加したことで、既存シート（sample-companyの実データ）の
-    // 解析結果自体には一切影響が無いことを、上のテストと同じ件数で再確認する。
+    expect(result).not.toHaveProperty("concurExpenseTypeMappings");
+    expect(result).not.toHaveProperty("hasConcurMappingSheet");
     expect(result.expenseTypes).toHaveLength(79);
   });
 
@@ -451,266 +449,25 @@ describe("parseInitialSetupExcel: sample-company実データテンプレート�
   });
 });
 
-// mappingの値（Concur Expense Type Code）はすべてテスト専用のダミー値であり、
-// 実際のConcur側のコードではない。
-const CONCUR_MAPPING_SHEET_NAME = "07_Concurマッピング";
-const CONCUR_MAPPING_HEADER = ["会社ID", "ポリシーID", "経費タイプID", "Concur Expense Type Code"];
-
-describe("parseInitialSetupExcel: 07_Concurマッピング（任意シート）", () => {
-  it("シートが無い場合はエラーにならず空配列になる", () => {
-    const workbook = buildWorkbook(buildValidSheets());
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors).toEqual([]);
-    expect(result.concurExpenseTypeMappings).toEqual([]);
-    expect(result.hasConcurMappingSheet).toBe(false);
-  });
-
-  it("シートがあってもデータ行が無ければ空配列になる", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({ [CONCUR_MAPPING_SHEET_NAME]: [CONCUR_MAPPING_HEADER] }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors).toEqual([]);
-    expect(result.concurExpenseTypeMappings).toEqual([]);
-    expect(result.hasConcurMappingSheet).toBe(true);
-  });
-
-  it("正しいmappingが1件あれば、companyId/policyId/botExpenseTypeId/concurExpenseTypeIdの配列になる", () => {
+describe("parseInitialSetupExcel: 経費タイプID＝Concur EXP_KEY", () => {
+  it("経費タイプIDは前後空白を除去した文字列として読み取られ、数値化されない（先頭ゼロ保持の確認）", () => {
     const workbook = buildWorkbook(
       buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [
-          CONCUR_MAPPING_HEADER,
-          ["test-co", "normal_expense", "taxi", "TEST_TAXI"],
+        "03_経費タイプ": [
+          ["経費タイプID", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
+          ["  01515  ", "normal_expense", "国内近距離バス", "不要", "Y"],
+        ],
+        "05_選択肢": [
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプID", "案内メッセージ", "注意事項"],
+          ["q1", "バス", "結果", "", "01515", "「国内近距離バス」を選択してください。", ""],
+          ["q2", "ダミー", "結果", "", "01515", "「国内近距離バス」を選択してください。", ""],
         ],
       }),
     );
     const result = parseInitialSetupExcel(workbook);
 
-    expect(result.errors).toEqual([]);
-    expect(result.concurExpenseTypeMappings).toEqual([
-      { companyId: "test-co", policyId: "normal_expense", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI" },
-    ]);
-  });
-
-  it("複数の正常なmappingを全て取り込める", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [
-          CONCUR_MAPPING_HEADER,
-          ["test-co", "normal_expense", "taxi", "TEST_TAXI"],
-          ["test-co", "normal_expense", "train_local", "TEST_TRAIN"],
-          ["test-co", "business_trip", "trip_type", "TEST_TRIP"],
-        ],
-      }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors).toEqual([]);
-    expect(result.concurExpenseTypeMappings).toHaveLength(3);
-    expect(result.concurExpenseTypeMappings.map((m) => m.botExpenseTypeId).sort()).toEqual([
-      "taxi",
-      "train_local",
-      "trip_type",
-    ]);
-  });
-
-  it("空行（全セル空欄）は無視される", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [
-          CONCUR_MAPPING_HEADER,
-          ["test-co", "normal_expense", "taxi", "TEST_TAXI"],
-          ["", "", "", ""],
-        ],
-      }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors).toEqual([]);
-    expect(result.concurExpenseTypeMappings).toHaveLength(1);
-  });
-
-  it("各セルの前後空白はtrimされる", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [
-          CONCUR_MAPPING_HEADER,
-          ["  test-co  ", "  normal_expense  ", "  taxi  ", "  TEST_TAXI  "],
-        ],
-      }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors).toEqual([]);
-    expect(result.concurExpenseTypeMappings).toEqual([
-      { companyId: "test-co", policyId: "normal_expense", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI" },
-    ]);
-  });
-
-  it("会社IDが未入力の行はエラーになる", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [CONCUR_MAPPING_HEADER, ["", "normal_expense", "taxi", "TEST_TAXI"]],
-      }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors.some((e) => e.id.startsWith("concur-mapping-company-required"))).toBe(true);
-    expect(result.concurExpenseTypeMappings).toEqual([]);
-  });
-
-  it("会社IDが01_基本設定と異なる行はエラーになる", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [
-          CONCUR_MAPPING_HEADER,
-          ["other-company", "normal_expense", "taxi", "TEST_TAXI"],
-        ],
-      }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors.some((e) => e.id.startsWith("concur-mapping-company-mismatch"))).toBe(true);
-  });
-
-  it("ポリシーIDが未入力の行はエラーになる", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [CONCUR_MAPPING_HEADER, ["test-co", "", "taxi", "TEST_TAXI"]],
-      }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors.some((e) => e.id.startsWith("concur-mapping-policy-required"))).toBe(true);
-  });
-
-  it("02_ポリシーに存在しないポリシーIDを参照している行はエラーになる", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [
-          CONCUR_MAPPING_HEADER,
-          ["test-co", "does_not_exist", "taxi", "TEST_TAXI"],
-        ],
-      }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors.some((e) => e.id.startsWith("concur-mapping-policy-missing"))).toBe(true);
-    expect(result.concurExpenseTypeMappings).toEqual([]);
-  });
-
-  it("経費タイプIDが未入力の行はエラーになる", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [CONCUR_MAPPING_HEADER, ["test-co", "normal_expense", "", "TEST_TAXI"]],
-      }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors.some((e) => e.id.startsWith("concur-mapping-expense-required"))).toBe(true);
-  });
-
-  it("03_経費タイプに存在しない経費タイプIDを参照している行はエラーになる", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [
-          CONCUR_MAPPING_HEADER,
-          ["test-co", "normal_expense", "does_not_exist", "TEST_TAXI"],
-        ],
-      }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors.some((e) => e.id.startsWith("concur-mapping-expense-missing"))).toBe(true);
-    expect(result.concurExpenseTypeMappings).toEqual([]);
-  });
-
-  it("Concur Expense Type Codeが未入力の行はエラーになる", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [CONCUR_MAPPING_HEADER, ["test-co", "normal_expense", "taxi", ""]],
-      }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors.some((e) => e.id.startsWith("concur-mapping-code-required"))).toBe(true);
-  });
-
-  it("会社ID・ポリシーID・経費タイプIDの3つ組が重複する行はエラーになり、後発の行は取り込まれない", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [
-          CONCUR_MAPPING_HEADER,
-          ["test-co", "normal_expense", "taxi", "TEST_TAXI_1"],
-          ["test-co", "normal_expense", "taxi", "TEST_TAXI_2"],
-        ],
-      }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors.some((e) => e.id.startsWith("concur-mapping-dup"))).toBe(true);
-    expect(result.concurExpenseTypeMappings).toEqual([
-      { companyId: "test-co", policyId: "normal_expense", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI_1" },
-    ]);
-  });
-
-  it("必須列が欠けている場合はシート単位でエラーになる", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [["会社ID", "ポリシーID", "経費タイプID"]],
-      }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    expect(result.errors.some((e) => e.id.includes(`missing-column-${CONCUR_MAPPING_SHEET_NAME}`))).toBe(true);
-    expect(result.concurExpenseTypeMappings).toEqual([]);
-  });
-});
-
-describe("parseInitialSetupExcel: Excel → concurExpenseTypeMappings → buildConfigFromFlow", () => {
-  it("Excelのmappingが、そのままconfig.concur.expenseTypeMappingsまで届く", () => {
-    const workbook = buildWorkbook(
-      buildValidSheets({
-        [CONCUR_MAPPING_SHEET_NAME]: [
-          CONCUR_MAPPING_HEADER,
-          ["test-co", "normal_expense", "taxi", "TEST_TAXI"],
-        ],
-      }),
-    );
-    const result = parseInitialSetupExcel(workbook);
-
-    return import("../src/flow/buildConfigFromFlow").then(({ buildConfigFromFlow }) => {
-      const config = buildConfigFromFlow(result.flow, {
-        company: result.company,
-        policies: result.policies,
-        expenseTypes: result.expenseTypes,
-        concurExpenseTypeMappings: result.concurExpenseTypeMappings,
-      });
-
-      expect(config.concur).toEqual({
-        expenseTypeMappings: [
-          { companyId: "test-co", policyId: "normal_expense", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI" },
-        ],
-      });
-    });
-  });
-
-  it("07_Concurマッピングが無いExcelでも、buildConfigFromFlowの結果は空配列で安全に成立する", () => {
-    const workbook = buildWorkbook(buildValidSheets());
-    const result = parseInitialSetupExcel(workbook);
-
-    return import("../src/flow/buildConfigFromFlow").then(({ buildConfigFromFlow }) => {
-      const config = buildConfigFromFlow(result.flow, {
-        company: result.company,
-        policies: result.policies,
-        expenseTypes: result.expenseTypes,
-        concurExpenseTypeMappings: result.concurExpenseTypeMappings,
-      });
-
-      expect(config.concur).toEqual({ expenseTypeMappings: [] });
-      expect(config.questions.length).toBeGreaterThan(0);
-    });
+    expect(result.expenseTypes).toHaveLength(1);
+    expect(result.expenseTypes[0].id).toBe("01515");
+    expect(typeof result.expenseTypes[0].id).toBe("string");
   });
 });

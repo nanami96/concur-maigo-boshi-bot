@@ -30,13 +30,12 @@ export default function ConfigCheckPanel({
   policies,
   expenseTypes,
   flow,
-  concurExpenseTypeMappings,
   onJumpToNode,
   onJumpToSettings,
 }) {
   const { errors, warnings } = useMemo(
-    () => runConfigChecks({ company, policies, expenseTypes, flow, concurExpenseTypeMappings }),
-    [company, policies, expenseTypes, flow, concurExpenseTypeMappings],
+    () => runConfigChecks({ company, policies, expenseTypes, flow }),
+    [company, policies, expenseTypes, flow],
   );
 
   const handleJump = (issue) => {

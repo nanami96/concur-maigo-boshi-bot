@@ -71,7 +71,7 @@ Supabase運用モードでは、会社の設定は管理画面で作成・編集
 
 ## SAP Concur API連携（設計・スタブ実装段階）
 
-- 迷子防止Bot内部の経費データ→Concur向け共通データへの変換、経費タイプIDのマッピング設計（`src/lib/concurExpenseData.js`、`src/lib/concurExpenseTypeMapping.js`）
+- 迷子防止Bot内部の経費データ→Concur向け共通データへの変換（`src/lib/concurExpenseData.js`）。経費タイプID自体がConcur側のEXP_KEY（経費タイプコード）と同じ値のため、別途マッピングテーブルは持たない
 - Quick Expense作成用のSupabase Edge Function（`supabase/functions/create-concur-quick-expense/`）：認証・入力検証・エラー処理まで実装済み
 - **現時点では実際のConcur APIへは接続していません**（固定のスタブ応答を返すのみ）。Concur側の認証情報も未登録です
 
@@ -253,8 +253,8 @@ Supabase運用モードでログイン中の利用者は、経費申請前に領
 実装済み:
 
 - 迷子防止Botの経費判定結果・OCR結果から、Concur送信前の共通経費データを組み立てる純粋関数（`src/lib/concurExpenseData.js`）と、その検証関数
-- 迷子防止Bot内部の経費タイプIDをConcur側の識別子へ変換するマッピングの設計（`src/lib/concurExpenseTypeMapping.js`、マッピング表は引数で受け取る設計で、まだ実データは無し）
-- Quick Expense作成用のSupabase Edge Function `create-concur-quick-expense`（`supabase/functions/create-concur-quick-expense/`）：Supabaseユーザー認証（JWT検証＋会社所属確認）、入力検証、共通エラー形式までを実装済み
+- 経費タイプID＝Concur EXP_KEY（経費タイプコード）という設計。管理画面の経費タイプ登録時に「Concur経費タイプコード」として入力し（新規登録時必須・登録後は変更不可）、Bot内部の経費タイプIDとConcur側の識別子を分けて管理する仕組み（旧・独立したマッピングテーブル）は廃止済み
+- Quick Expense作成用のSupabase Edge Function `create-concur-quick-expense`（`supabase/functions/create-concur-quick-expense/`）：Supabaseユーザー認証（JWT検証＋会社所属確認）、公開済み経費タイプ一覧との照合（`verifyExpenseTypeForQuickExpense.js`）、入力検証、共通エラー形式までを実装済み
 - フロントエンド（`src/data/concurApi.js`）から上記Edge Functionを呼び出す`createQuickExpense()`
 
 未実装（今後の対応が必要）:
@@ -263,6 +263,7 @@ Supabase運用モードでログイン中の利用者は、経費申請前に領
 - Concur側の認証情報（Client ID/Secret等）の登録（Supabase Secretsへの登録は未実施）
 - 領収書画像のConcurへのアップロード連携
 - 会社ごとにConcur連携を許可するかどうかの設定（テーブル・フラグとも未設計）
+- Concur側の`userID`（Quick Expense作成APIの必須パラメータ）を、Botの利用者からどう解決するか
 
 ---
 
@@ -376,7 +377,7 @@ npm test -- --run
 
 ## 進行中
 
-- [ ] SAP Concur API連携（共通データ生成・IDマッピング設計・Edge Function土台は完了、実際のConcur API通信は未実装）
+- [ ] SAP Concur API連携（共通データ生成・経費タイプID＝Concur EXP_KEY設計・Edge Function土台は完了、実際のConcur API通信は未実装）
 
 ## 今後
 

@@ -105,7 +105,6 @@ export default function ExcelImportSection({ editor, persistence, companyId }) {
       buildWorkspaceStateFromImport({
         bundle,
         currentCompanyId: companyId,
-        currentConcurExpenseTypeMappings: editor.concurExpenseTypeMappings,
       }),
     );
     setPhase("done");

@@ -7,20 +7,19 @@ import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
 // あれは「公開」フェーズ専用の別の変換であり、下書きはあくまで編集しやすい
 // 正規のデータ（company/policies/expenseTypes/flowをそのまま）として保存する。
 //
-// concur_expense_type_mappings列は、この列がまだ存在しない古いSupabaseプロジェクト
-// （schema.sqlのPhase 11未適用）やnull値に対しても安全に動作するよう、配列でない
-// 場合は必ず空配列へ正規化する（既存会社の挙動を一切変えない）。
-function normalizeConcurExpenseTypeMappings(concurExpenseTypeMappings) {
-  return Array.isArray(concurExpenseTypeMappings) ? concurExpenseTypeMappings : [];
-}
-
+// concur_expense_type_mappings列について（重要）：
+// 経費タイプID＝Concur EXP_KEYという設計への正式リファクタリングにより、
+// アプリ側はこの列を一切読み書きしなくなった。列自体はDBスキーマ上まだ
+// 削除しておらず（別commit・別migrationで削除予定）、この関数がキーを含めない
+// ことで、upsert時にSupabase側がこの列を触らず既存値をそのまま残す
+// （saveDraft()のupsert()は指定した列だけをSETするため、省略した列は
+// 既存行なら変更されず、新規行ならDBの既定値'[]'::jsonbのままになる）。
 export function mapDraftRowToWorkspaceState(row) {
   return {
     company: row.company_settings,
     policies: row.policies,
     expenseTypes: row.expense_types,
     flow: row.flow,
-    concurExpenseTypeMappings: normalizeConcurExpenseTypeMappings(row.concur_expense_type_mappings),
   };
 }
 
@@ -30,7 +29,6 @@ export function mapWorkspaceStateToDraftRow(state) {
     policies: state.policies,
     expense_types: state.expenseTypes,
     flow: state.flow,
-    concur_expense_type_mappings: normalizeConcurExpenseTypeMappings(state.concurExpenseTypeMappings),
   };
 }
 

@@ -7,7 +7,6 @@ function PolicyRow({ policy, editor }) {
   const [isEditing, setIsEditing] = useState(false);
   const [confirmRequest, setConfirmRequest] = useState(null);
   const usageCount = editor.computePolicyUsage(policy.policy_id);
-  const concurMappingUsage = editor.computePolicyConcurMappingUsage(policy.policy_id);
 
   const handleDelete = () => {
     if (usageCount > 0) {
@@ -16,22 +15,6 @@ function PolicyRow({ policy, editor }) {
         message: `このポリシーは${usageCount}件の経費タイプで使用されています。削除すると経費タイプ側の参照が壊れるため、まずは使用停止にすることをおすすめします。`,
         confirmLabel: "使用停止にする",
         onConfirm: () => editor.updatePolicy(policy.policy_id, { enabled: "N" }),
-      });
-      return;
-    }
-
-    // 経費タイプからは参照されていなくても、Concurマッピングから直接参照されている
-    // 場合がある（Excel由来のマッピング等）。削除するとマッピング側が「存在しない
-    // ポリシー」を参照した孤児データになるため、警告のうえで削除を続行できるようにする
-    // （経費タイプ使用中のケースと異なり、Concurマッピングには「使用停止」に相当する
-    // 状態が無いため、ブロックではなく警告に留める）。
-    if (concurMappingUsage > 0) {
-      setConfirmRequest({
-        title: "このポリシーはConcurマッピングで参照されています",
-        message: `このポリシーは${concurMappingUsage}件のConcurマッピングで参照されています。削除すると、それらのマッピングは存在しないポリシーを参照した状態になります。`,
-        note: "先にConcurマッピング画面で該当のマッピングを削除・変更することをおすすめします。",
-        confirmLabel: "それでも削除する",
-        onConfirm: () => editor.deletePolicy(policy.policy_id),
       });
       return;
     }
