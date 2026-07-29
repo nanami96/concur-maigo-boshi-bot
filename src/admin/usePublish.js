@@ -38,7 +38,13 @@ export function usePublish({ companyDbId, editorState, isDraftDirty, saveNow }) 
   const { errors, warnings } = useMemo(
     () => runConfigChecks(editorState),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editorState.company, editorState.policies, editorState.expenseTypes, editorState.flow],
+    [
+      editorState.company,
+      editorState.policies,
+      editorState.expenseTypes,
+      editorState.flow,
+      editorState.concurExpenseTypeMappings,
+    ],
   );
 
   const [publishStatus, setPublishStatus] = useState("idle"); // idle | publishing | error

@@ -25,10 +25,18 @@ function IssueList({ title, items, onJump }) {
 // Error/Warning件数のサマリと一覧を出す。IDではなく自然文のメッセージのみを表示する。
 // 質問フロー（flowChecks）と基本設定・ポリシー・経費タイプ（masterDataChecks）の
 // チェック結果をこの画面でまとめて表示する。
-export default function ConfigCheckPanel({ company, policies, expenseTypes, flow, onJumpToNode, onJumpToSettings }) {
+export default function ConfigCheckPanel({
+  company,
+  policies,
+  expenseTypes,
+  flow,
+  concurExpenseTypeMappings,
+  onJumpToNode,
+  onJumpToSettings,
+}) {
   const { errors, warnings } = useMemo(
-    () => runConfigChecks({ company, policies, expenseTypes, flow }),
-    [company, policies, expenseTypes, flow],
+    () => runConfigChecks({ company, policies, expenseTypes, flow, concurExpenseTypeMappings }),
+    [company, policies, expenseTypes, flow, concurExpenseTypeMappings],
   );
 
   const handleJump = (issue) => {

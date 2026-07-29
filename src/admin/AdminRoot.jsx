@@ -31,6 +31,7 @@ import ConfigCheckPanel from "./ConfigCheckPanel";
 import CompanySettings from "./CompanySettings";
 import PolicySettings from "./PolicySettings";
 import ExpenseTypeSettings from "./ExpenseTypeSettings";
+import ConcurMappingSettings from "./ConcurMappingSettings";
 import InitialSetupScreen from "./InitialSetupScreen";
 import ExcelImportSection from "./ExcelImportSection";
 import UserManagementPanel from "./UserManagementPanel";
@@ -48,6 +49,7 @@ const SETTINGS_TABS = [
   { id: "company", label: "基本設定" },
   { id: "policies", label: "ポリシー" },
   { id: "expenseTypes", label: "経費タイプ" },
+  { id: "concurMapping", label: "Concurマッピング" },
 ];
 
 const FLOW_TABS = [
@@ -207,7 +209,12 @@ function AdminWorkspace({
   };
 
   const handleJumpToSettings = (target) => {
-    const tabByTarget = { company: "company", policies: "policies", expenseTypes: "expenseTypes" };
+    const tabByTarget = {
+      company: "company",
+      policies: "policies",
+      expenseTypes: "expenseTypes",
+      concurMapping: "concurMapping",
+    };
     setSection("settings");
     setSettingsTab(tabByTarget[target] || "company");
   };
@@ -273,6 +280,7 @@ function AdminWorkspace({
             )}
             {settingsTab === "policies" && <PolicySettings editor={editor} />}
             {settingsTab === "expenseTypes" && <ExpenseTypeSettings editor={editor} />}
+            {settingsTab === "concurMapping" && <ConcurMappingSettings editor={editor} />}
           </div>
         </>
       )}
@@ -323,6 +331,7 @@ function AdminWorkspace({
                 policies={editor.policies}
                 expenseTypes={editor.expenseTypes}
                 flow={editor.flow}
+                concurExpenseTypeMappings={editor.concurExpenseTypeMappings}
                 onJumpToNode={handleJumpToFlowNode}
                 onJumpToSettings={handleJumpToSettings}
               />

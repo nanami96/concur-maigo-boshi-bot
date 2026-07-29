@@ -39,4 +39,37 @@ describe("runConfigChecks", () => {
 
     expect(result.errors[0].id).toBe("company-name-required");
   });
+
+  it("concurExpenseTypeMappingsが空・未指定でもエラーにならない（Concur未使用の会社が存在するため）", () => {
+    const { flow } = buildFlowFromConfig(sampleCompanyConfig);
+    const result = runConfigChecks({
+      company: sampleCompanyConfig.company,
+      policies: sampleCompanyConfig.policies,
+      expenseTypes: sampleCompanyConfig.expenseTypes,
+      flow,
+      concurExpenseTypeMappings: [],
+    });
+
+    expect(result.errors).toEqual([]);
+  });
+
+  it("不正なConcurマッピング（存在しないポリシー参照）はErrorとして検出される", () => {
+    const { flow } = buildFlowFromConfig(sampleCompanyConfig);
+    const result = runConfigChecks({
+      company: sampleCompanyConfig.company,
+      policies: sampleCompanyConfig.policies,
+      expenseTypes: sampleCompanyConfig.expenseTypes,
+      flow,
+      concurExpenseTypeMappings: [
+        {
+          companyId: sampleCompanyConfig.company.company_id,
+          policyId: "does_not_exist",
+          botExpenseTypeId: sampleCompanyConfig.expenseTypes[0].id,
+          concurExpenseTypeId: "TEST_CODE",
+        },
+      ],
+    });
+
+    expect(result.errors.some((e) => e.id === "concur-mapping-policy-missing-0")).toBe(true);
+  });
 });

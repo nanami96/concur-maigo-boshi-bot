@@ -9,6 +9,11 @@ import {
   deleteExpenseType,
   countExpenseTypesUsingPolicy,
   countFlowResultsUsingExpenseType,
+  addConcurExpenseTypeMapping,
+  updateConcurExpenseTypeMapping,
+  deleteConcurExpenseTypeMapping,
+  countConcurMappingsUsingPolicy,
+  countConcurMappingsUsingExpenseType,
 } from "../src/flow/masterDataMutations";
 
 describe("company mutations", () => {
@@ -109,5 +114,133 @@ describe("使用状況カウント", () => {
     expect(countFlowResultsUsingExpenseType(flow, "taxi")).toBe(2);
     expect(countFlowResultsUsingExpenseType(flow, "train_local")).toBe(1);
     expect(countFlowResultsUsingExpenseType(flow, "unused")).toBe(0);
+  });
+
+  it("countConcurMappingsUsingPolicy: ポリシーを参照しているConcurマッピング件数を数える", () => {
+    const mappings = [
+      { companyId: "c1", policyId: "p1", botExpenseTypeId: "taxi", concurExpenseTypeId: "X1" },
+      { companyId: "c1", policyId: "p1", botExpenseTypeId: "train", concurExpenseTypeId: "X2" },
+      { companyId: "c1", policyId: "p2", botExpenseTypeId: "hotel", concurExpenseTypeId: "X3" },
+    ];
+    expect(countConcurMappingsUsingPolicy(mappings, "p1")).toBe(2);
+    expect(countConcurMappingsUsingPolicy(mappings, "p2")).toBe(1);
+    expect(countConcurMappingsUsingPolicy(mappings, "p3")).toBe(0);
+    expect(countConcurMappingsUsingPolicy(undefined, "p1")).toBe(0);
+  });
+
+  it("countConcurMappingsUsingExpenseType: 経費タイプを参照しているConcurマッピング件数を数える", () => {
+    const mappings = [
+      { companyId: "c1", policyId: "p1", botExpenseTypeId: "taxi", concurExpenseTypeId: "X1" },
+      { companyId: "c1", policyId: "p2", botExpenseTypeId: "taxi", concurExpenseTypeId: "X2" },
+    ];
+    expect(countConcurMappingsUsingExpenseType(mappings, "taxi")).toBe(2);
+    expect(countConcurMappingsUsingExpenseType(mappings, "hotel")).toBe(0);
+    expect(countConcurMappingsUsingExpenseType(undefined, "taxi")).toBe(0);
+  });
+});
+
+// mappingの値（Concur Expense Type Code）はすべてテスト専用のダミー値であり、
+// 実際のConcur側のコードではない。
+describe("Concurマッピング mutations", () => {
+  function buildMappings() {
+    return [
+      { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI" },
+      { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "train_local", concurExpenseTypeId: "TEST_TRAIN" },
+    ];
+  }
+
+  it("addConcurExpenseTypeMapping: マッピングを追加できる（既存配列を直接変更しない）", () => {
+    const mappings = buildMappings();
+    const next = addConcurExpenseTypeMapping(mappings, {
+      companyId: "sample-company",
+      policyId: "business_trip",
+      botExpenseTypeId: "trip_type",
+      concurExpenseTypeId: "TEST_TRIP",
+    });
+
+    expect(next).toHaveLength(3);
+    expect(mappings).toHaveLength(2); // 元の配列は変更されない
+    expect(next[2].concurExpenseTypeId).toBe("TEST_TRIP");
+  });
+
+  it("updateConcurExpenseTypeMapping: companyId+policyId+botExpenseTypeIdで対象を特定し、内容を更新できる", () => {
+    const mappings = buildMappings();
+    const next = updateConcurExpenseTypeMapping(
+      mappings,
+      { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "taxi" },
+      { concurExpenseTypeId: "TEST_TAXI_UPDATED" },
+    );
+
+    expect(next[0].concurExpenseTypeId).toBe("TEST_TAXI_UPDATED");
+    expect(next[1]).toEqual(mappings[1]); // 対象外の行は変更されない
+    expect(mappings[0].concurExpenseTypeId).toBe("TEST_TAXI"); // 元の配列は変更されない
+  });
+
+  it("updateConcurExpenseTypeMapping: policyId/botExpenseTypeId自体（キー）も変更できる", () => {
+    const mappings = buildMappings();
+    const next = updateConcurExpenseTypeMapping(
+      mappings,
+      { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "taxi" },
+      { policyId: "business_trip", botExpenseTypeId: "trip_type", concurExpenseTypeId: "TEST_TRIP" },
+    );
+
+    expect(next[0]).toEqual({
+      companyId: "sample-company",
+      policyId: "business_trip",
+      botExpenseTypeId: "trip_type",
+      concurExpenseTypeId: "TEST_TRIP",
+    });
+  });
+
+  it("deleteConcurExpenseTypeMapping: companyId+policyId+botExpenseTypeIdで対象を特定し削除できる", () => {
+    const mappings = buildMappings();
+    const next = deleteConcurExpenseTypeMapping(mappings, {
+      companyId: "sample-company",
+      policyId: "normal_expense",
+      botExpenseTypeId: "taxi",
+    });
+
+    expect(next).toHaveLength(1);
+    expect(next[0].botExpenseTypeId).toBe("train_local");
+    expect(mappings).toHaveLength(2); // 元の配列は変更されない
+  });
+
+  it("存在しないキーを指定してもupdate/deleteは例外にならず、他の行に影響しない", () => {
+    const mappings = buildMappings();
+
+    const afterUpdate = updateConcurExpenseTypeMapping(
+      mappings,
+      { companyId: "sample-company", policyId: "does_not_exist", botExpenseTypeId: "unknown" },
+      { concurExpenseTypeId: "SHOULD_NOT_APPLY" },
+    );
+    expect(afterUpdate).toEqual(mappings);
+
+    const afterDelete = deleteConcurExpenseTypeMapping(mappings, {
+      companyId: "sample-company",
+      policyId: "does_not_exist",
+      botExpenseTypeId: "unknown",
+    });
+    expect(afterDelete).toEqual(mappings);
+  });
+
+  it("Excel由来のmapping（parseInitialSetupExcelの戻り値と全く同じ形）も、管理画面と同じmutationで編集・削除できる", () => {
+    // Excel経由・管理画面経由でデータ構造を分けない、という設計方針の確認。
+    const excelImportedMappings = [
+      { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI_FROM_EXCEL" },
+    ];
+
+    const afterUpdate = updateConcurExpenseTypeMapping(
+      excelImportedMappings,
+      { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "taxi" },
+      { concurExpenseTypeId: "TEST_TAXI_EDITED_IN_ADMIN" },
+    );
+    expect(afterUpdate[0].concurExpenseTypeId).toBe("TEST_TAXI_EDITED_IN_ADMIN");
+
+    const afterDelete = deleteConcurExpenseTypeMapping(afterUpdate, {
+      companyId: "sample-company",
+      policyId: "normal_expense",
+      botExpenseTypeId: "taxi",
+    });
+    expect(afterDelete).toHaveLength(0);
   });
 });

@@ -241,6 +241,65 @@ export function useWorkspaceEditor(initialState) {
     [state.expenseTypes, apply],
   );
 
+  const computePolicyConcurMappingUsage = useCallback(
+    (policyId) => masterDataMutations.countConcurMappingsUsingPolicy(state.concurExpenseTypeMappings, policyId),
+    [state.concurExpenseTypeMappings],
+  );
+
+  const computeExpenseTypeConcurMappingUsage = useCallback(
+    (expenseTypeId) =>
+      masterDataMutations.countConcurMappingsUsingExpenseType(state.concurExpenseTypeMappings, expenseTypeId),
+    [state.concurExpenseTypeMappings],
+  );
+
+  // --- Concurマッピング -----------------------------------------------------
+
+  const addConcurExpenseTypeMapping = useCallback(
+    (mapping) => {
+      apply(
+        {
+          concurExpenseTypeMappings: masterDataMutations.addConcurExpenseTypeMapping(
+            state.concurExpenseTypeMappings,
+            mapping,
+          ),
+        },
+        null,
+      );
+    },
+    [state.concurExpenseTypeMappings, apply],
+  );
+
+  const updateConcurExpenseTypeMapping = useCallback(
+    (targetKey, patch) => {
+      apply(
+        {
+          concurExpenseTypeMappings: masterDataMutations.updateConcurExpenseTypeMapping(
+            state.concurExpenseTypeMappings,
+            targetKey,
+            patch,
+          ),
+        },
+        null,
+      );
+    },
+    [state.concurExpenseTypeMappings, apply],
+  );
+
+  const deleteConcurExpenseTypeMapping = useCallback(
+    (targetKey) => {
+      apply(
+        {
+          concurExpenseTypeMappings: masterDataMutations.deleteConcurExpenseTypeMapping(
+            state.concurExpenseTypeMappings,
+            targetKey,
+          ),
+        },
+        "Concurマッピングを削除しました。",
+      );
+    },
+    [state.concurExpenseTypeMappings, apply],
+  );
+
   return {
     company: state.company,
     policies: state.policies,
@@ -278,5 +337,11 @@ export function useWorkspaceEditor(initialState) {
     updateExpenseType,
     deleteExpenseType,
     computeExpenseTypeUsage,
+    computePolicyConcurMappingUsage,
+    computeExpenseTypeConcurMappingUsage,
+
+    addConcurExpenseTypeMapping,
+    updateConcurExpenseTypeMapping,
+    deleteConcurExpenseTypeMapping,
   };
 }

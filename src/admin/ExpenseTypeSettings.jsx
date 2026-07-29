@@ -40,6 +40,21 @@ function ExpenseTypeRow({ expenseType, editor, policies }) {
       return;
     }
 
+    // 質問フローからは参照されていなくても、Concurマッピングから直接参照されている
+    // 場合がある（Excel由来のマッピング等）。PolicySettings.jsxの同種の警告と同じ考え方で、
+    // ブロックはせず警告のうえで削除を続行できるようにする。
+    const concurMappingUsage = editor.computeExpenseTypeConcurMappingUsage(expenseType.id);
+    if (concurMappingUsage > 0) {
+      setConfirmRequest({
+        title: "この経費タイプはConcurマッピングで参照されています",
+        message: `この経費タイプは${concurMappingUsage}件のConcurマッピングで参照されています。削除すると、それらのマッピングは存在しない経費タイプを参照した状態になります。`,
+        note: "先にConcurマッピング画面で該当のマッピングを削除・変更することをおすすめします。",
+        confirmLabel: "それでも削除する",
+        onConfirm: () => editor.deleteExpenseType(expenseType.id),
+      });
+      return;
+    }
+
     setConfirmRequest({
       title: "経費タイプを削除しますか？",
       message: `「${expenseType.name}」を削除します。`,
