@@ -593,6 +593,30 @@ Custom SMTP（Resend等）へ切り替えても、**アプリ側のコード変�
 
 ---
 
+## Step 18. Concur OAuth（Access Token取得）用のSupabase Secrets
+
+`create-concur-quick-expense` Edge Function内に、Concur側のOAuth2「Refresh
+Token Grant」でAccess Tokenを更新するためのモジュール（`refreshConcurAccessToken.js`
+ほか）を用意しています。**現時点ではこのモジュールはどこからも呼び出されておらず
+（未配線）、Concur APIへの実通信は一切行いません。** 以下は、将来実際に配線・
+デプロイする際に登録することになるSecret名の一覧です（実際の値はこのドキュメントは
+もちろん、コード・`.env.example`・ログのいずれにも書きません）。
+
+| Secret名 | 用途 | 必須/任意 |
+|---|---|---|
+| `CONCUR_CLIENT_ID` | Concur App Managementで発行されたClient ID | 必須 |
+| `CONCUR_CLIENT_SECRET` | 同上のClient Secret | 必須 |
+| `CONCUR_REFRESH_TOKEN` | 既に取得済みのRefresh Token | 必須 |
+| `CONCUR_TOKEN_URL` | Concur側のtoken endpoint（例: `https://{リージョン}.api.concursolutions.com/oauth2/v0/token`。会社ごとに異なるため既定値へのフォールバックは行わず、未設定時は安全側で失敗させる設計） | 必須 |
+| `CONCUR_SCOPE` | Refresh Token Grantに含めるscope | 任意 |
+
+登録方法は他のSecret（`AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT`等）と同様、Supabase
+ダッシュボードの「Edge Functions」→「Secrets」、またはSupabase CLIの
+`supabase secrets set`で行います（値は絶対にリポジトリへコミットしないこと）。
+このEdge FunctionはVite/GitHub Pagesの静的フロントから直接呼ばれるものではなく、
+Concur側の認証情報はSupabase Secretsにのみ保存し、フロントエンド
+（`VITE_`で始まる環境変数）には一切置きません。
+
 ## 生成AI（ChatGPT等）へ顧客情報を入力する場合の注意
 
 このアプリは、Concurの経費タイプ一覧や経費規程等の顧客情報をChatGPT等の生成AIへ入力し、
