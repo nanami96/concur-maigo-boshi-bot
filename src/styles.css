@@ -3550,12 +3550,14 @@ textarea.resultFieldInput {
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  max-width: 480px;
   box-sizing: border-box;
   background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 14px 12px 14px 16px;
+  border: 1px solid #c8d8ff;
+  border-radius: 16px;
+  padding: 18px 16px 18px 22px;
+  box-shadow:
+    0 0 0 1px rgba(79, 120, 255, 0.15),
+    0 0 12px rgba(79, 120, 255, 0.12);
 }
 
 .inviteCodeValue {
@@ -3569,12 +3571,14 @@ textarea.resultFieldInput {
 .inviteCodeCopyButton {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   flex-shrink: 0;
-  height: 36px;
+  height: 44px;
   padding: 0 16px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid #e5e7eb;
+  border-left: 1px solid #aec0f5;
   background: #fafafa;
   color: #2563eb;
   font-size: 14px;
