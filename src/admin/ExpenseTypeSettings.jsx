@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import OptionMenu from "./OptionMenu";
 import ConfirmDialog from "./ConfirmDialog";
 import EditableText from "./EditableText";
+import { shouldConfirmExpenseTypePolicyChange } from "../lib/concurMappingValidation";
 
 function receiptLabel(value) {
   if (value === true) return "必要";
@@ -27,6 +28,37 @@ function ExpenseTypeRow({ expenseType, editor, policies }) {
   const policyName =
     policies.find((policy) => policy.policy_id === expenseType.policyId)?.policy_name ||
     expenseType.policyId;
+  const concurMappingUsage = editor.computeExpenseTypeConcurMappingUsage(expenseType.id);
+
+  // ポリシーを変更しても、既存のConcurマッピング（companyId+policyId+
+  // botExpenseTypeIdが一意キー）は自動的に新しいpolicyIdへ書き換えない
+  // （同じConcurコードが新ポリシーでも使えるとは限らない、外部システム設定を
+  // 推測で変更すべきではない、という判断）。代わりに、この経費タイプが
+  // Concurマッピングから参照されている場合だけ確認を挟み、変更後は
+  // 既存マッピングをそのまま残す（不整合はcheckMasterData/公開前チェックが
+  // 検出する、Commit Fから維持している既存挙動）。
+  function handlePolicyChange(nextPolicyId) {
+    if (nextPolicyId === expenseType.policyId) {
+      return;
+    }
+    if (
+      shouldConfirmExpenseTypePolicyChange({
+        currentPolicyId: expenseType.policyId,
+        nextPolicyId,
+        concurMappingUsage,
+      })
+    ) {
+      setConfirmRequest({
+        title: "ポリシーを変更しますか？",
+        message: `この経費タイプは${concurMappingUsage}件のConcurマッピングで使用されています。ポリシーを変更しても、既存のConcurマッピングは自動的には変更されません。`,
+        note: "変更後は、Concurマッピング画面で内容を確認・修正してください。",
+        confirmLabel: "変更する",
+        onConfirm: () => editor.updateExpenseType(expenseType.id, { policyId: nextPolicyId }),
+      });
+      return;
+    }
+    editor.updateExpenseType(expenseType.id, { policyId: nextPolicyId });
+  }
 
   const handleDelete = () => {
     const usage = editor.computeExpenseTypeUsage(expenseType.id);
@@ -42,8 +74,8 @@ function ExpenseTypeRow({ expenseType, editor, policies }) {
 
     // 質問フローからは参照されていなくても、Concurマッピングから直接参照されている
     // 場合がある（Excel由来のマッピング等）。PolicySettings.jsxの同種の警告と同じ考え方で、
-    // ブロックはせず警告のうえで削除を続行できるようにする。
-    const concurMappingUsage = editor.computeExpenseTypeConcurMappingUsage(expenseType.id);
+    // ブロックはせず警告のうえで削除を続行できるようにする（concurMappingUsageは
+    // コンポーネント冒頭でポリシー変更ガードと共用するために計算済み）。
     if (concurMappingUsage > 0) {
       setConfirmRequest({
         title: "この経費タイプはConcurマッピングで参照されています",
@@ -118,7 +150,7 @@ function ExpenseTypeRow({ expenseType, editor, policies }) {
               <select
                 className="settingsSelectInput"
                 value={expenseType.policyId}
-                onChange={(event) => editor.updateExpenseType(expenseType.id, { policyId: event.target.value })}
+                onChange={(event) => handlePolicyChange(event.target.value)}
               >
                 {policies.map((policy) => (
                   <option key={policy.policy_id} value={policy.policy_id}>

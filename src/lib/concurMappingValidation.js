@@ -120,3 +120,24 @@ export function validateConcurExpenseTypeMappingInput({
     },
   };
 }
+
+/**
+ * 経費タイプ編集画面（ExpenseTypeSettings.jsx）で「ポリシー」を変更しようとした
+ * 時に、確認ダイアログを挟むべきかどうかを判定する。
+ *
+ * 既存のConcurマッピング（companyId+policyId+botExpenseTypeIdが一意キー）は、
+ * ポリシー変更時に自動的には書き換えない（同じConcurコードが新ポリシーでも
+ * 使えるとは限らない、外部システム設定を推測で変更すべきではないため）。
+ * その代わり、この経費タイプが1件以上のConcurマッピングから参照されている
+ * 場合だけ、変更前に管理者へ確認を求める。ポリシーを実際には変更しない編集
+ * （選択したまま・同じ値を選び直した等）では確認不要。
+ *
+ * @param {{currentPolicyId: string, nextPolicyId: string, concurMappingUsage: number}} input
+ * @returns {boolean} trueなら確認ダイアログを表示すべき。
+ */
+export function shouldConfirmExpenseTypePolicyChange({ currentPolicyId, nextPolicyId, concurMappingUsage }) {
+  if (nextPolicyId === currentPolicyId) {
+    return false;
+  }
+  return (concurMappingUsage || 0) > 0;
+}

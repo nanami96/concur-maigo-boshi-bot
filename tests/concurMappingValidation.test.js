@@ -3,6 +3,7 @@ import {
   validateConcurExpenseTypeMappingInput,
   resolvePolicyName,
   resolveExpenseTypeName,
+  shouldConfirmExpenseTypePolicyChange,
 } from "../src/lib/concurMappingValidation.js";
 
 // mappingの値（Concur Expense Type Code）はすべてテスト専用のダミー値であり、
@@ -144,5 +145,57 @@ describe("resolvePolicyName / resolveExpenseTypeName", () => {
   it("policies/expenseTypesが未指定でも例外にならない", () => {
     expect(resolvePolicyName(undefined, "p1")).toBe("p1");
     expect(resolveExpenseTypeName(undefined, "e1")).toBe("e1");
+  });
+});
+
+describe("shouldConfirmExpenseTypePolicyChange", () => {
+  it("Concurマッピングから参照されていない経費タイプは、ポリシー変更時に確認不要", () => {
+    expect(
+      shouldConfirmExpenseTypePolicyChange({
+        currentPolicyId: "normal_expense",
+        nextPolicyId: "business_trip",
+        concurMappingUsage: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it("Concurマッピングから参照されている経費タイプは、ポリシー変更時に確認が必要", () => {
+    expect(
+      shouldConfirmExpenseTypePolicyChange({
+        currentPolicyId: "normal_expense",
+        nextPolicyId: "business_trip",
+        concurMappingUsage: 1,
+      }),
+    ).toBe(true);
+  });
+
+  it("複数のConcurマッピングから参照されている場合も確認が必要", () => {
+    expect(
+      shouldConfirmExpenseTypePolicyChange({
+        currentPolicyId: "normal_expense",
+        nextPolicyId: "business_trip",
+        concurMappingUsage: 3,
+      }),
+    ).toBe(true);
+  });
+
+  it("ポリシーIDを実際には変更しない場合は、マッピングの有無に関わらず確認不要", () => {
+    expect(
+      shouldConfirmExpenseTypePolicyChange({
+        currentPolicyId: "normal_expense",
+        nextPolicyId: "normal_expense",
+        concurMappingUsage: 5,
+      }),
+    ).toBe(false);
+  });
+
+  it("concurMappingUsageが未指定（undefined）でも例外にならず確認不要になる", () => {
+    expect(
+      shouldConfirmExpenseTypePolicyChange({
+        currentPolicyId: "normal_expense",
+        nextPolicyId: "business_trip",
+        concurMappingUsage: undefined,
+      }),
+    ).toBe(false);
   });
 });
