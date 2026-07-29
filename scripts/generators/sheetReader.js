@@ -16,6 +16,10 @@ const DATA_START_ROW_BY_SHEET = {
   "04_質問": 2,
   "05_選択肢": 2,
   "06_判定ルール": 2,
+  // 07_Concurマッピングは任意シート（scripts/generators/concurMapping.js参照）だが、
+  // 存在する場合のレイアウトは他の新スキーマ系シートと同じ
+  // （ヘッダー行の次から即データ、メタ行なし）。
+  "07_Concurマッピング": 2,
 };
 
 function getDataStartRowNumber(sheetName) {

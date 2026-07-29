@@ -35,6 +35,9 @@ const {
   validateCompanySettings,
   validateRequiredColumns,
 } = require("./generators/validators");
+// 07_Concurマッピング（任意シート）読み取り。新旧どちらのスキーマからも
+// 共通で呼び出せる（scripts/generators/concurMapping.js参照）。
+const { createConcurExpenseTypeMappings } = require("./generators/concurMapping");
 
 // 複数企業対応
 const companyId = process.argv[2] || "sample-company";
@@ -80,6 +83,21 @@ if (isNewSchema) {
     ruleSheet,
   });
 
+  // company/policies/expenseTypesは、07_Concurマッピングの検証（会社ID・
+  // ポリシーID・経費タイプIDの参照整合性チェック）にも使うため、config組み立てより
+  // 前に計算しておく（変換内容自体はconfig組み立て時と同じ）。
+  const company = createCompanyFromNewSchema(companySheet);
+  const policies = createPoliciesFromNewSchema(policySheet);
+  const expenseTypes = createExpenseTypesFromNewSchema(expenseTypeSheet);
+
+  const concurMappingResult = createConcurExpenseTypeMappings({
+    workbook,
+    company,
+    policies,
+    expenseTypes,
+  });
+  errors.push(...concurMappingResult.errors);
+
   if (errors.length > 0) {
     console.error("config.json の生成に失敗しました。");
     console.error("");
@@ -92,15 +110,21 @@ if (isNewSchema) {
   warnings.forEach((warning) => console.warn(`⚠️ ${warning}`));
 
   config = {
-    company: createCompanyFromNewSchema(companySheet),
-    policies: createPoliciesFromNewSchema(policySheet),
-    expenseTypes: createExpenseTypesFromNewSchema(expenseTypeSheet),
+    company,
+    policies,
+    expenseTypes,
     questions: createQuestionsWithOptionsFromNewSchema(
       questionSheet,
       optionSheet,
     ),
     rules: createRulesFromNewSchema(ruleSheet),
   };
+
+  // 有効なマッピングが1件も無い場合は、concurキー自体を出力しない
+  // （既存会社のconfig.jsonへ不要な空オブジェクトを増やさないため）。
+  if (concurMappingResult.concurExpenseTypeMappings.length > 0) {
+    config.concur = { expenseTypeMappings: concurMappingResult.concurExpenseTypeMappings };
+  }
 } else {
   // --- 旧スキーマ（99_company_settings 等 + 横並び03_判定ルール）経路（既存のまま） ---
   const companySheet = readSheet(workbook, "99_company_settings");
@@ -159,6 +183,17 @@ if (isNewSchema) {
     ),
   ];
 
+  // 07_Concurマッピング（任意シート）。company-a等、このシートを持たない
+  // 既存会社ではreadSheet()が空配列を返すだけで、errors/mappingsともに
+  // 空になり、既存の生成結果には一切影響しない。
+  const concurMappingResult = createConcurExpenseTypeMappings({
+    workbook,
+    company: companySheet[0],
+    policies: policySheet,
+    expenseTypes,
+  });
+  validationErrors.push(...concurMappingResult.errors);
+
   if (validationErrors.length > 0) {
     console.error("config.json の生成に失敗しました。");
     console.error("");
@@ -184,6 +219,12 @@ if (isNewSchema) {
     questions,
     rules,
   };
+
+  // 有効なマッピングが1件も無い場合は、concurキー自体を出力しない
+  // （既存会社のconfig.jsonへ不要な空オブジェクトを増やさないため）。
+  if (concurMappingResult.concurExpenseTypeMappings.length > 0) {
+    config.concur = { expenseTypeMappings: concurMappingResult.concurExpenseTypeMappings };
+  }
 }
 
 // 出力フォルダを作る
