@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { analyzeReceiptImage } from "./data/ocrReceiptRepository";
 import { resolveOcrErrorMessage } from "./receiptOcrErrorMessages";
+import { sanitizeDigitsOnly } from "./lib/numericInput";
 
 // クライアント側の事前チェック用（Edge Function側の上限と揃えている。
 // supabase/functions/ocr-receipt/index.tsのMAX_FILE_SIZE_BYTES参照）。
@@ -362,13 +363,14 @@ export default function ReceiptOcrPanel({ onConfirm, onAuthExpired }) {
                 <span className="receiptOcrFieldLabel">金額</span>
                 <span className="receiptOcrAmountRow">
                   <input
-                    type="number"
+                    type="text"
                     inputMode="numeric"
+                    pattern="[0-9]*"
                     className="receiptOcrInput"
                     value={formValues.totalAmount}
                     disabled={phase === "confirmed"}
                     placeholder="未入力（読み取れませんでした）"
-                    onChange={(event) => handleFieldChange("totalAmount", event.target.value)}
+                    onChange={(event) => handleFieldChange("totalAmount", sanitizeDigitsOnly(event.target.value))}
                   />
                   <span className="receiptOcrCurrency">{ocrResult?.currencyCode || "円"}</span>
                 </span>

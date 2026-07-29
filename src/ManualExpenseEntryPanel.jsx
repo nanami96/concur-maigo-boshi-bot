@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { sanitizeDigitsOnly } from "./lib/numericInput";
 
 const EMPTY_FORM_VALUES = { transactionDate: "", merchantName: "", totalAmount: "" };
 
@@ -89,12 +90,13 @@ export default function ManualExpenseEntryPanel({ onConfirm, defaultCurrencyCode
           <label className="receiptOcrField">
             <span className="receiptOcrFieldLabel">金額</span>
             <input
-              type="number"
+              type="text"
               inputMode="numeric"
+              pattern="[0-9]*"
               className="receiptOcrInput"
               value={formValues.totalAmount}
               disabled={confirmed}
-              onChange={(event) => handleFieldChange("totalAmount", event.target.value)}
+              onChange={(event) => handleFieldChange("totalAmount", sanitizeDigitsOnly(event.target.value))}
             />
           </label>
 

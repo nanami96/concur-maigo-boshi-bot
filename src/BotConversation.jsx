@@ -19,6 +19,23 @@ import policyTagIcon from "./assets/policy-tag.png";
 // このコンポーネントをそのまま再利用する。headerActionsに渡すJSX
 // （会社セレクタ・管理画面リンク等）だけが呼び出し側ごとに異なる。
 
+// prefers-reduced-motionを尊重しつつ、対象要素が見える位置まで自然にスクロール
+// する共通処理（会話の前進時・領収書確定時など、複数のuseEffectから使う）。
+function scrollElementIntoViewNaturally(target, block) {
+  if (!target) {
+    return;
+  }
+
+  const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  target.scrollIntoView({
+    behavior: prefersReducedMotion ? "auto" : "smooth",
+    block,
+  });
+}
+
 function getReceiptStatus(receiptRequired) {
   if (receiptRequired === true) {
     return {
@@ -334,21 +351,27 @@ export default function BotConversation({
       return;
     }
 
-    const target = result ? resultAnchorRef.current : questionAnchorRef.current;
+    scrollElementIntoViewNaturally(result ? resultAnchorRef.current : questionAnchorRef.current, "start");
+  }, [currentQuestion?.id, result]);
 
-    if (!target) {
+  // 領収書OCRの確認（ReceiptOcrPanel.jsx）または手入力の確定
+  // （ManualExpenseEntryPanel.jsx）によりreceiptDataが確定すると、結果カード内に
+  // 「この内容を記録しました」の表示と、条件が揃えばConcur登録確認カード
+  // （ConcurRegistrationPanel.jsx）が追加で表示され、カードの高さが伸びる。
+  // ブラウザはこの高さの変化に追従して自動スクロールしないため、resultAnchorRef
+  // （結果カード全体を指す、上の効果と共通のref）の末尾が見える位置まで
+  // 自然にスクロールし、新しく表示された内容へ視線が自然に届くようにする。
+  // receiptDataは会社切り替え・「最初から」でのみnullへ戻るため（BotConversation.jsx
+  // 冒頭のuseEffect・resetAnswers参照）、truthyへ変わるタイミング＝利用者が
+  // 実際に確認操作をした瞬間だけに限られ、skipNextScrollRef相当の初期表示ガードは
+  // 不要（値がある時だけ発火するガードで十分）。
+  useEffect(() => {
+    if (!receiptData) {
       return;
     }
 
-    const prefersReducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-
-    target.scrollIntoView({
-      behavior: prefersReducedMotion ? "auto" : "smooth",
-      block: "start",
-    });
-  }, [currentQuestion?.id, result]);
+    scrollElementIntoViewNaturally(resultAnchorRef.current, "end");
+  }, [receiptData]);
 
   return (
     <main className="appShell">
