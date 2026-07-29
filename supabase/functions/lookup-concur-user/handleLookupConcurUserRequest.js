@@ -81,6 +81,7 @@ import { buildConcurIdentityLookupError } from "../_shared/concur-identity/class
 import { lookupConcurUser } from "../_shared/concur-identity/lookupConcurUser.js";
 import { refreshConcurAccessToken } from "../_shared/concur-oauth/refreshConcurAccessToken.js";
 import { buildSafeConcurOAuthScopeDiagnosticLog } from "../_shared/concur-identity/buildSafeConcurOAuthScopeDiagnosticLog.js";
+import { buildSafeConcurPrincipalTypeDiagnosticLog } from "../_shared/concur-identity/buildSafeConcurPrincipalTypeDiagnosticLog.js";
 
 function respondWithLocalCode(code) {
   return buildLookupConcurUserErrorResponse(buildLookupConcurUserError(code));
@@ -102,6 +103,29 @@ function logConcurOAuthScopeDiagnosticForDebug(log, scope) {
     log(
       "[DEBUG][concur_oauth_scope_diagnostic 一時デバッグ・要削除]",
       buildSafeConcurOAuthScopeDiagnosticLog({ scope }),
+    );
+  } catch {
+    // ログ出力自体の失敗は本処理へ影響させない。
+  }
+}
+
+// 【一時的なデバッグログ・要削除】concur_identity_rejected（401）の原因切り分けの
+// ため、OAuth Tokenレスポンスのid_token（OIDCのJWT）からconcur.typeクレームの
+// 有無・安全化した値だけを記録する。id_token全体・Access Token・Refresh
+// Token・Client Secretはここでは一切参照しない
+// （buildSafeConcurPrincipalTypeDiagnosticLog.js参照）。この診断結果は
+// あくまで参考情報であり、署名検証済みの認証根拠として扱ってはならず、
+// Identity API呼び出し・認証判定の分岐には一切使用しない
+// （id_tokenが無い場合も通常どおりIdentity APIを呼ぶ）。
+// デバッグが終わったら、この関数呼び出し箇所ごと削除すること。
+function logConcurPrincipalTypeDiagnosticForDebug(log, idToken) {
+  if (typeof log !== "function") {
+    return;
+  }
+  try {
+    log(
+      "[DEBUG][concur_principal_type_diagnostic 一時デバッグ・要削除]",
+      buildSafeConcurPrincipalTypeDiagnosticLog({ idToken }),
     );
   } catch {
     // ログ出力自体の失敗は本処理へ影響させない。
@@ -141,8 +165,11 @@ async function safeCompleteFailure(completeOAuthRefresh, connectionId, leaseId, 
  *   concur_identity_rejected発生時の調査用。lookupUser()へそのまま渡すだけで、
  *   この関数自身はログ出力しない（detailsは許可リスト済みの安全な構造化情報のみ）。
  *   加えて、この関数自身がOAuth Tokenのscope診断（concur_oauth_scope_diagnostic。
- *   identity.user.ids.readの有無の真偽値のみ）を1回だけ記録する
- *   （logConcurOAuthScopeDiagnosticForDebug参照）。
+ *   identity.user.ids.readの有無の真偽値のみ）と、principal種別診断
+ *   （concur_principal_type_diagnostic。id_tokenのconcur.typeクレームの有無・
+ *   安全化した値のみ。署名検証済みの認証根拠としては扱わない）を、
+ *   それぞれ1回だけ記録する（logConcurOAuthScopeDiagnosticForDebug・
+ *   logConcurPrincipalTypeDiagnosticForDebug参照）。
  * @returns {Promise<{ status: number, body: { result: object|null, error: object|null } }>}
  */
 export async function handleLookupConcurUserRequest({
@@ -236,9 +263,10 @@ export async function handleLookupConcurUserRequest({
   }
 
   // ここまでで「Refresh Tokenの保存成功」が確定した場合にのみ、Identity APIへ進む。
-  const { accessToken, geolocation, scope } = oauthResult.tokens;
+  const { accessToken, geolocation, scope, idToken } = oauthResult.tokens;
 
   logConcurOAuthScopeDiagnosticForDebug(log, scope);
+  logConcurPrincipalTypeDiagnosticForDebug(log, idToken);
 
   let lookupResult;
   try {

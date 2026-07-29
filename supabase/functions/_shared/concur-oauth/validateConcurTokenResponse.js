@@ -19,6 +19,17 @@
 //     未設定」と同じであり、無意味な値を後段へ通さないため空文字も拒否する）。
 //   - scope / geolocation: 存在する場合のみ、文字列であることを確認する
 //     （値そのものの検証は行わない）。
+//   - id_token: 存在する場合のみ、文字列であることを確認する（任意項目。
+//     型が文字列以外の場合は不正な応答として拒否する。文字列だが
+//     trim後に空の場合は「実質的に未設定」としてnullへ丸める＝応答全体は
+//     拒否しない）。
+//
+// 【一時的なデバッグログ・要削除】id_tokenについて：
+// id_tokenはOIDCのJWT（access_token本体とは別物）で、
+// concur_principal_type_diagnosticの一時デバッグ（401原因切り分けのための
+// company/user種別の参考情報）だけに使う想定。DB・Vault・Secretsへの保存、
+// フロントへの返却は一切行わない。デバッグが終わったら、この項目の保持
+// 自体も削除を検討すること。
 //
 // 実際のトークン値はこの関数の戻り値（tokens）にそのまま含まれるため、
 // 呼び出し元は絶対にこれをログ・エラー・レスポンスへ転記しないこと
@@ -49,6 +60,7 @@ function isValidExpiresIn(value) {
  *   expiresIn: number | null,
  *   scope: string | null,
  *   geolocation: string | null,
+ *   idToken: string | null,
  * } } | { ok: false }}
  */
 export function validateConcurTokenResponse(body) {
@@ -80,6 +92,10 @@ export function validateConcurTokenResponse(body) {
     return { ok: false };
   }
 
+  if (body.id_token !== undefined && typeof body.id_token !== "string") {
+    return { ok: false };
+  }
+
   return {
     ok: true,
     tokens: {
@@ -89,6 +105,7 @@ export function validateConcurTokenResponse(body) {
       expiresIn: body.expires_in !== undefined ? Number(body.expires_in) : null,
       scope: typeof body.scope === "string" ? body.scope : null,
       geolocation: typeof body.geolocation === "string" ? body.geolocation : null,
+      idToken: isNonEmptyString(body.id_token) ? body.id_token : null,
     },
   };
 }
