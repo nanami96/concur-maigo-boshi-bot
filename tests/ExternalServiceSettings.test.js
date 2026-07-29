@@ -5,6 +5,8 @@ import {
   formatConcurOAuthCheckResult,
   shouldShowExternalServiceSettings,
   shouldSkipConcurOAuthCheck,
+  formatConcurUserIdentityLookupResult,
+  shouldDisableConcurUserIdentityLookup,
 } from "../src/admin/ExternalServiceSettings.jsx";
 
 // このプロジェクトにはReact Testing Library等のDOM描画テスト基盤が無く
@@ -115,6 +117,61 @@ describe("formatConcurOAuthCheckResult（結果整形）", () => {
   });
 });
 
+describe("shouldDisableConcurUserIdentityLookup（入力空欄・二重クリック防止）", () => {
+  it("checking中は入力があっても無効化する", () => {
+    expect(shouldDisableConcurUserIdentityLookup({ status: "checking", userNameInput: "user@example.com" })).toBe(true);
+  });
+
+  it("入力が空欄（trim後）の場合は無効化する", () => {
+    expect(shouldDisableConcurUserIdentityLookup({ status: "idle", userNameInput: "" })).toBe(true);
+    expect(shouldDisableConcurUserIdentityLookup({ status: "idle", userNameInput: "   " })).toBe(true);
+  });
+
+  it("入力があり、checking中でなければ有効化する", () => {
+    expect(shouldDisableConcurUserIdentityLookup({ status: "idle", userNameInput: "user@example.com" })).toBe(false);
+    expect(shouldDisableConcurUserIdentityLookup({ status: "result", userNameInput: "user@example.com" })).toBe(false);
+    expect(shouldDisableConcurUserIdentityLookup({ status: "error", userNameInput: "user@example.com" })).toBe(false);
+  });
+
+  it("userNameInputがnull/undefinedでも例外にならず無効化する", () => {
+    expect(shouldDisableConcurUserIdentityLookup({ status: "idle", userNameInput: null })).toBe(true);
+    expect(shouldDisableConcurUserIdentityLookup({ status: "idle", userNameInput: undefined })).toBe(true);
+  });
+});
+
+describe("formatConcurUserIdentityLookupResult（結果整形）", () => {
+  it("found:true・hasUserId:trueをそのままBoolean化する", () => {
+    expect(formatConcurUserIdentityLookupResult({ found: true, hasUserId: true, multipleMatches: false })).toEqual({
+      userConfirmed: true,
+      userIdObtained: true,
+    });
+  });
+
+  it("安全ゲート無効時の{found:false, status:'disabled'}はfalse相当に丸める", () => {
+    expect(formatConcurUserIdentityLookupResult({ found: false, status: "disabled" })).toEqual({
+      userConfirmed: false,
+      userIdObtained: false,
+    });
+  });
+
+  it("null/undefinedを渡しても例外にならない", () => {
+    expect(formatConcurUserIdentityLookupResult(null)).toEqual({ userConfirmed: false, userIdObtained: false });
+    expect(formatConcurUserIdentityLookupResult(undefined)).toEqual({ userConfirmed: false, userIdObtained: false });
+  });
+
+  it("戻り値のキーはuserConfirmed/userIdObtainedの2つだけ（Concur実UUID等が紛れ込んでも除外される）", () => {
+    const formatted = formatConcurUserIdentityLookupResult({
+      found: true,
+      hasUserId: true,
+      multipleMatches: false,
+      userId: "SHOULD_NOT_APPEAR-3df11695-e8bb-40ff-8e98-c85913ab2789",
+    });
+
+    expect(Object.keys(formatted).sort()).toEqual(["userConfirmed", "userIdObtained"].sort());
+    expect(JSON.stringify(formatted)).not.toContain("SHOULD_NOT_APPEAR");
+  });
+});
+
 // 表示文言・エラー表示に関する静的回帰テスト（他のtests/schemaSql*.test.jsと
 // 同じ「ソースを読んでテキスト検証する」方式。DOM描画は行わない）。
 describe("ExternalServiceSettings.jsx: 表示文言・エラー表示の静的確認", () => {
@@ -151,6 +208,73 @@ describe("ExternalServiceSettings.jsx: 表示文言・エラー表示の静的�
     expect(descriptionIndex).toBeGreaterThan(headingIndex);
     expect(buttonIndex).toBeGreaterThan(descriptionIndex);
     expect(resultIndex).toBeGreaterThan(buttonIndex);
+  });
+});
+
+describe("ExternalServiceSettings.jsx: Concur利用者の確認（Identity検索診断）の静的確認", () => {
+  const source = fs.readFileSync(
+    path.resolve(__dirname, "../src/admin/ExternalServiceSettings.jsx"),
+    "utf8",
+  );
+
+  it("結果表示ラベルに内部プロパティ名（found・hasUserId等）を含めない", () => {
+    expect(source).not.toMatch(/<span>[^<]*[（(]found[）)][^<]*<\/span>/);
+    expect(source).not.toMatch(/<span>[^<]*[（(]hasUserId[）)][^<]*<\/span>/);
+    expect(source).toMatch(/<span>利用者<\/span>/);
+    expect(source).toMatch(/<span>userID<\/span>/);
+  });
+
+  it("実際のuserID（UUID）を表示するコードが存在しない（result.userId等を直接参照していない）", () => {
+    expect(source).not.toMatch(/identityLookupState\.result\.userId/);
+    expect(source).not.toMatch(/\.userId\b/);
+  });
+
+  it("エラー表示はerrorType（固定コード）だけで、error.message・生レスポンスを参照していない", () => {
+    expect(source).toMatch(/エラーコード: \{identityLookupState\.errorType/);
+  });
+
+  it("入力したConcurログインID自体を結果表示へ反射する記述が無い（ボタンJSXより後でidentityLookupUserNameを参照しない）", () => {
+    // 入力欄自体はvalue={identityLookupUserName}という制御コンポーネントの
+    // 構造上、当然identityLookupUserNameを参照する。ここで確認したいのは
+    // 「ボタンJSXより後（結果・エラー表示部分）」に入力値がそのまま反射されて
+    // いないことなので、ボタンのJSX特有の文字列（三項演算子の中の"利用者を
+    // 確認する"）で検索する（コメント中の「利用者を確認する」との誤マッチを
+    // 避けるため、コロン＋ダブルクォートを含めた文字列で検索する）。
+    const buttonJsxIndex = source.indexOf(': "利用者を確認する"');
+    const resultListStart = source.indexOf("concurOAuthCheckResultList", buttonJsxIndex);
+    const sectionEnd = source.indexOf("</div>", resultListStart);
+    const resultDisplayBody = source.slice(buttonJsxIndex, sectionEnd);
+
+    expect(buttonJsxIndex).toBeGreaterThan(-1);
+    expect(resultDisplayBody).not.toMatch(/\{identityLookupUserName\}/);
+  });
+
+  it("見出し→説明文→入力欄→ボタン→結果の順で並んでいる（操作してから結果を見る順序）", () => {
+    const headingIndex = source.indexOf("<h4>Concur利用者の確認</h4>");
+    const descriptionIndex = source.indexOf("Concur側に登録されているかを確認します。");
+    const inputIndex = source.indexOf('placeholder="ConcurログインID"');
+    const buttonJsxIndex = source.indexOf(': "利用者を確認する"');
+    const resultIndex = source.indexOf('identityLookupState.status === "result"');
+
+    expect(headingIndex).toBeGreaterThan(-1);
+    expect(descriptionIndex).toBeGreaterThan(headingIndex);
+    expect(inputIndex).toBeGreaterThan(descriptionIndex);
+    expect(buttonJsxIndex).toBeGreaterThan(inputIndex);
+    expect(resultIndex).toBeGreaterThan(buttonJsxIndex);
+  });
+
+  it("既存のOAuth接続確認セクションとは独立したセクション（settingsConcurIdentityLookupSection）に分かれている", () => {
+    expect(source).toMatch(/settingsConcurIdentityLookupSection/);
+    const oauthSectionIndex = source.indexOf('className="settingsCard settingsConcurConnectionSection"');
+    const identitySectionIndex = source.indexOf("settingsConcurIdentityLookupSection");
+    expect(identitySectionIndex).toBeGreaterThan(oauthSectionIndex);
+  });
+
+  it("platform_admin限定の表示ゲート（shouldShowExternalServiceSettings）の呼び出しはコンポーネント全体に1箇所だけで、Identity検索セクション専用の別ゲートを持たない（同じ権限境界を共有する）", () => {
+    // 関数定義自体（export function shouldShowExternalServiceSettings(...)）は
+    // 除外し、実際の呼び出し箇所（!shouldShowExternalServiceSettings(...)）だけを数える。
+    const matches = source.match(/!shouldShowExternalServiceSettings\(/g) || [];
+    expect(matches.length).toBe(1);
   });
 });
 

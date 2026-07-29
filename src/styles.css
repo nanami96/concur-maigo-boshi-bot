@@ -2412,6 +2412,21 @@ button {
   margin: 0;
 }
 
+/* Concur利用者の確認（Identity API検索診断）。既存のOAuth接続確認とは
+   区切り線で分ける（.userManagementInviteCodeSectionと同じ考え方・同じ数値）。 */
+.settingsConcurIdentityLookupSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(22, 32, 51, 0.1);
+}
+
+.settingsConcurIdentityLookupSection h4 {
+  margin: 0;
+}
+
 .concurOAuthCheckResultList {
   display: flex;
   flex-direction: column;

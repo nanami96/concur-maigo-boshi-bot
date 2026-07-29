@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { checkConcurOAuthConnection } from "../data/concurOAuthCheckRepository";
+import { lookupConcurUserIdentity } from "../data/concurIdentityLookupRepository";
 
 // 「設定」画面の末尾に表示する、外部サービス連携の状態確認セクション。
 // 現時点ではConcurの接続確認だけを持つが、見出しは将来の他サービス追加を
@@ -34,6 +35,24 @@ export function shouldSkipConcurOAuthCheck(status) {
   return status === "checking";
 }
 
+// lookupConcurUserIdentity()の戻り値（result）を、画面表示用の真偽値へ正規化する
+// 純粋関数。Concur利用者の実際のUUID（userID）・氏名・メールアドレス等の
+// プロフィールはこの戻り値に一切含まれない（含まれているのはfound・
+// hasUserId・multipleMatchesという真偽値だけ）。
+export function formatConcurUserIdentityLookupResult(result) {
+  return {
+    userConfirmed: Boolean(result?.found),
+    userIdObtained: Boolean(result?.hasUserId),
+  };
+}
+
+// 「利用者を確認する」ボタンを無効化すべきかどうかを判定する純粋関数。
+// 入力が空欄（trim後）の場合、または既に確認中（二重クリック防止）の場合は
+// 無効化する。
+export function shouldDisableConcurUserIdentityLookup({ status, userNameInput }) {
+  return status === "checking" || String(userNameInput ?? "").trim() === "";
+}
+
 // platform_admin専用：Concur OAuth（Refresh Token Grant）の疎通確認を行う
 // check-concur-oauth Edge Functionを呼び出すカード。
 //
@@ -47,6 +66,12 @@ export function shouldSkipConcurOAuthCheck(status) {
 // （company_admin・一般ユーザーには一切表示されない）。
 export default function ExternalServiceSettings({ isPlatformAdmin = false }) {
   const [concurCheckState, setConcurCheckState] = useState({
+    status: "idle", // idle | checking | result | error
+    result: null,
+    errorType: null,
+  });
+  const [identityLookupUserName, setIdentityLookupUserName] = useState("");
+  const [identityLookupState, setIdentityLookupState] = useState({
     status: "idle", // idle | checking | result | error
     result: null,
     errorType: null,
@@ -75,6 +100,28 @@ export default function ExternalServiceSettings({ isPlatformAdmin = false }) {
     }
 
     setConcurCheckState({ status: "result", result, errorType: null });
+  }
+
+  async function handleLookupConcurUserIdentity() {
+    if (shouldDisableConcurUserIdentityLookup({ status: identityLookupState.status, userNameInput: identityLookupUserName })) {
+      // 二重クリック防止・入力空欄防止（ボタンのdisabledに加えて、状態でも念のため防ぐ）。
+      return;
+    }
+
+    setIdentityLookupState({ status: "checking", result: null, errorType: null });
+
+    const { result, error } = await lookupConcurUserIdentity(identityLookupUserName.trim());
+
+    if (error) {
+      // 利用者へは固定エラーコードだけを見せる（Token・Secret・利用者プロフィール・
+      // 入力したConcurログインID自体は一切表示しない）。詳細な原因調査が必要な
+      // 場合はコンソールログを参照する。
+      console.error("Concur利用者確認に失敗しました", error);
+      setIdentityLookupState({ status: "error", result: null, errorType: error.type });
+      return;
+    }
+
+    setIdentityLookupState({ status: "result", result, errorType: null });
   }
 
   return (
@@ -140,6 +187,66 @@ export default function ExternalServiceSettings({ isPlatformAdmin = false }) {
             エラーコード: {concurCheckState.errorType || "unknown"}
           </p>
         )}
+
+        <div className="settingsConcurIdentityLookupSection">
+          <h4>Concur利用者の確認</h4>
+          <p>
+            指定したConcurログインIDに対応する利用者が、Concur側に登録されているかを確認します。
+          </p>
+          <p className="settingsHint">
+            この操作はplatform_adminのみ実行できます。入力したConcurログインIDや取得結果の実際の値は、
+            この画面には表示されません（確認済みかどうかだけを表示します）。
+          </p>
+
+          <input
+            type="text"
+            className="settingsTextInput"
+            value={identityLookupUserName}
+            onChange={(event) => setIdentityLookupUserName(event.target.value)}
+            placeholder="ConcurログインID"
+            aria-label="ConcurログインID"
+            disabled={identityLookupState.status === "checking"}
+          />
+
+          <button
+            type="button"
+            className="importConfirmButton"
+            disabled={shouldDisableConcurUserIdentityLookup({ status: identityLookupState.status, userNameInput: identityLookupUserName })}
+            onClick={handleLookupConcurUserIdentity}
+          >
+            {identityLookupState.status === "checking" ? "確認中…" : "利用者を確認する"}
+          </button>
+
+          {identityLookupState.status === "result" && identityLookupState.result && (
+            <ul className="concurOAuthCheckResultList">
+              {(() => {
+                const formatted = formatConcurUserIdentityLookupResult(identityLookupState.result);
+                return (
+                  <>
+                    <li>
+                      <span>利用者</span>
+                      <span className={formatted.userConfirmed ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
+                        {formatted.userConfirmed ? "確認済み" : "未確認"}
+                      </span>
+                    </li>
+                    <li>
+                      <span>userID</span>
+                      <span className={formatted.userIdObtained ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
+                        {formatted.userIdObtained ? "取得済み" : "未取得"}
+                      </span>
+                    </li>
+                  </>
+                );
+              })()}
+            </ul>
+          )}
+
+          {identityLookupState.status === "error" && (
+            <p className="settingsErrorText">
+              エラーコード: {identityLookupState.errorType || "unknown"}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
