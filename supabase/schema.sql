@@ -519,9 +519,15 @@ begin
   end if;
 
   -- Phase 11で追加：concur_expense_type_mappings列もdraft_configsからそのまま
-  -- コピーする（他の列と全く同じ「公開のたびに複製する」方式。config_snapshotの
-  -- 計算＝config.concur.expenseTypeMappingsへの反映は、他のconfig_snapshot項目と
-  -- 同様にアプリ側のbuildConfigFromFlow()が担当し、この関数はそれをそのまま受け取るだけ）。
+  -- コピーする（他の列と全く同じ「公開のたびに複製する」方式）。
+  --
+  -- 【将来の削除予定・現時点では未適用】経費タイプID＝Concur EXP_KEYという
+  -- 設計への正式リファクタリングにより、アプリ側はもうこの列に意味のある値を
+  -- 書き込まない（常に空配列のまま複製されるだけになる）。列自体・この
+  -- INSERT文からの参照を削除する際は、schema.sqlの列定義コメント側に書いた
+  -- 安全なdeploy順序（アプリ切替→未参照確認→列を一定期間残す→別migrationで
+  -- 削除）に従い、このinto句・values句からconcur_expense_type_mappingsを
+  -- 取り除いた版へ差し替える。今回はその変更を行っていない。
   insert into published_versions (
     company_id, company_settings, policies, expense_types, flow, concur_expense_type_mappings,
     config_snapshot, published_by
@@ -1439,19 +1445,36 @@ grant execute on function delete_platform_company(uuid) to authenticated;
 --   アプリ側（buildConfigFromFlow()・draftConfigRepository.js）もmapping未設定を
 --   「空配列」として安全に扱う設計のため、Concurを導入していない会社・
 --   このPhase適用前に保存された下書きの挙動は一切変化しない。
+-- 【将来の削除予定・現時点では未適用のメモ】
+-- 経費タイプID＝Concur EXP_KEYという設計への正式リファクタリングにより、
+-- アプリ側（buildConfigFromFlow.js・draftConfigRepository.js・
+-- create-concur-quick-expense Edge Function）はこの列を一切読み書きしなく
+-- なった。ただし、この変更だけでは列自体もこのコメントも削除しない
+-- （安全なdeploy順序：①アプリを新方式へ切り替える →
+-- ②旧列を参照していないことを本番で確認する → ③旧列を一定期間残す →
+-- ④別commit・別migrationで列を削除する、という段階を踏む）。
+-- 実際に削除する際は、以下をそれぞれ別のmigrationとして本番へ適用する想定：
+--   alter table draft_configs drop column if exists concur_expense_type_mappings;
+--   alter table published_versions drop column if exists concur_expense_type_mappings;
+-- publish_company_draft()も、concur_expense_type_mappings列のselect/insert部分を
+-- 削除した版へ差し替える必要がある（下の定義を参照）。
+-- 今回はこれらのdrop/migrationを一切実行していない（既存公開済みデータを
+-- 壊さないことを最優先するため）。
 alter table draft_configs
   add column if not exists concur_expense_type_mappings jsonb not null default '[]'::jsonb;
 alter table published_versions
   add column if not exists concur_expense_type_mappings jsonb not null default '[]'::jsonb;
 
 comment on column draft_configs.concur_expense_type_mappings is
-  'Concur Expense Type mapping（{companyId, policyId, botExpenseTypeId, concurExpenseTypeId}の'
-  '配列）の下書き。管理画面「Concurマッピング」タブでの追加・編集・削除、および初期設定Excel'
-  '（07_Concurマッピングシート）からの取り込みに対応している（Concur APIへの実際の送信は未実装）。';
+  '【非推奨・未使用】経費タイプID＝Concur EXP_KEYという設計への正式リファクタリング'
+  '（管理画面「Concurマッピング」タブ・07_Concurマッピングシートを廃止）により、'
+  'アプリ側はこの列を一切読み書きしない。旧データが残っている可能性はあるが、'
+  '安全なdeploy順序に従い列自体は後日別migrationで削除予定（現時点では未適用）。';
 comment on column published_versions.concur_expense_type_mappings is
-  '公開時点のConcur Expense Type mapping（publish_company_draft()がdraft_configsから'
-  'そのままコピーする）。config_snapshot.concur.expenseTypeMappingsと同じ内容を、'
-  '他の列（policies・expense_types等）と同様に公開履歴として保持する。';
+  '【非推奨・未使用】draft_configs.concur_expense_type_mappingsと同じ理由により、'
+  'publish_company_draft()がdraft_configsからそのままコピーするだけの列になった。'
+  'config_snapshotにはもうこの内容は含まれない（config_snapshot.expenseTypes[].id'
+  'がConcur側の識別子そのもの）。列自体は後日別migrationで削除予定（現時点では未適用）。';
 
 -- ============================================================================
 -- ここまででPhase 9・10・11のスキーマも完成です。
