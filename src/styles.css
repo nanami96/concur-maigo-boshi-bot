@@ -3542,6 +3542,7 @@ textarea.resultFieldInput {
    会社作成完了画面・招待コード再発行の両方で共有する。 */
 .inviteCodeWrap {
   margin-top: 16px;
+  margin-bottom: 24px;
 }
 
 .inviteCodeBox {
@@ -3550,11 +3551,13 @@ textarea.resultFieldInput {
   justify-content: space-between;
   gap: 12px;
   width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
   box-sizing: border-box;
   background: #ffffff;
   border: 1px solid #c8d8ff;
   border-radius: 16px;
-  padding: 18px 16px 18px 22px;
+  padding: 10px 16px 10px 22px;
   box-shadow:
     0 0 0 1px rgba(79, 120, 255, 0.15),
     0 0 12px rgba(79, 120, 255, 0.12);
@@ -3565,6 +3568,7 @@ textarea.resultFieldInput {
   font-size: 18px;
   font-weight: 600;
   color: #111827;
+  letter-spacing: 0.08em;
   overflow-wrap: anywhere;
 }
 
@@ -3574,11 +3578,10 @@ textarea.resultFieldInput {
   justify-content: center;
   gap: 6px;
   flex-shrink: 0;
-  height: 44px;
+  height: 38px;
   padding: 0 16px;
   border-radius: 10px;
   border: 1px solid #e5e7eb;
-  border-left: 1px solid #aec0f5;
   background: #fafafa;
   color: #2563eb;
   font-size: 14px;
@@ -3596,7 +3599,19 @@ textarea.resultFieldInput {
   background: #e0e7ff;
 }
 
+/* copy-icon.png自体の実際の絵柄は1024x1024の中央付近（約46%×53%）だけを
+   占めており、周囲に大きな透過余白がある。そのため表示上のアイコンを
+   通常サイズ（例:20px）に見せるには、CSS側のボックスをその分大きめに
+   取る必要がある。 */
 .inviteCodeCopyIcon {
+  width: 32px;
+  height: 32px;
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.inviteCodeToastIcon {
   width: 16px;
   height: 16px;
   flex-shrink: 0;

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import copyIcon from "../assets/copy-icon.png";
 
 // 招待コード表示用のボックス＋コピー機能。CreatePlatformCompanyScreen.jsx
 // （会社作成完了画面）・UserManagementPanel.jsx（招待コード再発行）の両方から
@@ -7,30 +8,13 @@ import { useEffect, useRef, useState } from "react";
 // コピー処理以外の副作用を持たない。
 const FEEDBACK_DURATION_MS = 2000;
 
-function ClipboardIcon() {
-  return (
-    <svg
-      className="inviteCodeCopyIcon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75h-6a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184"
-      />
-    </svg>
-  );
-}
-
+// トースト（成功／失敗）のアイコンは、コピーボタンの画像アイコンとは別クラス
+// （.inviteCodeToastIcon）にする。同じ.inviteCodeCopyIconのままだと、ボタン用に
+// サイズ変更した際にトースト側の見た目まで意図せず変わってしまうため。
 function CheckIcon() {
   return (
     <svg
-      className="inviteCodeCopyIcon"
+      className="inviteCodeToastIcon"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -46,7 +30,7 @@ function CheckIcon() {
 function ErrorIcon() {
   return (
     <svg
-      className="inviteCodeCopyIcon"
+      className="inviteCodeToastIcon"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -106,7 +90,7 @@ export default function InviteCodeBox({ code }) {
       <div className="inviteCodeBox">
         <span className="inviteCodeValue">{code}</span>
         <button type="button" className="inviteCodeCopyButton" onClick={handleCopy}>
-          <ClipboardIcon />
+          <img src={copyIcon} alt="" aria-hidden="true" className="inviteCodeCopyIcon" />
           コピー
         </button>
       </div>

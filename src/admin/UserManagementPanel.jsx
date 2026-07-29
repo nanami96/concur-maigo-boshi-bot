@@ -259,7 +259,7 @@ export default function UserManagementPanel({
 
       <button
         type="button"
-        className="flowGhostButton"
+        className="importConfirmButton"
         disabled={inviteCodeState.status === "submitting"}
         onClick={handleRegenerateInviteCode}
       >
