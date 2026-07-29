@@ -62,6 +62,9 @@ function createPoliciesFromNewSchema(policySheet) {
   }));
 }
 
+// idはConcur側で自動採番される経費タイプコード（EXP_KEY）と同じ値として扱う。
+// 先頭ゼロを含む数字列（例："01515"）もありうるため、toText()（String+trim）で
+// 必ず文字列化する（Number()・parseInt()は使わない。先頭ゼロが失われるため）。
 function createExpenseTypesFromNewSchema(expenseTypeSheet) {
   return expenseTypeSheet.map((row) => ({
     id: toText(row["経費タイプID"]),

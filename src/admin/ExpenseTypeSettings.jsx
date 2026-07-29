@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import OptionMenu from "./OptionMenu";
 import ConfirmDialog from "./ConfirmDialog";
 import EditableText from "./EditableText";
-import { shouldConfirmExpenseTypePolicyChange } from "../lib/concurMappingValidation";
 
 function receiptLabel(value) {
   if (value === true) return "必要";
@@ -28,33 +27,9 @@ function ExpenseTypeRow({ expenseType, editor, policies }) {
   const policyName =
     policies.find((policy) => policy.policy_id === expenseType.policyId)?.policy_name ||
     expenseType.policyId;
-  const concurMappingUsage = editor.computeExpenseTypeConcurMappingUsage(expenseType.id);
 
-  // ポリシーを変更しても、既存のConcurマッピング（companyId+policyId+
-  // botExpenseTypeIdが一意キー）は自動的に新しいpolicyIdへ書き換えない
-  // （同じConcurコードが新ポリシーでも使えるとは限らない、外部システム設定を
-  // 推測で変更すべきではない、という判断）。代わりに、この経費タイプが
-  // Concurマッピングから参照されている場合だけ確認を挟み、変更後は
-  // 既存マッピングをそのまま残す（不整合はcheckMasterData/公開前チェックが
-  // 検出する、Commit Fから維持している既存挙動）。
   function handlePolicyChange(nextPolicyId) {
     if (nextPolicyId === expenseType.policyId) {
-      return;
-    }
-    if (
-      shouldConfirmExpenseTypePolicyChange({
-        currentPolicyId: expenseType.policyId,
-        nextPolicyId,
-        concurMappingUsage,
-      })
-    ) {
-      setConfirmRequest({
-        title: "ポリシーを変更しますか？",
-        message: `この経費タイプは${concurMappingUsage}件のConcurマッピングで使用されています。ポリシーを変更しても、既存のConcurマッピングは自動的には変更されません。`,
-        note: "変更後は、Concurマッピング画面で内容を確認・修正してください。",
-        confirmLabel: "変更する",
-        onConfirm: () => editor.updateExpenseType(expenseType.id, { policyId: nextPolicyId }),
-      });
       return;
     }
     editor.updateExpenseType(expenseType.id, { policyId: nextPolicyId });
@@ -68,21 +43,6 @@ function ExpenseTypeRow({ expenseType, editor, policies }) {
         message: `この経費タイプは質問フロー内の${usage}件の結果で使用されています。削除すると質問フロー側の参照が壊れるため、まずは使用停止にすることをおすすめします。`,
         confirmLabel: "使用停止にする",
         onConfirm: () => editor.updateExpenseType(expenseType.id, { active: false }),
-      });
-      return;
-    }
-
-    // 質問フローからは参照されていなくても、Concurマッピングから直接参照されている
-    // 場合がある（Excel由来のマッピング等）。PolicySettings.jsxの同種の警告と同じ考え方で、
-    // ブロックはせず警告のうえで削除を続行できるようにする（concurMappingUsageは
-    // コンポーネント冒頭でポリシー変更ガードと共用するために計算済み）。
-    if (concurMappingUsage > 0) {
-      setConfirmRequest({
-        title: "この経費タイプはConcurマッピングで参照されています",
-        message: `この経費タイプは${concurMappingUsage}件のConcurマッピングで参照されています。削除すると、それらのマッピングは存在しない経費タイプを参照した状態になります。`,
-        note: "先にConcurマッピング画面で該当のマッピングを削除・変更することをおすすめします。",
-        confirmLabel: "それでも削除する",
-        onConfirm: () => editor.deleteExpenseType(expenseType.id),
       });
       return;
     }
@@ -196,8 +156,19 @@ function ExpenseTypeRow({ expenseType, editor, policies }) {
             </span>
           </label>
 
-          <p className="settingsHint">
-            経費タイプID: <code>{expenseType.id}</code>（Concur側との突合キーのため作成後は変更できません）
+          <label className="flowFieldLabel">
+            Concur経費タイプコード
+            <input
+              className="settingsTextInput"
+              value={expenseType.id}
+              readOnly
+              disabled
+              aria-describedby={`expense-type-code-hint-${expenseType.id}`}
+            />
+          </label>
+          <p className="settingsHint" id={`expense-type-code-hint-${expenseType.id}`}>
+            登録後はこのコードを変更できません。Concur側で経費タイプを作り直した場合は、
+            この経費タイプを使用停止にし、新しいコードで経費タイプを新規登録してください。
           </p>
 
           <button type="button" className="flowGhostButton" onClick={() => setIsEditing(false)}>
@@ -223,7 +194,7 @@ function AddExpenseTypeForm({ editor, policies, onDone }) {
     const trimmedName = name.trim();
 
     if (!trimmedId) {
-      setError("経費タイプIDを入力してください。");
+      setError("Concur経費タイプコードを入力してください。");
       return;
     }
     if (!trimmedName) {
@@ -235,7 +206,7 @@ function AddExpenseTypeForm({ editor, policies, onDone }) {
       return;
     }
     if (editor.expenseTypes.some((expenseType) => expenseType.id === trimmedId)) {
-      setError(`経費タイプID「${trimmedId}」は既に使われています。`);
+      setError(`Concur経費タイプコード「${trimmedId}」は既に使われています。`);
       return;
     }
 
@@ -253,16 +224,16 @@ function AddExpenseTypeForm({ editor, policies, onDone }) {
   return (
     <div className="settingsCard settingsAddForm">
       <label className="flowFieldLabel">
-        経費タイプID
+        Concur経費タイプコード
         <input
           className="settingsTextInput"
           value={id}
           onChange={(event) => setId(event.target.value)}
-          placeholder="例：taxi"
+          placeholder="例：01515"
         />
       </label>
       <p className="settingsHint">
-        Concurで使用している経費タイプコードがある場合は、その値を入力してください。
+        Concur側で自動採番される経費タイプコードを入力してください。先頭の0を含めて入力してください。
       </p>
 
       <label className="flowFieldLabel">
