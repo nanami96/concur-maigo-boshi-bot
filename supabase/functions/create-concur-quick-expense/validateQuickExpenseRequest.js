@@ -3,34 +3,39 @@
 // supabase/functions/ocr-receipt/normalizeReceiptResult.jsと同じ方針で
 // Node/vitestから直接importしてテストできる。
 //
-// このリクエストの項目は、src/lib/concurExpenseData.js（共通経費データ）・
-// src/lib/concurExpenseTypeMapping.js（ID変換）が生成する値を組み合わせた
-// ものを想定しているが、フィールド名はそれぞれの既存実装に合わせて
-// 決めている：
+// このリクエストの項目は、src/lib/concurExpenseData.js（共通経費データ）が
+// 生成する値を組み合わせたものを想定しているが、フィールド名はそれぞれの
+// 既存実装に合わせて決めている：
 //   - transactionDate / amount / receiptRequired
 //       … src/lib/concurExpenseData.js とまったく同じ名前。
 //   - currencyCode
 //       … src/lib/concurExpenseData.js に合わせた名前
 //         （このEdge Function向けの当初案では "currency" だったが、
 //         既存実装のフィールド名を優先して改名した）。
-//   - botExpenseTypeId / concurExpenseTypeId
-//       … src/lib/concurExpenseTypeMapping.js の入出力と同じ名前。
-//         このリクエストにはBot側ID・Concur側IDの両方が同時に含まれるため、
-//         短い "expenseTypeId" ではどちらを指すか曖昧になる。曖昧さを避ける
-//         ため、あえて長い名前をそのまま採用している。
+//   - expenseTypeId
+//       … 経費タイプID＝Concur EXP_KEYという設計（正式リファクタリング）
+//         により、src/lib/concurExpenseData.jsのbuildConcurExpenseData()が
+//         生成するexpenseTypeIdをそのまま使う。以前あった、Bot内部の
+//         意味的IDとConcur側識別子を別々に送るbotExpenseTypeId /
+//         concurExpenseTypeIdという2フィールド構成は廃止した。
 //   - vendorName
 //       … src/lib/concurExpenseData.js に存在するが、送信必須の項目とまでは
 //         言えない（OCRが読み取れなかった場合はnullになりうる値のため）。
 //         このリクエストでは任意項目として扱う。
 //   - memo
-//       … 既存のconcurExpenseData.js・concurExpenseTypeMapping.jsのどちらにも
-//         存在しない、利用者が自由入力する想定の任意項目。
+//       … concurExpenseData.jsには存在しない、利用者が自由入力する想定の
+//         任意項目。
 //
-// concurExpenseTypeId（Concur側の経費タイプ識別子）は、この関数が受け取る
-// 時点で「解決済み」の値であることを前提とする。Bot側IDからConcur側IDへの
-// 変換自体（src/lib/concurExpenseTypeMapping.jsの責務）は、このEdge Function
-// では一切行わない（責務の重複を避けるため。呼び出し側が事前にマッピングを
-// 解決してから呼び出す想定）。
+// 後方互換（旧request body）について：
+//   デプロイ順序（Edge Functionを新旧両方のrequest bodyを受けられる状態に
+//   してから先にdeployし、そのあとフロントを新方式へ切り替える）を安全にする
+//   ため、フロントがまだ旧フィールド名botExpenseTypeIdで送ってくる場合も
+//   受け付ける。expenseTypeIdが無ければbotExpenseTypeIdの値をそのまま
+//   expenseTypeIdとして扱う（新方式では両者が同じ値に収束するため、
+//   フィールド名が違うだけで値の意味は変わらない）。旧フィールド
+//   concurExpenseTypeIdは受け取っても無視する（もう検証・利用しない）。
+//   フロントの切り替えが完了したら、この後方互換コード（resolveExpenseTypeId
+//   のbotExpenseTypeIdフォールバック部分）は削除してよい。
 //
 // receiptFile・領収書画像は意図的にこのリクエストに含めない
 // （Base64化した画像や大きなデータを載せない、レシート添付は別責務という
@@ -43,7 +48,7 @@
 //   detailsが配列であることを活かし、こちらは見つかった問題をすべて集めて
 //   一度に返す（フォームの複数項目を一度に直せるようにするため）。
 
-const REQUIRED_STRING_FIELDS = ["companyId", "policyId", "botExpenseTypeId", "concurExpenseTypeId"];
+const REQUIRED_STRING_FIELDS = ["companyId", "policyId"];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
 
@@ -63,6 +68,18 @@ function isValidCalendarDate(value) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+// expenseTypeId（新方式）が無ければbotExpenseTypeId（旧方式）へフォールバック
+// する（ファイル冒頭コメント「後方互換」参照）。
+function resolveExpenseTypeId(data) {
+  if (!isBlankString(data.expenseTypeId)) {
+    return data.expenseTypeId;
+  }
+  if (!isBlankString(data.botExpenseTypeId)) {
+    return data.botExpenseTypeId;
+  }
+  return null;
+}
+
 /**
  * リクエストボディ（JSON.parse済みの値）を検証し、問題が無ければ
  * 認識しているフィールドだけへ正規化したオブジェクトを返す。
@@ -72,8 +89,7 @@ function isValidCalendarDate(value) {
  *   result: {
  *     companyId: string,
  *     policyId: string,
- *     botExpenseTypeId: string,
- *     concurExpenseTypeId: string,
+ *     expenseTypeId: string,
  *     transactionDate: string,
  *     amount: number,
  *     currencyCode: string,
@@ -92,6 +108,11 @@ export function validateQuickExpenseRequest(body) {
     if (isBlankString(data[field])) {
       details.push({ field, reason: "required" });
     }
+  }
+
+  const expenseTypeId = resolveExpenseTypeId(data);
+  if (isBlankString(expenseTypeId)) {
+    details.push({ field: "expenseTypeId", reason: "required" });
   }
 
   if (isBlankString(data.transactionDate)) {
@@ -137,8 +158,7 @@ export function validateQuickExpenseRequest(body) {
     result: {
       companyId: data.companyId,
       policyId: data.policyId,
-      botExpenseTypeId: data.botExpenseTypeId,
-      concurExpenseTypeId: data.concurExpenseTypeId,
+      expenseTypeId,
       transactionDate: data.transactionDate,
       amount: data.amount,
       currencyCode: data.currencyCode,

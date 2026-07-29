@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { handleQuickExpenseRequest } from "../supabase/functions/create-concur-quick-expense/handleQuickExpenseRequest.js";
 
 // Deno.serve/Deno.env等には一切依存しない純粋関数のため、
@@ -9,23 +9,16 @@ import { handleQuickExpenseRequest } from "../supabase/functions/create-concur-q
 
 const VALID_USER = { id: "user-1" };
 
-// buildValidBody()が申告するcompanyId/policyId/botExpenseTypeId/
-// concurExpenseTypeIdと完全一致する、テスト専用のダミーmapping
-// （実際のConcur Expense Type Codeではない）。
-const VALID_MAPPING = {
-  companyId: "company-a",
-  policyId: "policy-x",
-  botExpenseTypeId: "taxi",
-  concurExpenseTypeId: "CONCUR_TAXI_A_X",
-};
-const VALID_MEMBERSHIP = { company_code: "company-a", role: "user", concurExpenseTypeMappings: [VALID_MAPPING] };
+// buildValidBody()が申告するcompanyId/policyId/expenseTypeIdと完全一致する、
+// テスト専用のダミー経費タイプ（実際のConcur EXP_KEYではない）。
+const VALID_EXPENSE_TYPE = { id: "taxi", policyId: "policy-x", name: "タクシー", active: true };
+const VALID_MEMBERSHIP = { company_code: "company-a", role: "user", expenseTypes: [VALID_EXPENSE_TYPE] };
 
 function buildValidBody(overrides = {}) {
   return {
     companyId: "company-a",
     policyId: "policy-x",
-    botExpenseTypeId: "taxi",
-    concurExpenseTypeId: "CONCUR_TAXI_A_X",
+    expenseTypeId: "taxi",
     transactionDate: "2026-07-28",
     amount: 1000,
     currencyCode: "JPY",
@@ -314,7 +307,7 @@ describe("handleQuickExpenseRequest", () => {
 
       const { status, body } = await handleQuickExpenseRequest({
         method: "POST",
-        ...buildAuthedInput({ fetchCompanyMembership: async () => ({ company_code: "company-b", role: "user" }) }),
+        ...buildAuthedInput({ fetchCompanyMembership: async () => ({ company_code: "company-b", role: "user", expenseTypes: [] }) }),
         parseBody: parseBodyFor(buildValidBody({ companyId: "company-a" })),
         createQuickExpense,
       });
@@ -389,10 +382,10 @@ describe("handleQuickExpenseRequest", () => {
     });
   });
 
-  // mappingの値（Concur Expense Type Code）はすべてテスト専用のダミー値であり、
+  // 経費タイプID（Concur EXP_KEY）の値はすべてテスト専用のダミー値であり、
   // 実際のConcur側のコードではない。
-  describe("Concur Expense Type Mapping検証", () => {
-    it("正常なmappingが1件一致する場合はスタブ処理が実行され200を返す", async () => {
+  describe("経費タイプ検証（verifyExpenseTypeForQuickExpense）", () => {
+    it("正常な経費タイプが一致する場合はスタブ処理が実行され200を返す", async () => {
       const createQuickExpense = vi.fn().mockResolvedValue({
         result: { quickExpenseId: "stub_quick_expense_id", status: "stubbed" },
         error: null,
@@ -410,23 +403,7 @@ describe("handleQuickExpenseRequest", () => {
       expect(createQuickExpense).toHaveBeenCalledTimes(1);
     });
 
-    it("concurExpenseTypeIdが一致しない場合はmapping_not_found（403）。スタブは呼ばれない", async () => {
-      const createQuickExpense = vi.fn();
-
-      const { status, body } = await handleQuickExpenseRequest({
-        method: "POST",
-        ...buildAuthedInput(),
-        parseBody: parseBodyFor(buildValidBody({ concurExpenseTypeId: "FORGED_CODE" })),
-        createQuickExpense,
-      });
-
-      expect(status).toBe(403);
-      expect(body.result).toBeNull();
-      expect(body.error.code).toBe("mapping_not_found");
-      expect(createQuickExpense).not.toHaveBeenCalled();
-    });
-
-    it("policyIdが所属会社のmappingと一致しない場合はmapping_not_found（403）。スタブは呼ばれない", async () => {
+    it("policyIdが所属会社の経費タイプと一致しない場合はexpense_type_not_found（403）。スタブは呼ばれない", async () => {
       const createQuickExpense = vi.fn();
 
       const { status, body } = await handleQuickExpenseRequest({
@@ -437,43 +414,43 @@ describe("handleQuickExpenseRequest", () => {
       });
 
       expect(status).toBe(403);
-      expect(body.error.code).toBe("mapping_not_found");
+      expect(body.error.code).toBe("expense_type_not_found");
       expect(createQuickExpense).not.toHaveBeenCalled();
     });
 
-    it("botExpenseTypeIdが所属会社のmappingと一致しない場合はmapping_not_found（403）。スタブは呼ばれない", async () => {
+    it("expenseTypeIdが所属会社の経費タイプ一覧に存在しない場合はexpense_type_not_found（403）。スタブは呼ばれない", async () => {
       const createQuickExpense = vi.fn();
 
       const { status, body } = await handleQuickExpenseRequest({
         method: "POST",
         ...buildAuthedInput(),
-        parseBody: parseBodyFor(buildValidBody({ botExpenseTypeId: "does_not_exist" })),
+        parseBody: parseBodyFor(buildValidBody({ expenseTypeId: "does_not_exist" })),
         createQuickExpense,
       });
 
       expect(status).toBe(403);
-      expect(body.error.code).toBe("mapping_not_found");
+      expect(body.error.code).toBe("expense_type_not_found");
       expect(createQuickExpense).not.toHaveBeenCalled();
     });
 
-    it("所属会社のmappingが0件（Concur未導入の会社）の場合はmapping_not_found（403）。スタブは呼ばれない", async () => {
+    it("所属会社の経費タイプが0件（未登録）の場合はexpense_type_not_found（403）。スタブは呼ばれない", async () => {
       const createQuickExpense = vi.fn();
 
       const { status, body } = await handleQuickExpenseRequest({
         method: "POST",
         ...buildAuthedInput({
-          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", concurExpenseTypeMappings: [] }),
+          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", expenseTypes: [] }),
         }),
         parseBody: parseBodyFor(buildValidBody()),
         createQuickExpense,
       });
 
       expect(status).toBe(403);
-      expect(body.error.code).toBe("mapping_not_found");
+      expect(body.error.code).toBe("expense_type_not_found");
       expect(createQuickExpense).not.toHaveBeenCalled();
     });
 
-    it("concurExpenseTypeMappings自体が未定義（古いconfig_snapshot等）の場合もmapping_not_found（403）。例外にならない", async () => {
+    it("expenseTypes自体が未定義（古いconfig_snapshot等）の場合もexpense_type_not_found（403）。例外にならない", async () => {
       const createQuickExpense = vi.fn();
 
       const { status, body } = await handleQuickExpenseRequest({
@@ -486,68 +463,68 @@ describe("handleQuickExpenseRequest", () => {
       });
 
       expect(status).toBe(403);
-      expect(body.error.code).toBe("mapping_not_found");
+      expect(body.error.code).toBe("expense_type_not_found");
       expect(createQuickExpense).not.toHaveBeenCalled();
     });
 
-    it("concurExpenseTypeMappingsが配列でない（型不正な設定データ）場合もmapping_not_found（403）。例外にならない", async () => {
+    it("expenseTypesが配列でない（型不正な設定データ）場合もexpense_type_not_found（403）。例外にならない", async () => {
       const createQuickExpense = vi.fn();
 
       const { status, body } = await handleQuickExpenseRequest({
         method: "POST",
         ...buildAuthedInput({
-          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", concurExpenseTypeMappings: "not-an-array" }),
+          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", expenseTypes: "not-an-array" }),
         }),
         parseBody: parseBodyFor(buildValidBody()),
         createQuickExpense,
       });
 
       expect(status).toBe(403);
-      expect(body.error.code).toBe("mapping_not_found");
+      expect(body.error.code).toBe("expense_type_not_found");
       expect(createQuickExpense).not.toHaveBeenCalled();
     });
 
-    it("同じcompanyId・policyId・botExpenseTypeIdのmappingが複数存在する場合はmultiple_mappings_found（403）。スタブは呼ばれない", async () => {
+    it("使用停止（active: false）の経費タイプはexpense_type_not_found（403）。スタブは呼ばれない", async () => {
       const createQuickExpense = vi.fn();
-      const duplicatedMappings = [
-        VALID_MAPPING,
-        { ...VALID_MAPPING, concurExpenseTypeId: "CONCUR_TAXI_A_X_DUPLICATE" },
-      ];
 
       const { status, body } = await handleQuickExpenseRequest({
         method: "POST",
         ...buildAuthedInput({
-          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", concurExpenseTypeMappings: duplicatedMappings }),
+          fetchCompanyMembership: async () => ({
+            company_code: "company-a",
+            role: "user",
+            expenseTypes: [{ ...VALID_EXPENSE_TYPE, active: false }],
+          }),
         }),
         parseBody: parseBodyFor(buildValidBody()),
         createQuickExpense,
       });
 
       expect(status).toBe(403);
-      expect(body.error.code).toBe("multiple_mappings_found");
+      expect(body.error.code).toBe("expense_type_not_found");
       expect(createQuickExpense).not.toHaveBeenCalled();
     });
 
-    it("他社のmappingしか無い場合はmapping_not_found（403）。他社設定の流用不可", async () => {
+    it("他社の経費タイプ一覧しか無い場合はexpense_type_not_found（403）。他社設定の流用不可", async () => {
       const createQuickExpense = vi.fn();
-      const otherCompanyMapping = { companyId: "company-b", policyId: "policy-x", botExpenseTypeId: "taxi", concurExpenseTypeId: "CONCUR_TAXI_A_X" };
+      const otherCompanyExpenseType = { id: "taxi", policyId: "other-policy", name: "タクシー", active: true };
 
       const { status, body } = await handleQuickExpenseRequest({
         method: "POST",
         ...buildAuthedInput({
-          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", concurExpenseTypeMappings: [otherCompanyMapping] }),
+          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", expenseTypes: [otherCompanyExpenseType] }),
         }),
         parseBody: parseBodyFor(buildValidBody()),
         createQuickExpense,
       });
 
       expect(status).toBe(403);
-      expect(body.error.code).toBe("mapping_not_found");
+      expect(body.error.code).toBe("expense_type_not_found");
       expect(createQuickExpense).not.toHaveBeenCalled();
     });
 
-    it("mapping検証エラーの本文にmapping全体やconfig_snapshotが含まれない", async () => {
-      const secretLikeCode = "SHOULD_NOT_LEAK_MAPPING_CONTENTS";
+    it("経費タイプ検証エラーの本文に経費タイプ一覧やconfig_snapshotが含まれない", async () => {
+      const secretLikeId = "SHOULD_NOT_LEAK_EXPENSE_TYPE_CONTENTS";
 
       const { body } = await handleQuickExpenseRequest({
         method: "POST",
@@ -555,13 +532,36 @@ describe("handleQuickExpenseRequest", () => {
           fetchCompanyMembership: async () => ({
             company_code: "company-a",
             role: "user",
-            concurExpenseTypeMappings: [{ ...VALID_MAPPING, concurExpenseTypeId: secretLikeCode }],
+            expenseTypes: [{ id: secretLikeId, policyId: "policy-x", name: "秘密の経費タイプ", active: true }],
           }),
         }),
         parseBody: parseBodyFor(buildValidBody()),
       });
 
-      expect(JSON.stringify(body)).not.toContain(secretLikeCode);
+      expect(JSON.stringify(body)).not.toContain(secretLikeId);
+    });
+
+    it("旧フィールド名botExpenseTypeIdのみで送られたリクエストも受け付ける（デプロイ移行期間の後方互換）", async () => {
+      const createQuickExpense = vi.fn().mockResolvedValue({
+        result: { quickExpenseId: "stub_quick_expense_id", status: "stubbed" },
+        error: null,
+      });
+      const legacyBody = buildValidBody();
+      delete legacyBody.expenseTypeId;
+      legacyBody.botExpenseTypeId = "taxi";
+      // 旧方式ではconcurExpenseTypeIdも送られていたが、もう検証・利用しない。
+      legacyBody.concurExpenseTypeId = "LEGACY_CONCUR_CODE";
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput(),
+        parseBody: parseBodyFor(legacyBody),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(200);
+      expect(body.error).toBeNull();
+      expect(createQuickExpense).toHaveBeenCalledTimes(1);
     });
   });
 });

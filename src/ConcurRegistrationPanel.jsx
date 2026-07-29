@@ -33,18 +33,18 @@ import {
 //
 // buildConcurRegistrationData()（src/lib/concurRegistrationData.js）の呼び出しは
 // このコンポーネント自身の内部で行う（ReceiptOcrPanel.jsxがanalyzeReceiptImage()
-// を自身の内部で呼ぶのと同じ構成）。company/result/receiptDataのいずれかが
-// 不足している、またはConcur側マッピングがまだ見つからない場合（現時点では
-// 本番マッピングデータ自体が存在しない。BotConversation.jsx参照）等の理由で
-// 中間データの生成に失敗した場合は、エラーコードを画面へ出さず、単に何も
-// 描画しない（null）。これにより、呼び出し側は分岐ロジックを持つ必要が無く、
-// 既存の結果画面はそのまま変わらずに表示され続ける
-// （要件：validation error時に画面をクラッシュさせない・既存画面へ留める）。
+// を自身の内部で呼ぶのと同じ構成）。経費タイプID＝Concur EXP_KEYという設計
+// （正式リファクタリング）により、以前必要だった「Concur側マッピングがまだ
+// 登録されていない」という失敗パターンは無くなった。company/result/receiptData
+// のいずれかが不足している、または利用日・金額等のバリデーションに失敗した
+// 場合は、エラーコードを画面へ出さず、単に何も描画しない（null）。これにより、
+// 呼び出し側は分岐ロジックを持つ必要が無く、既存の結果画面はそのまま変わらず
+// 表示され続ける（要件：validation error時に画面をクラッシュさせない・
+// 既存画面へ留める）。
 export default function ConcurRegistrationPanel({
   company,
   result,
   receiptData,
-  mappings,
   expenseTypeName,
   policyName,
 }) {
@@ -52,7 +52,6 @@ export default function ConcurRegistrationPanel({
     company,
     result,
     receiptData,
-    mappings,
   });
 
   // phase: idle | submitting | success | error

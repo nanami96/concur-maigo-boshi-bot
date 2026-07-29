@@ -20,14 +20,13 @@
 //   再利用することで、新しいSECURITY DEFINER関数・RLS変更を一切追加せずに
 //   company_codeを取得できる。
 //
-// Commit H：concurExpenseTypeMappingsもここで一緒に取り出す。
+// expenseTypesもここで一緒に取り出す（経費タイプID＝Concur EXP_KEYという
+// 設計への正式リファクタリングにより、以前ここで取り出していた
+// concurExpenseTypeMappings（Concur Expense Type Mapping、別テーブル）は廃止した）。
 //   get_my_public_config()が返すconfig_snapshotは、公開中のBot画面が実際に
 //   参照しているものと全く同じ値（=下書きではなく公開済みの設定）であり、
-//   config_snapshot.concur.expenseTypeMappingsはbuildConfigFromFlow.jsが
-//   常に配列として埋め込む（Concur未導入の会社・Phase 11適用前に公開された
-//   古いconfig_snapshotではキー自体が無いこともあるため、フロント側の
-//   src/lib/concurRegistrationConfig.jsのresolveConcurExpenseTypeMappings()と
-//   同じ「無ければ安全に空配列」というフォールバックをここでも行う）。
+//   config_snapshot.expenseTypesはbuildConfigFromFlow.jsが常に配列として
+//   埋め込む。
 //   下書き（draft_configs）ではなく公開済み設定を正とする理由：
 //     ・一般利用者が実際に見ているBot画面・ConcurRegistrationPanel.jsxは
 //       常に公開済み設定だけを反映しており、下書きの内容は一切見えない。
@@ -35,9 +34,9 @@
 //     ・そもそも一般利用者（role='user'）はdraft_configsをRLS
 //       （draft_configs_select_admin）で読めないため、下書きを正にする
 //       実装は技術的にも成立しない。
-function resolveConcurExpenseTypeMappings(configSnapshot) {
-  const mappings = configSnapshot?.concur?.expenseTypeMappings;
-  return Array.isArray(mappings) ? mappings : [];
+function resolveExpenseTypes(configSnapshot) {
+  const expenseTypes = configSnapshot?.expenseTypes;
+  return Array.isArray(expenseTypes) ? expenseTypes : [];
 }
 
 export function resolveMembershipFromPublicConfigRow(row) {
@@ -48,6 +47,6 @@ export function resolveMembershipFromPublicConfigRow(row) {
   return {
     company_code: row.company_code,
     role: row.role ?? null,
-    concurExpenseTypeMappings: resolveConcurExpenseTypeMappings(row.config_snapshot),
+    expenseTypes: resolveExpenseTypes(row.config_snapshot),
   };
 }

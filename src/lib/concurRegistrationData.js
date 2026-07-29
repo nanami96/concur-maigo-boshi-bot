@@ -1,28 +1,33 @@
-// 迷子防止Botの既存データ（会社情報・判定結果・OCR確認済みデータ・Concur経費
-// タイプマッピング）から、将来Concurへ登録するための「迷子防止Bot内部の
-// Concur登録用中間データ」を1つにまとめて生成する統合関数。
+// 迷子防止Botの既存データ（会社情報・判定結果・OCR確認済みデータ）から、
+// 将来Concurへ登録するための「迷子防止Bot内部のConcur登録用中間データ」を
+// 1つにまとめて生成する統合関数。
 //
 // このファイルはConcur APIへの実通信・認証情報の使用を一切行わない
-// （src/lib/concurExpenseData.js・concurExpenseTypeMapping.jsと同じ純粋関数
-// のみで構成）。生成する中間データも、Concur APIの実際のリクエストボディ
-// ではなく、あくまで迷子防止Bot内部の橋渡し用データである
-// （concurExpenseData.js冒頭のコメント参照。Concur側の正式なリクエスト
-// フィールドはまだ確定していないため、ここでは推測で作り込まない）。
+// （src/lib/concurExpenseData.jsと同じ純粋関数のみで構成）。生成する中間データも、
+// Concur APIの実際のリクエストボディではなく、あくまで迷子防止Bot内部の
+// 橋渡し用データである（concurExpenseData.js冒頭のコメント参照。Concur側の
+// 正式なリクエストフィールドはまだ確定していないため、ここでは推測で作り込まない）。
 //
-// 既存の3つの関数の責務はそのまま再利用し、ここでは新しいバリデーション
+// 経費タイプID＝Concur EXP_KEYという設計への正式リファクタリングにより、
+// 以前ここにあった「Bot経費タイプID → Mapping → Concur Expense Type ID」という
+// 変換ステップ（mapBotExpenseTypeToConcur()の呼び出し）を廃止した。
+// judgmentResult.expenseType.id（config.expenseTypes[].idと同じ値）が、
+// そのままConcur Quick Expense APIへ送るexpenseTypeIdである
+// （src/admin/ExpenseTypeSettings.jsxの新規登録・編集画面が「Concur経費タイプ
+// コード」として扱っているのと同じ値。詳細はそちらのコメント参照）。
+// expenseTypeIdの必須チェック自体は、既存のbuildConcurExpenseData()/
+// validateConcurExpenseData()（src/lib/concurExpenseData.js）が既に行っている
+// （missing_expense_typeエラー）ため、ここで重複したチェックは追加しない。
+//
+// 既存の2つの関数の責務はそのまま再利用し、ここでは新しいバリデーション
 // ロジックを増やさない（validation責務を分散させないため）：
 //   - buildConcurExpenseData() / validateConcurExpenseData()
 //       （src/lib/concurExpenseData.js）
 //       … OCR結果・判定結果からtransactionDate/amount/currencyCode/
-//         vendorName/receiptRequiredを組み立て・検証する。botExpenseTypeId
-//         （expenseTypeIdという名前で扱われる）の有無もここでチェック済み。
+//         vendorName/receiptRequired/expenseTypeIdを組み立て・検証する。
 //         このファイルでは再実装しない。
-//   - mapBotExpenseTypeToConcur()（src/lib/concurExpenseTypeMapping.js）
-//       … Bot経費タイプIDをConcur側識別子へ変換する（company_unknown・
-//         policy_unknown・mapping_not_found等のエラーを含む）。このファイル
-//         では再実装しない。
-// このファイルが新たに追加する検証は、上記2つが関知しないcompanyId・
-// policyId自体の有無だけである。
+// このファイルが新たに追加する検証は、上記が関知しないcompanyId・policyId
+// 自体の有無だけである。
 //
 // companyIdについて（重要・混同注意）：
 // 現時点でフロント（BotConversation.jsx等）が実際に取得できるのは、
@@ -41,7 +46,6 @@
 // 使う必要が出てきた場合も、影響はこのファイルの中（companyCodeの取り出し
 // 部分、resolveCompanyCode()）だけに閉じ込まるようにする。
 import { buildConcurExpenseData, validateConcurExpenseData } from "./concurExpenseData";
-import { mapBotExpenseTypeToConcur } from "./concurExpenseTypeMapping";
 
 // company.company_id の実体はcompany_code（ファイル冒頭コメント参照）。
 // 補完はせず、空文字・非文字列は「無し」として扱う。
@@ -61,15 +65,11 @@ function resolvePolicyId(result) {
  * 迷子防止Botの既存データから、Concur登録用の中間データを組み立てる。
  *
  * チェック順序（同時に複数の問題がある場合、最初に見つかった1件だけを返す。
- * 既存のvalidateConcurExpenseData()・mapBotExpenseTypeToConcur()の呼び出しは
- * それぞれの既存の優先順位をそのまま引き継ぐ）：
+ * 既存のvalidateConcurExpenseData()の呼び出しはその既存の優先順位をそのまま引き継ぐ）：
  *   1. companyId（company_code）なし → missing_company_id
  *   2. policyIdなし → missing_policy_id
  *   3. buildConcurExpenseData() + validateConcurExpenseData() による検証
  *      （利用日・金額・通貨・経費タイプ判定・領収書必須チェック）
- *   4. mapBotExpenseTypeToConcur() によるConcur側マッピングの検証
- *      （company_unknown・policy_unknown・mapping_not_found・
- *      multiple_mappings_found）
  *
  * @param {object} [input]
  * @param {{ company_id?: string|null, company_name?: string|null }|null} [input.company]
@@ -86,10 +86,6 @@ function resolvePolicyId(result) {
  *   領収書ファイル自体。領収書必須チェック（既存のvalidateConcurExpenseData()）
  *   のためだけに使い、戻り値の中間データには含めない
  *   （要件：領収書画像自体は中間データに含めない）。
- * @param {Array<{ companyId: string, policyId: string, botExpenseTypeId: string, concurExpenseTypeId: string }>} [input.mappings]
- *   Concur経費タイプマッピング（mapBotExpenseTypeToConcur()と同じ形。実際の
- *   Concur Expense Type Codeは未確定のため、本番データはこの実装に含めない。
- *   テスト・将来のUI呼び出し側が用意する想定）。
  * @param {string|null} [input.memo]
  *   利用者の自由入力コメント。現状UIに入力欄が無いため、指定が無ければ
  *   常にnull（ダミー文字列は生成しない）。
@@ -98,8 +94,7 @@ function resolvePolicyId(result) {
  *   result: {
  *     companyId: string,
  *     policyId: string,
- *     botExpenseTypeId: string,
- *     concurExpenseTypeId: string,
+ *     expenseTypeId: string,
  *     transactionDate: string,
  *     amount: number,
  *     currencyCode: string,
@@ -115,7 +110,6 @@ export function buildConcurRegistrationData({
   result,
   receiptData,
   receiptFile,
-  mappings,
   memo,
 } = {}) {
   const companyId = resolveCompanyCode(company);
@@ -147,23 +141,11 @@ export function buildConcurRegistrationData({
     return { result: null, error: expenseDataError };
   }
 
-  const { result: mappingResult, error: mappingError } = mapBotExpenseTypeToConcur({
-    botExpenseTypeId: validatedExpenseData.expenseTypeId,
-    companyId,
-    policyId,
-    mappings,
-  });
-
-  if (mappingError) {
-    return { result: null, error: mappingError };
-  }
-
   return {
     result: {
       companyId,
       policyId,
-      botExpenseTypeId: validatedExpenseData.expenseTypeId,
-      concurExpenseTypeId: mappingResult.concurExpenseTypeId,
+      expenseTypeId: validatedExpenseData.expenseTypeId,
       transactionDate: validatedExpenseData.transactionDate,
       amount: validatedExpenseData.amount,
       currencyCode: validatedExpenseData.currencyCode,

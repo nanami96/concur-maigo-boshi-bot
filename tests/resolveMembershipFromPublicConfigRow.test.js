@@ -3,15 +3,15 @@ import { resolveMembershipFromPublicConfigRow } from "../supabase/functions/crea
 
 // get_my_public_config() RPC（supabase/schema.sql参照）の戻り値の形
 // { company_code, company_name, role, config_snapshot, published_at } を
-// 想定した行データから、認証・所属確認・Concur mapping検証に必要な
-// 最小限の情報だけを取り出せることを確認する。Deno/Supabaseクライアントには
+// 想定した行データから、認証・所属確認・経費タイプ検証（verifyExpenseTypeForQuickExpense.js）に
+// 必要な最小限の情報だけを取り出せることを確認する。Deno/Supabaseクライアントには
 // 一切依存しないため、実際のRPC呼び出しは行わない。
 //
-// mappingの値（Concur Expense Type Code）はすべてテスト専用のダミー値であり、
+// 経費タイプID（Concur EXP_KEY）の値はすべてテスト専用のダミー値であり、
 // 実際のConcur側のコードではない。
 
 describe("resolveMembershipFromPublicConfigRow", () => {
-  it("company_codeを含む行から{company_code, role, concurExpenseTypeMappings}を取り出す", () => {
+  it("company_codeを含む行から{company_code, role, expenseTypes}を取り出す", () => {
     const row = {
       company_code: "sample-company",
       company_name: "サンプル会社",
@@ -23,22 +23,22 @@ describe("resolveMembershipFromPublicConfigRow", () => {
     expect(resolveMembershipFromPublicConfigRow(row)).toEqual({
       company_code: "sample-company",
       role: "user",
-      concurExpenseTypeMappings: [],
+      expenseTypes: [],
     });
   });
 
-  it("config_snapshot.concur.expenseTypeMappingsが存在する場合はそのまま取り出す", () => {
-    const mappings = [
-      { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI" },
+  it("config_snapshot.expenseTypesが存在する場合はそのまま取り出す", () => {
+    const expenseTypes = [
+      { id: "01515", name: "国内近距離バス", policyId: "normal_expense", receiptRequired: false, active: true },
     ];
     const row = {
       company_code: "sample-company",
       role: "user",
-      config_snapshot: { questions: [], rules: [], concur: { expenseTypeMappings: mappings } },
+      config_snapshot: { questions: [], rules: [], expenseTypes },
       published_at: "2026-07-01T00:00:00Z",
     };
 
-    expect(resolveMembershipFromPublicConfigRow(row).concurExpenseTypeMappings).toEqual(mappings);
+    expect(resolveMembershipFromPublicConfigRow(row).expenseTypes).toEqual(expenseTypes);
   });
 
   it("未所属（RPCが0件を返した結果、rowがundefined）の場合はnull", () => {
@@ -61,7 +61,7 @@ describe("resolveMembershipFromPublicConfigRow", () => {
     expect(resolveMembershipFromPublicConfigRow({ company_code: 123, role: "user" })).toBeNull();
   });
 
-  it("所属していても未公開でconfig_snapshot/published_atがnullでも、company_code/roleは取り出せ、mappingは空配列になる", () => {
+  it("所属していても未公開でconfig_snapshot/published_atがnullでも、company_code/roleは取り出せ、expenseTypesは空配列になる", () => {
     // get_my_public_config()のコメント通り、未公開の会社はconfig_snapshot/
     // published_atがnullになるが、company_code/roleは所属していれば必ず埋まる。
     const row = {
@@ -75,36 +75,25 @@ describe("resolveMembershipFromPublicConfigRow", () => {
     expect(resolveMembershipFromPublicConfigRow(row)).toEqual({
       company_code: "not-yet-published",
       role: "admin",
-      concurExpenseTypeMappings: [],
+      expenseTypes: [],
     });
   });
 
-  it("config_snapshotにconcurキー自体が無い（Phase 11適用前に公開された古いconfig_snapshot）場合も空配列になる", () => {
+  it("expenseTypesが配列でない不正な形の場合も空配列になる（安全側）", () => {
     const row = {
       company_code: "sample-company",
       role: "user",
-      config_snapshot: { questions: [], rules: [] },
-      published_at: "2025-01-01T00:00:00Z",
+      config_snapshot: { expenseTypes: "not-an-array" },
     };
 
-    expect(resolveMembershipFromPublicConfigRow(row).concurExpenseTypeMappings).toEqual([]);
-  });
-
-  it("expenseTypeMappingsが配列でない不正な形の場合も空配列になる（安全側）", () => {
-    const row = {
-      company_code: "sample-company",
-      role: "user",
-      config_snapshot: { concur: { expenseTypeMappings: "not-an-array" } },
-    };
-
-    expect(resolveMembershipFromPublicConfigRow(row).concurExpenseTypeMappings).toEqual([]);
+    expect(resolveMembershipFromPublicConfigRow(row).expenseTypes).toEqual([]);
   });
 
   it("roleが無い場合はroleをnullとして扱う（company_codeさえあれば所属自体は成立するため）", () => {
     expect(resolveMembershipFromPublicConfigRow({ company_code: "sample-company" })).toEqual({
       company_code: "sample-company",
       role: null,
-      concurExpenseTypeMappings: [],
+      expenseTypes: [],
     });
   });
 

@@ -84,15 +84,6 @@ describe("resolveExpenseTypeNameDisplay", () => {
   });
 });
 
-// テスト専用のダミーmapping（本番のConcur Expense Type Codeではない）。
-function buildDummyMappings(overrides = []) {
-  return [
-    { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI" },
-    { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "train_local", concurExpenseTypeId: "TEST_TRAIN" },
-    ...overrides,
-  ];
-}
-
 function buildCompany(overrides = {}) {
   return { company_id: "sample-company", company_name: "サンプル会社", ...overrides };
 }
@@ -115,7 +106,6 @@ describe("一連の流れ（判定結果→OCR確認データ→buildConcurRegis
       result,
       receiptData,
       receiptFile: new File(["dummy"], "receipt.png", { type: "image/png" }),
-      mappings: buildDummyMappings(),
     });
 
     expect(error).toBeNull();
@@ -130,8 +120,7 @@ describe("一連の流れ（判定結果→OCR確認データ→buildConcurRegis
     // 内部識別子はユーザー表示に使わない値であることの確認
     // （画面には出さないが、統合データ自体には引き続き含まれている）。
     expect(registrationData.companyId).toBe("sample-company");
-    expect(registrationData.botExpenseTypeId).toBe("taxi");
-    expect(registrationData.concurExpenseTypeId).toBe("TEST_TAXI");
+    expect(registrationData.expenseTypeId).toBe("taxi");
   });
 
   it("領収書不要の経費タイプでも到達できる（OCR未実施でも領収書表示が崩れない）", () => {
@@ -151,7 +140,6 @@ describe("一連の流れ（判定結果→OCR確認データ→buildConcurRegis
       result,
       receiptData,
       receiptFile: null,
-      mappings: buildDummyMappings(),
     });
 
     expect(error).toBeNull();
@@ -174,35 +162,11 @@ describe("一連の流れ（判定結果→OCR確認データ→buildConcurRegis
       company: buildCompany(),
       result,
       receiptData: null,
-      mappings: buildDummyMappings(),
     });
 
     expect(registrationData).toBeNull();
     expect(error).not.toBeNull();
     // ConcurRegistrationPanel.jsx側はこのerrorの中身を画面に出さない
     // （error/registrationDataがnullならコンポーネントはnullを返すだけ）。
-  });
-
-  it("Concurマッピングが無い場合（本番データ未整備の現状）もvalidation errorとなり、確認画面は表示しない扱いになる", () => {
-    const result = {
-      rule: { id: "r002-g1" },
-      expenseType: { id: "taxi", name: "タクシー", policyId: "normal_expense", receiptRequired: false },
-    };
-    const receiptData = {
-      transactionDate: "2026-07-29",
-      merchantName: "テスト商店",
-      totalAmount: 1200,
-      currencyCode: "JPY",
-    };
-
-    const { result: registrationData, error } = buildConcurRegistrationData({
-      company: buildCompany(),
-      result,
-      receiptData,
-      mappings: [], // 本番マッピングデータはまだ存在しない想定
-    });
-
-    expect(registrationData).toBeNull();
-    expect(error.type).toBe("company_unknown");
   });
 });

@@ -6,7 +6,7 @@ import { shouldShowReceiptOcr } from "./lib/receiptOcrVisibility";
 import ReceiptOcrPanel from "./ReceiptOcrPanel";
 import ManualExpenseEntryPanel from "./ManualExpenseEntryPanel";
 import ConcurRegistrationPanel from "./ConcurRegistrationPanel";
-import { resolveConcurExpenseTypeMappings, resolveDefaultCurrencyCode } from "./lib/concurRegistrationConfig";
+import { resolveDefaultCurrencyCode } from "./lib/concurRegistrationConfig";
 import recommendedMedalIcon from "./assets/recommended-medal.png";
 import policyTagIcon from "./assets/policy-tag.png";
 
@@ -233,11 +233,9 @@ export default function BotConversation({
   // 領収書必須の経費タイプで手入力を許してしまう意図しない抜け道になる）。
   // showReceiptOcrとは常に排他（片方がtrueならもう片方は必ずfalse）になる。
   const showManualExpenseEntry = result?.expenseType?.receiptRequired === false;
-  // Concur Expense Type Codeのマッピング・登録前確認データの生成に必要な
-  // 設定値。本番データはまだ存在しないため、現時点ではどの会社でも空配列・
-  // "JPY"が返るだけで、既存の判定結果表示には一切影響しない
-  // （src/lib/concurRegistrationConfig.js参照）。
-  const concurExpenseTypeMappings = resolveConcurExpenseTypeMappings(config);
+  // Concur登録前確認データの生成に必要な設定値。経費タイプID＝Concur EXP_KEY
+  // という設計のため、現時点ではどの会社でも既定の"JPY"が返るだけで、
+  // 既存の判定結果表示には一切影響しない（src/lib/concurRegistrationConfig.js参照）。
   const concurDefaultCurrencyCode = resolveDefaultCurrencyCode(config);
 
   function handleSelect(answer) {
@@ -587,7 +585,6 @@ export default function BotConversation({
                 company={config?.company}
                 result={result}
                 receiptData={receiptData}
-                mappings={concurExpenseTypeMappings}
                 expenseTypeName={result.expenseType?.name}
                 policyName={showPolicySection ? policyName : null}
               />

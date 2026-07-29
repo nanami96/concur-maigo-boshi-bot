@@ -2,15 +2,6 @@ import { describe, it, expect } from "vitest";
 import { buildManualExpenseReceiptData } from "../src/ManualExpenseEntryPanel.jsx";
 import { buildConcurRegistrationData } from "../src/lib/concurRegistrationData.js";
 
-// mappingsはすべてテスト専用のダミー値であり、実際のConcur Expense Type
-// Codeではない。
-function buildDummyMappings() {
-  return [
-    { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI" },
-    { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "train_local", concurExpenseTypeId: "TEST_TRAIN" },
-  ];
-}
-
 function buildCompany() {
   return { company_id: "sample-company", company_name: "サンプル会社" };
 }
@@ -61,15 +52,13 @@ describe("OCRなし（手入力）で領収書不要の経費タイプの登録�
       company: buildCompany(),
       result,
       receiptData: manualReceiptData,
-      mappings: buildDummyMappings(),
     });
 
     expect(error).toBeNull();
     expect(registrationData).toEqual({
       companyId: "sample-company",
       policyId: "normal_expense",
-      botExpenseTypeId: "train_local",
-      concurExpenseTypeId: "TEST_TRAIN",
+      expenseTypeId: "train_local",
       transactionDate: "2026-07-29",
       amount: 350,
       currencyCode: "JPY",
@@ -94,7 +83,6 @@ describe("OCRなし（手入力）で領収書不要の経費タイプの登録�
       company: buildCompany(),
       result,
       receiptData: manualReceiptData,
-      mappings: buildDummyMappings(),
     });
 
     expect(error).toBeNull();
@@ -127,7 +115,6 @@ describe("OCRあり・手入力が混在しないこと", () => {
       result,
       receiptData: ocrConfirmedReceiptData,
       receiptFile: new File(["dummy"], "receipt.png", { type: "image/png" }),
-      mappings: buildDummyMappings(),
     });
 
     expect(error).toBeNull();
@@ -153,7 +140,6 @@ describe("不完全な入力では確認画面用データが安全に生成さ�
       company: buildCompany(),
       result: baseResult,
       receiptData: manualReceiptData,
-      mappings: buildDummyMappings(),
     });
 
     expect(result).toBeNull();
@@ -170,7 +156,6 @@ describe("不完全な入力では確認画面用データが安全に生成さ�
       company: buildCompany(),
       result: baseResult,
       receiptData: manualReceiptData,
-      mappings: buildDummyMappings(),
     });
 
     expect(result).toBeNull();
@@ -187,7 +172,6 @@ describe("不完全な入力では確認画面用データが安全に生成さ�
       company: buildCompany(),
       result: baseResult,
       receiptData: manualReceiptData,
-      mappings: buildDummyMappings(),
     });
 
     expect(result).toBeNull();

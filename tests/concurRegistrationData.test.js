@@ -1,18 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildConcurRegistrationData } from "../src/lib/concurRegistrationData.js";
 
-// mappingsはすべてテスト専用のダミー値であり、実際のConcur Expense Type Code
-// ではない（本番データは今回追加しない。concurExpenseTypeIdの値も
-// "TEST_"接頭辞で本番値でないことを明示する）。
-function buildDummyMappings(overrides = []) {
-  return [
-    { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI" },
-    { companyId: "sample-company", policyId: "normal_expense", botExpenseTypeId: "parking", concurExpenseTypeId: "TEST_PARKING" },
-    { companyId: "sample-company", policyId: "business_trip", botExpenseTypeId: "business_meal", concurExpenseTypeId: "TEST_BUSINESS_MEAL" },
-    ...overrides,
-  ];
-}
-
 function buildCompany(overrides = {}) {
   // company_idの実体はcompany_code（迷子防止Bot内部の会社スラッグ）であり、
   // Supabaseの内部UUIDではない（src/lib/concurRegistrationData.js冒頭コメント参照）。
@@ -45,20 +33,18 @@ function buildReceiptData(overrides = {}) {
 }
 
 describe("buildConcurRegistrationData（正常系）", () => {
-  it("company_code・policyId・Bot経費タイプID・ダミーConcur mapping・OCRデータから期待する統合データを生成する", () => {
+  it("company_code・policyId・経費タイプID（＝Concur EXP_KEY）・OCRデータから期待する統合データを生成する", () => {
     const { result, error } = buildConcurRegistrationData({
       company: buildCompany(),
       result: buildResult(),
       receiptData: buildReceiptData(),
-      mappings: buildDummyMappings(),
     });
 
     expect(error).toBeNull();
     expect(result).toEqual({
       companyId: "sample-company",
       policyId: "normal_expense",
-      botExpenseTypeId: "taxi",
-      concurExpenseTypeId: "TEST_TAXI",
+      expenseTypeId: "taxi",
       transactionDate: "2026-07-29",
       amount: 1200,
       currencyCode: "JPY",
@@ -73,7 +59,6 @@ describe("buildConcurRegistrationData（正常系）", () => {
       company: buildCompany(),
       result: buildResult(),
       receiptData: buildReceiptData(),
-      mappings: buildDummyMappings(),
       memo: "タクシー代（〇〇社訪問）",
     });
 
@@ -86,7 +71,6 @@ describe("buildConcurRegistrationData（正常系）", () => {
       company: buildCompany(),
       result: buildResult(),
       receiptData: buildReceiptData(),
-      mappings: buildDummyMappings(),
     });
 
     expect(error).toBeNull();
@@ -101,7 +85,6 @@ describe("buildConcurRegistrationData（正常系）", () => {
       result: buildResult({ expenseType: { receiptRequired: true } }),
       receiptData: buildReceiptData(),
       receiptFile,
-      mappings: buildDummyMappings(),
     });
 
     expect(error).toBeNull();
@@ -110,26 +93,20 @@ describe("buildConcurRegistrationData（正常系）", () => {
     expect(result).not.toHaveProperty("receiptFile");
   });
 
-  it("会社・ポリシーが異なれば同じBot経費タイプIDでも異なるConcur識別子になる（疎結合の確認）", () => {
-    const mappings = buildDummyMappings([
-      { companyId: "company-a", policyId: "normal_expense", botExpenseTypeId: "taxi", concurExpenseTypeId: "TEST_TAXI_COMPANY_A" },
-    ]);
-
-    const sampleCompanyResult = buildConcurRegistrationData({
-      company: buildCompany({ company_id: "sample-company" }),
-      result: buildResult(),
+  it("経費タイプIDが変わればそのまま異なるexpenseTypeIdになる（Mapping層を経由しない）", () => {
+    const taxiResult = buildConcurRegistrationData({
+      company: buildCompany(),
+      result: buildResult({ expenseType: { id: "01515" } }),
       receiptData: buildReceiptData(),
-      mappings,
     });
-    const companyAResult = buildConcurRegistrationData({
-      company: buildCompany({ company_id: "company-a" }),
-      result: buildResult(),
+    const otherResult = buildConcurRegistrationData({
+      company: buildCompany(),
+      result: buildResult({ expenseType: { id: "01516" } }),
       receiptData: buildReceiptData(),
-      mappings,
     });
 
-    expect(sampleCompanyResult.result.concurExpenseTypeId).toBe("TEST_TAXI");
-    expect(companyAResult.result.concurExpenseTypeId).toBe("TEST_TAXI_COMPANY_A");
+    expect(taxiResult.result.expenseTypeId).toBe("01515");
+    expect(otherResult.result.expenseTypeId).toBe("01516");
   });
 });
 
@@ -139,7 +116,6 @@ describe("buildConcurRegistrationData（異常系）", () => {
       company: null,
       result: buildResult(),
       receiptData: buildReceiptData(),
-      mappings: buildDummyMappings(),
     });
 
     expect(result).toBeNull();
@@ -151,7 +127,6 @@ describe("buildConcurRegistrationData（異常系）", () => {
       company: buildCompany({ company_id: "" }),
       result: buildResult(),
       receiptData: buildReceiptData(),
-      mappings: buildDummyMappings(),
     });
 
     expect(error.type).toBe("missing_company_id");
@@ -162,46 +137,21 @@ describe("buildConcurRegistrationData（異常系）", () => {
       company: buildCompany(),
       result: buildResult({ expenseType: { policyId: undefined } }),
       receiptData: buildReceiptData(),
-      mappings: buildDummyMappings(),
     });
 
     expect(result).toBeNull();
     expect(error.type).toBe("missing_policy_id");
   });
 
-  it("Bot経費タイプID（result.expenseType.id）が欠落している場合は、既存のvalidateConcurExpenseData()のmissing_expense_typeを再利用する", () => {
+  it("経費タイプID（result.expenseType.id）が欠落している場合は、既存のvalidateConcurExpenseData()のmissing_expense_typeを再利用する", () => {
     const { result, error } = buildConcurRegistrationData({
       company: buildCompany(),
       result: buildResult({ expenseType: { id: undefined } }),
       receiptData: buildReceiptData(),
-      mappings: buildDummyMappings(),
     });
 
     expect(result).toBeNull();
     expect(error.type).toBe("missing_expense_type");
-  });
-
-  it("Concur側マッピングが存在しない場合は、既存のmapBotExpenseTypeToConcur()のmapping_not_foundを再利用する", () => {
-    const { result, error } = buildConcurRegistrationData({
-      company: buildCompany(),
-      result: buildResult({ expenseType: { id: "unknown-expense-type" } }),
-      receiptData: buildReceiptData(),
-      mappings: buildDummyMappings(),
-    });
-
-    expect(result).toBeNull();
-    expect(error.type).toBe("mapping_not_found");
-  });
-
-  it("mappings自体が空の場合は、既存のmapBotExpenseTypeToConcur()のcompany_unknownを再利用する", () => {
-    const { error } = buildConcurRegistrationData({
-      company: buildCompany(),
-      result: buildResult(),
-      receiptData: buildReceiptData(),
-      mappings: [],
-    });
-
-    expect(error.type).toBe("company_unknown");
   });
 
   it("transactionDateが欠落している場合は、既存のvalidateConcurExpenseData()のmissing_transaction_dateを再利用する", () => {
@@ -209,7 +159,6 @@ describe("buildConcurRegistrationData（異常系）", () => {
       company: buildCompany(),
       result: buildResult(),
       receiptData: buildReceiptData({ transactionDate: null }),
-      mappings: buildDummyMappings(),
     });
 
     expect(result).toBeNull();
@@ -226,7 +175,6 @@ describe("buildConcurRegistrationData（異常系）", () => {
       company: buildCompany(),
       result: buildResult(),
       receiptData: buildReceiptData({ totalAmount }),
-      mappings: buildDummyMappings(),
     });
 
     expect(result).toBeNull();
@@ -238,7 +186,6 @@ describe("buildConcurRegistrationData（異常系）", () => {
       company: buildCompany(),
       result: buildResult(),
       receiptData: buildReceiptData({ currencyCode: null }),
-      mappings: buildDummyMappings(),
     });
 
     expect(result).toBeNull();
@@ -251,7 +198,6 @@ describe("buildConcurRegistrationData（異常系）", () => {
       result: buildResult({ expenseType: { receiptRequired: true } }),
       receiptData: buildReceiptData(),
       receiptFile: null,
-      mappings: buildDummyMappings(),
     });
 
     expect(error.type).toBe("receipt_required_but_missing");
@@ -262,7 +208,6 @@ describe("buildConcurRegistrationData（異常系）", () => {
       company: null,
       result: buildResult({ expenseType: { policyId: undefined, id: undefined } }),
       receiptData: buildReceiptData({ transactionDate: null, currencyCode: null }),
-      mappings: [],
     });
 
     expect(error.type).toBe("missing_company_id");
@@ -273,7 +218,6 @@ describe("buildConcurRegistrationData（異常系）", () => {
       company: buildCompany(),
       result: buildResult({ expenseType: { policyId: undefined } }),
       receiptData: buildReceiptData({ transactionDate: null, currencyCode: null }),
-      mappings: [],
     });
 
     expect(error.type).toBe("missing_policy_id");

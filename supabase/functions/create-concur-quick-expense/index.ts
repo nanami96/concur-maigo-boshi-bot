@@ -28,11 +28,13 @@
 //   取得する（詳細はresolveMembershipFromPublicConfigRow.js参照）。
 //
 //   get_my_public_config()が返すconfig_snapshotには、同じ会社の公開済み
-//   Concur Expense Type Mapping（config_snapshot.concur.expenseTypeMappings）も
-//   含まれているため、company_codeと同時にこれも取り出し、
-//   handleQuickExpenseRequest.js側でpolicyId・botExpenseTypeId・
-//   concurExpenseTypeIdの検証（verifyConcurExpenseTypeMapping.js）に使う
-//   （フロントから送られたこれらの値もそのまま信用しない。Commit H）。
+//   経費タイプ一覧（config_snapshot.expenseTypes）も含まれているため、
+//   company_codeと同時にこれも取り出し、handleQuickExpenseRequest.js側で
+//   policyId・expenseTypeId（＝Concur EXP_KEY）の検証
+//   （verifyExpenseTypeForQuickExpense.js）に使う（フロントから送られた
+//   これらの値もそのまま信用しない）。経費タイプID＝Concur EXP_KEYという
+//   設計への正式リファクタリングにより、以前存在した独立したConcur Expense
+//   Type Mapping（config_snapshot.concur.expenseTypeMappings）は廃止した。
 //
 //   このEdge Functionは現状スタブ応答のみを返し、実際のConcurへのアクセス・
 //   実データの作成を一切行わないが、認証自体は「実データを扱うようになって

@@ -5,8 +5,7 @@ function buildValidBody(overrides = {}) {
   return {
     companyId: "company-a",
     policyId: "policy-x",
-    botExpenseTypeId: "taxi",
-    concurExpenseTypeId: "CONCUR_TAXI_A_X",
+    expenseTypeId: "taxi",
     transactionDate: "2026-07-28",
     amount: 1000,
     currencyCode: "JPY",
@@ -23,8 +22,7 @@ describe("validateQuickExpenseRequest", () => {
     expect(result).toEqual({
       companyId: "company-a",
       policyId: "policy-x",
-      botExpenseTypeId: "taxi",
-      concurExpenseTypeId: "CONCUR_TAXI_A_X",
+      expenseTypeId: "taxi",
       transactionDate: "2026-07-28",
       amount: 1000,
       currencyCode: "JPY",
@@ -48,7 +46,7 @@ describe("validateQuickExpenseRequest", () => {
     expect(withOptional.result.memo).toBe("タクシー代");
   });
 
-  it.each(["companyId", "policyId", "botExpenseTypeId", "concurExpenseTypeId"])(
+  it.each(["companyId", "policyId", "expenseTypeId"])(
     "%sが空文字の場合はvalidation_error（requiredの詳細付き）",
     (field) => {
       const { result, error } = validateQuickExpenseRequest(buildValidBody({ [field]: "" }));
@@ -123,8 +121,7 @@ describe("validateQuickExpenseRequest", () => {
     const fields = error.details.map((item) => item.field);
     expect(fields).toContain("companyId");
     expect(fields).toContain("policyId");
-    expect(fields).toContain("botExpenseTypeId");
-    expect(fields).toContain("concurExpenseTypeId");
+    expect(fields).toContain("expenseTypeId");
     expect(fields).toContain("transactionDate");
     expect(fields).toContain("amount");
     expect(fields).toContain("currencyCode");
@@ -144,5 +141,49 @@ describe("validateQuickExpenseRequest", () => {
 
     expect(error.message).not.toContain(secretLike);
     expect(JSON.stringify(error.details)).not.toContain(secretLike);
+  });
+
+  describe("後方互換（旧request body、botExpenseTypeId/concurExpenseTypeId）", () => {
+    it("expenseTypeIdが無くてもbotExpenseTypeIdがあれば、それをexpenseTypeIdとして受け付ける", () => {
+      const legacyBody = buildValidBody();
+      delete legacyBody.expenseTypeId;
+      legacyBody.botExpenseTypeId = "taxi";
+
+      const { result, error } = validateQuickExpenseRequest(legacyBody);
+
+      expect(error).toBeNull();
+      expect(result.expenseTypeId).toBe("taxi");
+      expect(result).not.toHaveProperty("botExpenseTypeId");
+    });
+
+    it("expenseTypeId（新方式）が優先される（両方送られた場合）", () => {
+      const bothBody = buildValidBody({ expenseTypeId: "new-code" });
+      bothBody.botExpenseTypeId = "old-code";
+
+      const { result, error } = validateQuickExpenseRequest(bothBody);
+
+      expect(error).toBeNull();
+      expect(result.expenseTypeId).toBe("new-code");
+    });
+
+    it("concurExpenseTypeId（旧フィールド）が送られても、もう検証・利用しない（結果に含まれない）", () => {
+      const legacyBody = buildValidBody();
+      legacyBody.concurExpenseTypeId = "LEGACY_CODE";
+
+      const { result, error } = validateQuickExpenseRequest(legacyBody);
+
+      expect(error).toBeNull();
+      expect(result).not.toHaveProperty("concurExpenseTypeId");
+    });
+
+    it("expenseTypeId・botExpenseTypeIdのどちらも無い場合はexpenseTypeId必須エラー", () => {
+      const legacyBody = buildValidBody();
+      delete legacyBody.expenseTypeId;
+
+      const { error } = validateQuickExpenseRequest(legacyBody);
+
+      expect(error.code).toBe("validation_error");
+      expect(error.details).toContainEqual({ field: "expenseTypeId", reason: "required" });
+    });
   });
 });

@@ -182,7 +182,7 @@ async function ensureValidSession() {
  * アクセストークンの取得は一切行われない（Edge Function側のコメント参照）。
  *
  * @param {object} expenseData Edge Function（create-concur-quick-expense）が
- *   検証する項目（companyId・policyId・botExpenseTypeId・concurExpenseTypeId・
+ *   検証する項目（companyId・policyId・expenseTypeId（＝Concur側のEXP_KEY）・
  *   transactionDate・amount・currencyCode・receiptRequired、任意で
  *   vendorName・memo）。フィールドの詳細は
  *   supabase/functions/create-concur-quick-expense/validateQuickExpenseRequest.js
