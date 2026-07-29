@@ -2315,9 +2315,19 @@ button {
 /* メニュー項目内のアイコンだけ、文言との間隔を確保する（トリガー側の
    アイコンは.companyManageMenuLabelのmargin-leftで間隔を持たせているため
    対象外）。以前は絵文字の直後に半角スペース文字を1つ置くだけだったが、
-   フォントによって幅が不安定なため、CSSのmarginへ置き換えた。 */
+   フォントによって幅が不安定なため、CSSのmarginへ置き換えた。
+   「＋ 新しい会社を作成」だけはアイコン用のspanを持たずラベル文字列に
+   「＋ 」を直接含めているため、他の項目のアイコン幅+余白がこれより広いと
+   ラベルの開始位置が項目ごとにずれて見える（ガタガタして見える原因）。
+   余白を詰めて、その開始位置のずれを小さくする。 */
 .companyManageMenuItem .companyManageMenuIcon {
-  margin-right: 12px;
+  margin-right: 6px;
+}
+
+/* 「この会社を削除」（🗑）はキー（🔑）と同じfont-sizeでも、絵文字の
+   実際の描画上小さく見えるため、この項目のアイコンだけさらに大きくする。 */
+.companyManageMenuItem.danger .companyManageMenuIcon {
+  font-size: 1.4em;
 }
 
 .companyManageMenuList {
