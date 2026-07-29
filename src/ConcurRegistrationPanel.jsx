@@ -1,9 +1,28 @@
+import { useEffect, useRef, useState } from "react";
 import { buildConcurRegistrationData } from "./lib/concurRegistrationData";
+import { resolveConcurRegistrationErrorMessage } from "./concurRegistrationErrorMessages";
+import {
+  computeRegistrationSignature,
+  runConcurRegistrationSubmit,
+  shouldRenderConcurRegistrationCard,
+} from "./concurRegistrationSubmission";
 
-// Concur「Quick Expense」登録前に、登録予定の内容をユーザーへ確認表示する
-// ためだけの表示専用コンポーネント（Commit B）。送信処理・API呼び出しは
-// 一切持たない。「Concurに登録」ボタン・createQuickExpense()呼び出しは
-// 将来のCommit Cで追加する想定で、今回はまだ実装しない。
+// Concur「Quick Expense」登録前に、登録予定の内容をユーザーへ確認表示し、
+// 「Concurに登録」ボタンから既存のcreateQuickExpense()
+// （src/data/concurApi.js）を呼び出すコンポーネント（Commit C相当）。
+//
+// 現時点ではsupabase/functions/create-concur-quick-expenseはConcurへの
+// 実通信を一切行わないスタブ応答（{ quickExpenseId: "stub_quick_expense_id",
+// status: "stubbed" }）しか返さない（createQuickExpenseStub.js参照）。この
+// コンポーネントもOAuth・Concur API実通信・Secretsの追加は一切行わない
+// （呼び出す先は既存のcreateQuickExpense()のみ）。
+//
+// スタブ応答であることを画面へ大きく表示しない理由：一般利用者向けの
+// 業務画面に「スタブ」「未実装」等の開発者向けの生々しい文言を出すと、
+// 利用者が実際の障害だと誤解しうるため。その代わり、コード（この
+// コメント・下のhandleRegister内のDEVログ）を見れば分かるようにしている。
+// 同じ理由で、成功時にquickExpenseId（現状の値は文字通り
+// "stub_quick_expense_id"）自体は画面に表示しない。
 //
 // src/ReceiptOcrPanel.jsxと同じく、既存の質問フロー・経費タイプ判定
 // （src/engine/QuestionEngine.js）とは意図的に一切importし合わない、
@@ -36,7 +55,48 @@ export default function ConcurRegistrationPanel({
     mappings,
   });
 
-  if (error || !registrationData) {
+  // phase: idle | submitting | success | error
+  const [phase, setPhase] = useState("idle");
+  const [errorType, setErrorType] = useState(null);
+  // 二重送信防止用の同期的なミュータブルフラグ。phase state（React管理・
+  // 非同期に反映）ではなくこちらで判定する理由は
+  // concurRegistrationSubmission.js冒頭コメント参照。
+  const submittingRef = useRef(false);
+
+  // 登録対象データ（registrationData）自体が変わった場合（例：OCR内容の
+  // 修正・別の判定結果への遷移）は、以前の送信結果を引き継がず状態を
+  // 初期化する。
+  const registrationSignature = computeRegistrationSignature(registrationData);
+  const previousSignatureRef = useRef(registrationSignature);
+
+  useEffect(() => {
+    if (previousSignatureRef.current !== registrationSignature) {
+      previousSignatureRef.current = registrationSignature;
+      setPhase("idle");
+      setErrorType(null);
+    }
+  }, [registrationSignature]);
+
+  async function handleRegister() {
+    await runConcurRegistrationSubmit({
+      submittingRef,
+      phase,
+      registrationData,
+      isDev: import.meta.env.DEV,
+      onStubSuccess: (result) => {
+        // 一般利用者へは表示しない、開発環境のコンソールログのみ
+        // （ファイル冒頭コメント参照）。
+        console.info("[ConcurRegistrationPanel] スタブ応答を受信しました（Concur実登録ではありません）", result);
+      },
+      onUnexpectedError: (caughtError) => {
+        console.error("[ConcurRegistrationPanel] Concurへの登録リクエスト中に予期しないエラーが発生しました", caughtError);
+      },
+      onPhaseChange: setPhase,
+      onErrorTypeChange: setErrorType,
+    });
+  }
+
+  if (!shouldRenderConcurRegistrationCard({ error, registrationData })) {
     return null;
   }
 
@@ -98,6 +158,31 @@ export default function ConcurRegistrationPanel({
             </div>
           )}
         </dl>
+
+        <div className="concurRegistrationActions">
+          <button
+            type="button"
+            className="concurRegistrationSubmitButton"
+            onClick={handleRegister}
+            disabled={phase === "submitting" || phase === "success"}
+          >
+            {phase === "submitting" ? "登録中…" : "Concurに登録"}
+          </button>
+        </div>
+
+        <div aria-live="polite">
+          {phase === "submitting" && (
+            <p className="concurRegistrationStatusText">Concurへ登録リクエストを送信しています…</p>
+          )}
+          {phase === "success" && (
+            <p className="concurRegistrationSuccessText">Concurへの登録リクエストを受け付けました。</p>
+          )}
+          {phase === "error" && (
+            <p className="concurRegistrationErrorText" role="alert">
+              {resolveConcurRegistrationErrorMessage({ type: errorType })}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
