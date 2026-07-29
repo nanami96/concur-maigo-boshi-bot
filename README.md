@@ -72,6 +72,7 @@ Supabase運用モードでは、会社の設定は管理画面で作成・編集
 ## SAP Concur API連携（設計・スタブ実装段階）
 
 - 迷子防止Bot内部の経費データ→Concur向け共通データへの変換（`src/lib/concurExpenseData.js`）。経費タイプID自体がConcur側のEXP_KEY（経費タイプコード）と同じ値のため、別途マッピングテーブルは持たない
+- ただし上記は「その会社が実際にConcur EXP_KEYへ移行済み」の場合の設計であり、`company.concurExpenseTypeIdMode`が明示的に`"concur_exp_key"`である会社だけに適用される。既存の全社（`company-a`・`sample-company`含む）は移行未完了のため、このフラグは立てておらず、Concur登録カード自体が表示されない（後述「経費タイプID移行フラグ」参照）
 - Quick Expense作成用のSupabase Edge Function（`supabase/functions/create-concur-quick-expense/`）：認証・入力検証・エラー処理まで実装済み
 - **現時点では実際のConcur APIへは接続していません**（固定のスタブ応答を返すのみ）。Concur側の認証情報も未登録です
 
@@ -254,7 +255,8 @@ Supabase運用モードでログイン中の利用者は、経費申請前に領
 
 - 迷子防止Botの経費判定結果・OCR結果から、Concur送信前の共通経費データを組み立てる純粋関数（`src/lib/concurExpenseData.js`）と、その検証関数
 - 経費タイプID＝Concur EXP_KEY（経費タイプコード）という設計。管理画面の経費タイプ登録時に「Concur経費タイプコード」として入力し（新規登録時必須・登録後は変更不可）、Bot内部の経費タイプIDとConcur側の識別子を分けて管理する仕組み（旧・独立したマッピングテーブル）は廃止済み
-- Quick Expense作成用のSupabase Edge Function `create-concur-quick-expense`（`supabase/functions/create-concur-quick-expense/`）：Supabaseユーザー認証（JWT検証＋会社所属確認）、公開済み経費タイプ一覧との照合（`verifyExpenseTypeForQuickExpense.js`）、入力検証、共通エラー形式までを実装済み
+- **経費タイプID移行フラグ（`company.concurExpenseTypeIdMode`）**：上記の設計は、実際にConcur EXP_KEYへの移行が完了した会社にだけ適用してよい。既存の経費タイプID（例：`train_local`）は移行前のBot内部スラッグのままの会社が大半のため、`company.concurExpenseTypeIdMode`が明示的に文字列`"concur_exp_key"`である会社だけを「移行済み」として扱う（数字・桁数・先頭ゼロの有無などIDの見た目からの推測は行わない）。未設定の会社（`company-a`・`sample-company`を含む既存の全社）は、質問フロー・判定機能は従来どおり利用できるが、Concur登録カード自体を表示せず、Edge Functionへ直接リクエストしても拒否する。このフラグを立てる管理画面UIは今回追加しておらず、会社ごとに全経費タイプの移行を確認した後、config側（`draft_configs.company_settings`）へ直接設定する運用を想定している
+- Quick Expense作成用のSupabase Edge Function `create-concur-quick-expense`（`supabase/functions/create-concur-quick-expense/`）：Supabaseユーザー認証（JWT検証＋会社所属確認）、公開済み経費タイプ一覧との照合＋経費タイプID移行フラグの確認（`verifyExpenseTypeForQuickExpense.js`）、入力検証、共通エラー形式までを実装済み
 - フロントエンド（`src/data/concurApi.js`）から上記Edge Functionを呼び出す`createQuickExpense()`
 
 未実装（今後の対応が必要）:
@@ -262,7 +264,7 @@ Supabase運用モードでログイン中の利用者は、経費申請前に領
 - Concur APIへの実際のHTTPリクエスト・OAuth認証・アクセストークンの取得（`create-concur-quick-expense`は現在**固定のスタブ応答**を返すのみです）
 - Concur側の認証情報（Client ID/Secret等）の登録（Supabase Secretsへの登録は未実施）
 - 領収書画像のConcurへのアップロード連携
-- 会社ごとにConcur連携を許可するかどうかの設定（テーブル・フラグとも未設計）
+- 経費タイプID移行フラグ（`concurExpenseTypeIdMode`）を安全に有効化するための管理画面UI（現状はconfigへの直接設定のみ）
 - Concur側の`userID`（Quick Expense作成APIの必須パラメータ）を、Botの利用者からどう解決するか
 
 ---

@@ -39,6 +39,20 @@ function resolveExpenseTypes(configSnapshot) {
   return Array.isArray(expenseTypes) ? expenseTypes : [];
 }
 
+// 【重要・移行安全性】経費タイプID＝Concur EXP_KEYという設計は、既にConcur側の
+// 正式なEXP_KEYへ移行が完了した会社にだけ適用してよい（src/lib/concurRegistrationData.js
+// のisExpenseTypeIdModeMigrated()と同じ判定。Denoバンドル境界をまたげないため、
+// 同じロジックをこのEdge Function側にも複製している）。
+// 移行済みかどうかは、公開済みconfig_snapshot.company.concurExpenseTypeIdModeが
+// 明示的に文字列"concur_exp_key"である場合だけ「移行済み」として扱う。
+// フロントから送られたmode相当の値は一切受け取らない・信用しない
+// （そもそもこのEdge Functionのリクエストスキーマにmodeフィールドは存在しない。
+// validateQuickExpenseRequest.js参照）。必ず公開済みconfig_snapshot側の値だけを正とする。
+function resolveExpenseTypeIdMode(configSnapshot) {
+  const mode = configSnapshot?.company?.concurExpenseTypeIdMode;
+  return typeof mode === "string" ? mode : null;
+}
+
 export function resolveMembershipFromPublicConfigRow(row) {
   if (!row || typeof row.company_code !== "string" || row.company_code.trim() === "") {
     return null;
@@ -48,5 +62,6 @@ export function resolveMembershipFromPublicConfigRow(row) {
     company_code: row.company_code,
     role: row.role ?? null,
     expenseTypes: resolveExpenseTypes(row.config_snapshot),
+    expenseTypeIdMode: resolveExpenseTypeIdMode(row.config_snapshot),
   };
 }

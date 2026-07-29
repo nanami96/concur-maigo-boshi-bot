@@ -12,7 +12,17 @@ const VALID_USER = { id: "user-1" };
 // buildValidBody()が申告するcompanyId/policyId/expenseTypeIdと完全一致する、
 // テスト専用のダミー経費タイプ（実際のConcur EXP_KEYではない）。
 const VALID_EXPENSE_TYPE = { id: "taxi", policyId: "policy-x", name: "タクシー", active: true };
-const VALID_MEMBERSHIP = { company_code: "company-a", role: "user", expenseTypes: [VALID_EXPENSE_TYPE] };
+// expenseTypeIdMode: "concur_exp_key" は、この会社が経費タイプID＝Concur EXP_KEY
+// 方式へ移行済みであることを示す、公開済みconfig_snapshot由来の値
+// （resolveMembershipFromPublicConfigRow.js参照）。以降の「正常系」テストは
+// 全て「移行済みの会社」を想定するため、既定でこの値を含める（未移行時の
+// 挙動は下部の「経費タイプID移行フラグ」describe参照）。
+const VALID_MEMBERSHIP = {
+  company_code: "company-a",
+  role: "user",
+  expenseTypes: [VALID_EXPENSE_TYPE],
+  expenseTypeIdMode: "concur_exp_key",
+};
 
 function buildValidBody(overrides = {}) {
   return {
@@ -439,7 +449,12 @@ describe("handleQuickExpenseRequest", () => {
       const { status, body } = await handleQuickExpenseRequest({
         method: "POST",
         ...buildAuthedInput({
-          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", expenseTypes: [] }),
+          fetchCompanyMembership: async () => ({
+            company_code: "company-a",
+            role: "user",
+            expenseTypes: [],
+            expenseTypeIdMode: "concur_exp_key",
+          }),
         }),
         parseBody: parseBodyFor(buildValidBody()),
         createQuickExpense,
@@ -456,7 +471,7 @@ describe("handleQuickExpenseRequest", () => {
       const { status, body } = await handleQuickExpenseRequest({
         method: "POST",
         ...buildAuthedInput({
-          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user" }),
+          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", expenseTypeIdMode: "concur_exp_key" }),
         }),
         parseBody: parseBodyFor(buildValidBody()),
         createQuickExpense,
@@ -473,7 +488,12 @@ describe("handleQuickExpenseRequest", () => {
       const { status, body } = await handleQuickExpenseRequest({
         method: "POST",
         ...buildAuthedInput({
-          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", expenseTypes: "not-an-array" }),
+          fetchCompanyMembership: async () => ({
+            company_code: "company-a",
+            role: "user",
+            expenseTypes: "not-an-array",
+            expenseTypeIdMode: "concur_exp_key",
+          }),
         }),
         parseBody: parseBodyFor(buildValidBody()),
         createQuickExpense,
@@ -494,6 +514,7 @@ describe("handleQuickExpenseRequest", () => {
             company_code: "company-a",
             role: "user",
             expenseTypes: [{ ...VALID_EXPENSE_TYPE, active: false }],
+            expenseTypeIdMode: "concur_exp_key",
           }),
         }),
         parseBody: parseBodyFor(buildValidBody()),
@@ -512,7 +533,12 @@ describe("handleQuickExpenseRequest", () => {
       const { status, body } = await handleQuickExpenseRequest({
         method: "POST",
         ...buildAuthedInput({
-          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", expenseTypes: [otherCompanyExpenseType] }),
+          fetchCompanyMembership: async () => ({
+            company_code: "company-a",
+            role: "user",
+            expenseTypes: [otherCompanyExpenseType],
+            expenseTypeIdMode: "concur_exp_key",
+          }),
         }),
         parseBody: parseBodyFor(buildValidBody()),
         createQuickExpense,
@@ -533,6 +559,7 @@ describe("handleQuickExpenseRequest", () => {
             company_code: "company-a",
             role: "user",
             expenseTypes: [{ id: secretLikeId, policyId: "policy-x", name: "秘密の経費タイプ", active: true }],
+            expenseTypeIdMode: "concur_exp_key",
           }),
         }),
         parseBody: parseBodyFor(buildValidBody()),
@@ -562,6 +589,124 @@ describe("handleQuickExpenseRequest", () => {
       expect(status).toBe(200);
       expect(body.error).toBeNull();
       expect(createQuickExpense).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // 経費タイプID（Concur EXP_KEY）の値はすべてテスト専用のダミー値であり、
+  // 実際のConcur側のコードではない。
+  describe("経費タイプID移行フラグ（expenseTypeIdMode）", () => {
+    it("公開済み設定にexpenseTypeIdModeが無い会社（未移行、現時点の全社の既定状態）は、expenseTypeId・policyIdが正しく一致していてもexpense_type_not_found（403）", async () => {
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({
+          fetchCompanyMembership: async () => ({
+            company_code: "company-a",
+            role: "user",
+            expenseTypes: [VALID_EXPENSE_TYPE],
+            // expenseTypeIdMode未設定＝未移行。
+          }),
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(403);
+      expect(body.error.code).toBe("expense_type_not_found");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it.each(["", "legacy", "true"])(
+      "expenseTypeIdModeが'concur_exp_key'以外の値(%s)の場合もexpense_type_not_found（403）",
+      async (expenseTypeIdMode) => {
+        const createQuickExpense = vi.fn();
+
+        const { status, body } = await handleQuickExpenseRequest({
+          method: "POST",
+          ...buildAuthedInput({
+            fetchCompanyMembership: async () => ({
+              company_code: "company-a",
+              role: "user",
+              expenseTypes: [VALID_EXPENSE_TYPE],
+              expenseTypeIdMode,
+            }),
+          }),
+          parseBody: parseBodyFor(buildValidBody()),
+          createQuickExpense,
+        });
+
+        expect(status).toBe(403);
+        expect(body.error.code).toBe("expense_type_not_found");
+        expect(createQuickExpense).not.toHaveBeenCalled();
+      },
+    );
+
+    it("旧IDがそのまま残っている会社（train_local等）でも、経費タイプIDの見た目だけでは移行済み扱いにしない", async () => {
+      // "01515"のような数字文字列のIDに見えても、expenseTypeIdModeが無ければ拒否する
+      // （IDのフォーマットから移行済みかどうかを推測することは行わない）。
+      const createQuickExpense = vi.fn();
+      const numericLookingExpenseType = { id: "01515", policyId: "policy-x", name: "国内近距離バス", active: true };
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({
+          fetchCompanyMembership: async () => ({
+            company_code: "company-a",
+            role: "user",
+            expenseTypes: [numericLookingExpenseType],
+          }),
+        }),
+        parseBody: parseBodyFor(buildValidBody({ expenseTypeId: "01515" })),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(403);
+      expect(body.error.code).toBe("expense_type_not_found");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("expenseTypeIdModeが'concur_exp_key'に完全一致する会社は、従来どおりスタブ処理まで進む", async () => {
+      const createQuickExpense = vi.fn().mockResolvedValue({
+        result: { quickExpenseId: "stub_quick_expense_id", status: "stubbed" },
+        error: null,
+      });
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput(),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(200);
+      expect(body.error).toBeNull();
+      expect(createQuickExpense).toHaveBeenCalledTimes(1);
+    });
+
+    it("リクエスト本文に偽のmode/expenseTypeIdModeを含めても一切信用しない（公開済み設定側のmodeだけを正とする）", async () => {
+      const createQuickExpense = vi.fn();
+      const tamperedBody = buildValidBody();
+      tamperedBody.mode = "concur_exp_key";
+      tamperedBody.expenseTypeIdMode = "concur_exp_key";
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({
+          fetchCompanyMembership: async () => ({
+            company_code: "company-a",
+            role: "user",
+            expenseTypes: [VALID_EXPENSE_TYPE],
+            // 公開済み設定側は未移行のまま。
+          }),
+        }),
+        parseBody: parseBodyFor(tamperedBody),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(403);
+      expect(body.error.code).toBe("expense_type_not_found");
+      expect(createQuickExpense).not.toHaveBeenCalled();
     });
   });
 });

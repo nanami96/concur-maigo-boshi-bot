@@ -7,6 +7,7 @@ import {
   resolveExpenseTypeNameDisplay,
 } from "../src/ConcurRegistrationPanel.jsx";
 import { buildConcurRegistrationData } from "../src/lib/concurRegistrationData.js";
+import { shouldRenderConcurRegistrationCard } from "../src/concurRegistrationSubmission.js";
 
 // このプロジェクトにはReact Testing Library等のDOM描画テスト基盤が無く
 // （既存のtests/配下は全て純粋関数のユニットテストのみ）、今回もその方針を
@@ -85,7 +86,12 @@ describe("resolveExpenseTypeNameDisplay", () => {
 });
 
 function buildCompany(overrides = {}) {
-  return { company_id: "sample-company", company_name: "サンプル会社", ...overrides };
+  return {
+    company_id: "sample-company",
+    company_name: "サンプル会社",
+    concurExpenseTypeIdMode: "concur_exp_key",
+    ...overrides,
+  };
 }
 
 describe("一連の流れ（判定結果→OCR確認データ→buildConcurRegistrationData→表示値）", () => {
@@ -168,5 +174,33 @@ describe("一連の流れ（判定結果→OCR確認データ→buildConcurRegis
     expect(error).not.toBeNull();
     // ConcurRegistrationPanel.jsx側はこのerrorの中身を画面に出さない
     // （error/registrationDataがnullならコンポーネントはnullを返すだけ）。
+  });
+
+  it("経費タイプID移行が未完了の会社では、Concur登録カード自体を表示しない（開発者向けエラーも出さない）", () => {
+    const result = {
+      rule: { id: "r002-g1" },
+      expenseType: { id: "taxi", name: "タクシー", policyId: "normal_expense", receiptRequired: true },
+    };
+    const receiptData = {
+      transactionDate: "2026-07-29",
+      merchantName: "株式会社あんしんネット21",
+      totalAmount: 1200,
+      currencyCode: "JPY",
+    };
+
+    const { result: registrationData, error } = buildConcurRegistrationData({
+      // 移行フラグを含まない会社（company-a・sample-companyを含む、現時点の全社）。
+      company: buildCompany({ concurExpenseTypeIdMode: undefined }),
+      result,
+      receiptData,
+      receiptFile: new File(["dummy"], "receipt.png", { type: "image/png" }),
+    });
+
+    expect(registrationData).toBeNull();
+    expect(error.type).toBe("expense_type_id_not_migrated");
+    // ConcurRegistrationPanel.jsxはerrorが1件でもあればカードを描画しない
+    // （shouldRenderConcurRegistrationCard参照）。通常の経費タイプ判定結果
+    // （result自体）の表示にはここでは一切影響しない。
+    expect(shouldRenderConcurRegistrationCard({ error, registrationData })).toBe(false);
   });
 });

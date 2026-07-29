@@ -1,10 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { buildConcurRegistrationData } from "../src/lib/concurRegistrationData.js";
+import { buildConcurRegistrationData, isExpenseTypeIdModeMigrated } from "../src/lib/concurRegistrationData.js";
 
+// concurExpenseTypeIdModeは、経費タイプID＝Concur EXP_KEYへの移行が完了した
+// 会社だけに明示的に付与される想定のテスト専用フラグ。以降の「正常系」
+// テストは全て「移行済みの会社」を想定するため、既定でこの値を含める
+// （未移行時の挙動は下部の「経費タイプID移行フラグ」describe参照）。
 function buildCompany(overrides = {}) {
   // company_idの実体はcompany_code（迷子防止Bot内部の会社スラッグ）であり、
   // Supabaseの内部UUIDではない（src/lib/concurRegistrationData.js冒頭コメント参照）。
-  return { company_id: "sample-company", company_name: "サンプル会社", ...overrides };
+  return {
+    company_id: "sample-company",
+    company_name: "サンプル会社",
+    concurExpenseTypeIdMode: "concur_exp_key",
+    ...overrides,
+  };
 }
 
 function buildResult(overrides = {}) {
@@ -228,5 +237,84 @@ describe("buildConcurRegistrationData（異常系）", () => {
 
     expect(result).toBeNull();
     expect(error.type).toBe("missing_company_id");
+  });
+});
+
+// 経費タイプID（Concur EXP_KEY）の値はすべてテスト専用のダミー値であり、
+// 実際のConcur側のコードではない。
+describe("buildConcurRegistrationData（経費タイプID移行フラグ、expense_type_id_not_migrated）", () => {
+  it("isExpenseTypeIdModeMigrated: concurExpenseTypeIdModeが'concur_exp_key'の場合だけtrue", () => {
+    expect(isExpenseTypeIdModeMigrated({ concurExpenseTypeIdMode: "concur_exp_key" })).toBe(true);
+  });
+
+  it.each([
+    [undefined, "concurExpenseTypeIdMode未設定"],
+    [null, "concurExpenseTypeIdModeがnull"],
+    [true, "concurExpenseTypeIdModeが真偽値true（文字列enumではない）"],
+    ["", "concurExpenseTypeIdModeが空文字"],
+    ["legacy", "concurExpenseTypeIdModeが不明な値"],
+    ["CONCUR_EXP_KEY", "大文字違いは一致とみなさない"],
+  ])("isExpenseTypeIdModeMigrated: %s（%s）はfalse", (mode) => {
+    expect(isExpenseTypeIdModeMigrated({ concurExpenseTypeIdMode: mode })).toBe(false);
+  });
+
+  it("isExpenseTypeIdModeMigrated: companyがnull・undefinedでも例外にならずfalse", () => {
+    expect(isExpenseTypeIdModeMigrated(null)).toBe(false);
+    expect(isExpenseTypeIdModeMigrated(undefined)).toBe(false);
+  });
+
+  it("concurExpenseTypeIdModeが未設定の会社（未移行）はexpense_type_id_not_migratedを返す（他の値は全て正常）", () => {
+    const { result, error } = buildConcurRegistrationData({
+      company: buildCompany({ concurExpenseTypeIdMode: undefined }),
+      result: buildResult(),
+      receiptData: buildReceiptData(),
+    });
+
+    expect(result).toBeNull();
+    expect(error.type).toBe("expense_type_id_not_migrated");
+  });
+
+  it("旧IDがそのまま残っている会社（train_local等）でも、経費タイプIDの見た目だけでは移行済み扱いにしない", () => {
+    // "01515"のような数字文字列に見えるIDであっても、フラグが無ければ拒否する
+    // （IDのフォーマットから移行済みかどうかを推測することは行わない）。
+    const { result, error } = buildConcurRegistrationData({
+      company: buildCompany({ concurExpenseTypeIdMode: undefined }),
+      result: buildResult({ expenseType: { id: "01515" } }),
+      receiptData: buildReceiptData(),
+    });
+
+    expect(result).toBeNull();
+    expect(error.type).toBe("expense_type_id_not_migrated");
+  });
+
+  it("companyId・policyIdは揃っているが移行フラグが無い場合、missing_*系より移行フラグエラーが優先される", () => {
+    const { error } = buildConcurRegistrationData({
+      company: buildCompany({ concurExpenseTypeIdMode: undefined }),
+      result: buildResult(),
+      receiptData: buildReceiptData({ transactionDate: null, currencyCode: null }),
+    });
+
+    expect(error.type).toBe("expense_type_id_not_migrated");
+  });
+
+  it("companyId自体が無い場合はmissing_company_idが移行フラグエラーより優先される", () => {
+    const { error } = buildConcurRegistrationData({
+      company: null,
+      result: buildResult(),
+      receiptData: buildReceiptData(),
+    });
+
+    expect(error.type).toBe("missing_company_id");
+  });
+
+  it("移行済み（concur_exp_key）の会社は従来どおり登録データを生成する", () => {
+    const { result, error } = buildConcurRegistrationData({
+      company: buildCompany({ concurExpenseTypeIdMode: "concur_exp_key" }),
+      result: buildResult(),
+      receiptData: buildReceiptData(),
+    });
+
+    expect(error).toBeNull();
+    expect(result.expenseTypeId).toBe("taxi");
   });
 });

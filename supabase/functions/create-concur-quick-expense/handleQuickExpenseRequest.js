@@ -26,7 +26,11 @@
 //      そのまま信用せず、認証済みユーザーの所属会社が実際に公開している
 //      経費タイプ一覧（membership.expenseTypes、公開済みconfig_snapshot由来）
 //      に、指定されたexpenseTypeIdが存在し、policyIdが一致し、使用停止で
-//      ないことを確認する
+//      ないことを確認する。さらに、その会社が経費タイプID＝Concur EXP_KEY
+//      方式へ移行済みであること（membership.expenseTypeIdMode ===
+//      "concur_exp_key"、公開済みconfig_snapshot由来）も確認する。未移行の
+//      会社（このコミット時点では全社）は、上記条件を満たしていても拒否する
+//      （経費タイプIDがまだ旧Bot内部スラッグのままであり、誤登録につながるため）
 //      → 条件を満たさなければ forbidden（403）
 //   7. Concur側スタブ処理の呼び出し
 //   8. 成功結果を返す
@@ -149,6 +153,7 @@ export async function handleQuickExpenseRequest({
   // 実行の根拠にしない）。エラー本文には経費タイプ一覧やconfig_snapshotを
   // 一切含めない（固定のメッセージ・理由を区別しないcodeのみ）。
   const expenseTypeCheck = verifyExpenseTypeForQuickExpense({
+    expenseTypeIdMode: authResult.membership.expenseTypeIdMode,
     expenseTypes: authResult.membership.expenseTypes,
     expenseTypeId: validated.expenseTypeId,
     policyId: validated.policyId,

@@ -3,7 +3,7 @@ import { buildManualExpenseReceiptData } from "../src/ManualExpenseEntryPanel.js
 import { buildConcurRegistrationData } from "../src/lib/concurRegistrationData.js";
 
 function buildCompany() {
-  return { company_id: "sample-company", company_name: "サンプル会社" };
+  return { company_id: "sample-company", company_name: "サンプル会社", concurExpenseTypeIdMode: "concur_exp_key" };
 }
 
 describe("buildManualExpenseReceiptData", () => {

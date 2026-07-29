@@ -11,7 +11,7 @@ import { resolveMembershipFromPublicConfigRow } from "../supabase/functions/crea
 // 実際のConcur側のコードではない。
 
 describe("resolveMembershipFromPublicConfigRow", () => {
-  it("company_codeを含む行から{company_code, role, expenseTypes}を取り出す", () => {
+  it("company_codeを含む行から{company_code, role, expenseTypes, expenseTypeIdMode}を取り出す", () => {
     const row = {
       company_code: "sample-company",
       company_name: "サンプル会社",
@@ -24,6 +24,7 @@ describe("resolveMembershipFromPublicConfigRow", () => {
       company_code: "sample-company",
       role: "user",
       expenseTypes: [],
+      expenseTypeIdMode: null,
     });
   });
 
@@ -76,6 +77,7 @@ describe("resolveMembershipFromPublicConfigRow", () => {
       company_code: "not-yet-published",
       role: "admin",
       expenseTypes: [],
+      expenseTypeIdMode: null,
     });
   });
 
@@ -94,6 +96,7 @@ describe("resolveMembershipFromPublicConfigRow", () => {
       company_code: "sample-company",
       role: null,
       expenseTypes: [],
+      expenseTypeIdMode: null,
     });
   });
 
@@ -102,5 +105,47 @@ describe("resolveMembershipFromPublicConfigRow", () => {
     // company_membersの生の行（company_id, role）のような形が誤って渡された
     // 場合でも、company_codeキーが無い以上は所属なしとして安全側に倒れる。
     expect(resolveMembershipFromPublicConfigRow({ company_id: "11111111-2222-3333-4444-555555555555", role: "user" })).toBeNull();
+  });
+
+  describe("expenseTypeIdMode（経費タイプID移行フラグ）の取り出し", () => {
+    it("config_snapshot.company.concurExpenseTypeIdModeが'concur_exp_key'ならそのまま取り出す", () => {
+      const row = {
+        company_code: "sample-company",
+        role: "user",
+        config_snapshot: { company: { company_id: "sample-company", concurExpenseTypeIdMode: "concur_exp_key" } },
+      };
+
+      expect(resolveMembershipFromPublicConfigRow(row).expenseTypeIdMode).toBe("concur_exp_key");
+    });
+
+    it("config_snapshot.companyにconcurExpenseTypeIdModeが無い場合はnull（未移行）", () => {
+      const row = {
+        company_code: "sample-company",
+        role: "user",
+        config_snapshot: { company: { company_id: "sample-company", company_name: "サンプル会社" } },
+      };
+
+      expect(resolveMembershipFromPublicConfigRow(row).expenseTypeIdMode).toBeNull();
+    });
+
+    it("config_snapshot.company自体が無い場合もnull（例外にならない）", () => {
+      const row = { company_code: "sample-company", role: "user", config_snapshot: { expenseTypes: [] } };
+      expect(resolveMembershipFromPublicConfigRow(row).expenseTypeIdMode).toBeNull();
+    });
+
+    it("config_snapshotが無い（未公開）場合もnull", () => {
+      const row = { company_code: "sample-company", role: "user", config_snapshot: null };
+      expect(resolveMembershipFromPublicConfigRow(row).expenseTypeIdMode).toBeNull();
+    });
+
+    it("concurExpenseTypeIdModeが文字列以外（true等の型不正な設定データ）の場合もnullとして扱う（安全側）", () => {
+      const row = {
+        company_code: "sample-company",
+        role: "user",
+        config_snapshot: { company: { concurExpenseTypeIdMode: true } },
+      };
+
+      expect(resolveMembershipFromPublicConfigRow(row).expenseTypeIdMode).toBeNull();
+    });
   });
 });

@@ -47,6 +47,29 @@
 // 部分、resolveCompanyCode()）だけに閉じ込まるようにする。
 import { buildConcurExpenseData, validateConcurExpenseData } from "./concurExpenseData";
 
+// 【重要・移行安全性】経費タイプID＝Concur EXP_KEYという設計は、既にConcur側の
+// 正式なEXP_KEYへの移行が完了した会社にだけ適用してよい。移行前の会社
+// （このコミット時点ではcompany-a・sample-companyを含む全社）は、経費タイプIDが
+// 従来のBot内部の意味的スラッグ（例:"train_local"）のままであり、これを
+// Concur expenseTypeIdとして送信すると誤った経費タイプへ登録されてしまう。
+//
+// 移行済みかどうかは、company.concurExpenseTypeIdMode（config_snapshot.company、
+// つまりCompanySettings.jsxが編集するcompanyオブジェクトと同じ場所に置く）が
+// 明示的に文字列"concur_exp_key"である場合だけ「移行済み」として扱う。
+// 未設定・null・真偽値true・その他の文字列は全て「未移行」として扱う（安全側
+// デフォルト）。経費タイプIDの見た目（数字かどうか・桁数・先頭ゼロの有無等）
+// から移行済みかどうかを推測することは絶対に行わない（推測によるIDのフォーマット
+// 判定は誤検知のリスクがあるため、必ず明示的なフラグだけを根拠にする）。
+//
+// このフラグを立てる管理画面UIは今回追加しない（誤って有効化されるリスクを
+// 避けるため）。会社ごとに全経費タイプが実際にConcur EXP_KEYへ移行済みで
+// あることを確認したうえで、config側（draft_configs.company_settingsまたは
+// Excel生成前提のcompany_id/company_nameに追加する形）へ直接設定することを
+// 想定している。
+export function isExpenseTypeIdModeMigrated(company) {
+  return company?.concurExpenseTypeIdMode === "concur_exp_key";
+}
+
 // company.company_id の実体はcompany_code（ファイル冒頭コメント参照）。
 // 補完はせず、空文字・非文字列は「無し」として扱う。
 function resolveCompanyCode(company) {
@@ -68,7 +91,9 @@ function resolvePolicyId(result) {
  * 既存のvalidateConcurExpenseData()の呼び出しはその既存の優先順位をそのまま引き継ぐ）：
  *   1. companyId（company_code）なし → missing_company_id
  *   2. policyIdなし → missing_policy_id
- *   3. buildConcurExpenseData() + validateConcurExpenseData() による検証
+ *   3. company.concurExpenseTypeIdModeが"concur_exp_key"でない（未移行の会社）
+ *      → expense_type_id_not_migrated
+ *   4. buildConcurExpenseData() + validateConcurExpenseData() による検証
  *      （利用日・金額・通貨・経費タイプ判定・領収書必須チェック）
  *
  * @param {object} [input]
@@ -125,6 +150,16 @@ export function buildConcurRegistrationData({
     return {
       result: null,
       error: { type: "missing_policy_id", message: "ポリシーが判定されていません。" },
+    };
+  }
+
+  if (!isExpenseTypeIdModeMigrated(company)) {
+    return {
+      result: null,
+      error: {
+        type: "expense_type_id_not_migrated",
+        message: "この会社はConcur経費タイプコードへの移行が完了していないため、Concurへの登録はご利用いただけません。",
+      },
     };
   }
 

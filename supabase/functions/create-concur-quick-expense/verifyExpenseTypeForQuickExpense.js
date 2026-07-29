@@ -9,6 +9,13 @@
 // 識別子であるため、公開済みexpenseTypes配列に対して直接照合するだけでよい。
 //
 // 検証する項目（Commit Gで確立したcompanyId＝company_codeの照合とは別軸）：
+//   0. その会社が経費タイプID＝Concur EXP_KEY方式へ移行済みであること
+//      （expenseTypeIdMode === "concur_exp_key"。src/lib/concurRegistrationData.js
+//      のisExpenseTypeIdModeMigrated()と同じ判定をここでも複製している。
+//      未移行の会社は経費タイプIDが旧Bot内部スラッグ（例:"train_local"）の
+//      ままであり、これをConcur側のexpenseTypeIdとして扱うと誤登録になるため、
+//      たとえ1〜3の条件を満たしていても拒否する。IDの見た目からの移行判定は
+//      行わない＝expenseTypeIdModeという明示的な値だけを根拠にする）
 //   1. expenseTypeIdが存在すること（企業の公開済み経費タイプ一覧に無ければ拒否）
 //   2. その経費タイプのpolicyIdが、リクエストのpolicyIdと一致すること
 //      （フロントが別ポリシーのIDを詐称して送ってきた場合に拒否するため）
@@ -25,13 +32,20 @@ function toText(value) {
 
 /**
  * @param {object} input
+ * @param {string|null} input.expenseTypeIdMode 公開済みconfig_snapshot.company.
+ *   concurExpenseTypeIdMode（resolveMembershipFromPublicConfigRow.js参照）。
+ *   "concur_exp_key"以外（未設定・null・その他の値）は全て未移行として扱う。
  * @param {Array<{ id: string, policyId: string, active?: boolean }>} input.expenseTypes
  *   公開済みconfig_snapshot.expenseTypes（resolveMembershipFromPublicConfigRow.js参照）。
  * @param {string} input.expenseTypeId リクエスト本文のexpenseTypeId（Concur EXP_KEY）。
  * @param {string} input.policyId リクエスト本文のpolicyId。
  * @returns {{ valid: boolean, reason: string|null }}
  */
-export function verifyExpenseTypeForQuickExpense({ expenseTypes, expenseTypeId, policyId }) {
+export function verifyExpenseTypeForQuickExpense({ expenseTypeIdMode, expenseTypes, expenseTypeId, policyId }) {
+  if (expenseTypeIdMode !== "concur_exp_key") {
+    return { valid: false, reason: "not_found" };
+  }
+
   const entries = Array.isArray(expenseTypes) ? expenseTypes : [];
   const match = entries.find((entry) => toText(entry?.id) === expenseTypeId);
 
