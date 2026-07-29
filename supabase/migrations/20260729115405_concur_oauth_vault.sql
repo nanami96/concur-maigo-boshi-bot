@@ -116,8 +116,13 @@ comment on column concur_oauth_connections.vault_secret_id is
   '呼び出し元（Edge Function）からこの値を直接指定させることはせず、RPC内部で'
   'この列に保存された値だけを使う。';
 comment on column concur_oauth_connections.status is
-  'inactive=未接続、active=正常、rotating=ローテーション処理中の一時的な'
-  'リース状態、error=直近の疎通確認が失敗。';
+  'inactive=明示的に無効化された接続。get_concur_refresh_token_for_edge()の'
+  '取得対象外（意図的に取得不可にしている状態）。active=通常利用可能で取得'
+  '対象。rotating=ローテーション処理中の一時的なリース状態（期限切れの場合の'
+  'み再取得可能）。error=直近の疎通確認が失敗した状態だが、再試行のため取得'
+  '対象に含む。新規接続行を登録する際、直ちに疎通確認可能にしたい場合は'
+  'status=''active''で作成すること（docs/supabase-setup.md Step 19参照。'
+  'デフォルト値''inactive''のままだと取得対象にならない）。';
 comment on column concur_oauth_connections.lease_id is
   'get_concur_refresh_token_for_edge()がリースを獲得するたびに新しく発行する'
   'ランダムUUID。complete_concur_oauth_refresh()は、この列の現在値と呼び'
@@ -167,10 +172,33 @@ revoke all on vault.decrypted_secrets from anon, authenticated, public;
 -- ----------------------------------------------------------------------------
 -- 5. RPC: 現在のRefresh Tokenを取得し、同時にローテーション用のリースを
 --    新しいlease_idで獲得する（Edge Function専用。service_roleだけがEXECUTE
---    可能）。単一のUPDATE ... RETURNINGで「WHERE条件の確認」と「リースの
---    獲得」を1つの原子的な操作として行うため、2つの呼び出しが同時に実行
---    されても、Postgresの行ロックにより片方だけがこのUPDATEに成功し、
+--    可能）。
+--
+--    【重要・改訂】以前の実装は(a)先にstatus='rotating'へUPDATEし、(b)その後
+--    vault.decrypted_secretsをSELECTする、という2段階の処理だった。この順序
+--    では、対応するVault Secretが存在しない・空文字・復号できない場合でも
+--    (a)の時点で接続行が既にrotatingへ更新済みとなり、lock_expires_atの
+--    期限（30秒）が切れるまで他のリクエストがその接続を一切取得できなく
+--    なる欠陥があった。
+--
+--    今回、単一のUPDATE ... FROM vault.decrypted_secrets ... RETURNINGへ
+--    書き直し、「接続行の選定」「Vault Secretの存在確認」「復号値が空文字
+--    でないことの確認」「status条件の確認」「status='rotating'への変更・
+--    lease_id発行・lock_expires_at設定」を1つの原子的な操作として行う。
+--    Vault Secretが存在しない・decrypted_secretがnull・trim後に空文字の
+--    場合は、FROM句のJOIN条件（WHERE句内のvs.decrypted_secret関連の条件）
+--    自体が満たされないため、UPDATEは対象0行のまま終わり、
+--    concur_oauth_connections側の行は一切変更されない（status・lease_id・
+--    lock_expires_atのいずれも変わらない）。
+--
+--    同時実行時も、Postgresの行ロックにより片方だけがこのUPDATEに成功し、
 --    もう片方は0行を受け取る（Tokenを同時に2件が取得することはない）。
+--
+--    取得対象となるstatus（意味の確定。上記status列のコメントも参照）：
+--      - active（通常利用可能）
+--      - error（前回失敗。再試行可能）
+--      - rotating かつ lock_expires_at < now()（リース期限切れ後の再取得）
+--    inactive（明示的に無効化された接続）は取得対象に含めない。
 -- ----------------------------------------------------------------------------
 create or replace function get_concur_refresh_token_for_edge(
   p_company_id uuid default null
@@ -181,43 +209,36 @@ security definer
 set search_path = public
 as $$
 declare
-  v_connection_id uuid;
-  v_vault_secret_id uuid;
   v_lease_id uuid := gen_random_uuid();
 begin
-  update concur_oauth_connections c
-    set status = 'rotating',
-        lease_id = v_lease_id,
-        lock_expires_at = now() + interval '30 seconds',
-        updated_at = now()
-    where (
-        (p_company_id is null and c.company_id is null)
-        or c.company_id = p_company_id
-      )
-      and (c.status <> 'rotating' or c.lock_expires_at < now())
-    returning c.id, c.vault_secret_id into v_connection_id, v_vault_secret_id;
-
-  if v_connection_id is null then
-    -- 対象接続が存在しない、または他のリクエストがロック中（かつリース期限
-    -- 切れでない）。理由は区別せず0行を返す（呼び出し元はconcur_oauth_not_
-    -- connected等、単一の安全なコードへまとめる）。期限切れ後の再取得では、
-    -- WHERE句の「lock_expires_at < now()」が真になるため通常どおりUPDATEが
-    -- 成功し、v_lease_id（今回新しく生成した値）へ差し替わる＝再取得のたびに
-    -- lease_idが変わる。
-    return;
-  end if;
-
   return query
-    select v_connection_id, v_lease_id, vs.decrypted_secret
-    from vault.decrypted_secrets vs
-    where vs.id = v_vault_secret_id;
-  -- vault_secret_idに対応する行がvault.secretsに存在しない・復号できない
-  -- 場合、上のSELECTは0行を返す（例外にならない）。この場合、呼び出し元は
-  -- refresh_tokenを受け取れないため、Tokenを一切返さないという安全な既定
-  -- 動作になる。ただしこの時点で既にリース（status='rotating'）は獲得済み
-  -- のままになる点に注意：呼び出し元（Edge Function）はrefresh_tokenが
-  -- 空/欠落の場合、必ずcomplete_concur_oauth_refresh(success:false)を呼んで
-  -- リースを解放すること（handleConcurOAuthCheckRequest.js参照）。
+    update concur_oauth_connections c
+      set status = 'rotating',
+          lease_id = v_lease_id,
+          lock_expires_at = now() + interval '30 seconds',
+          updated_at = now()
+      from vault.decrypted_secrets vs
+      where vs.id = c.vault_secret_id
+        and vs.decrypted_secret is not null
+        and trim(vs.decrypted_secret) <> ''
+        and (
+          (p_company_id is null and c.company_id is null)
+          or c.company_id = p_company_id
+        )
+        and (
+          c.status = 'active'
+          or c.status = 'error'
+          or (c.status = 'rotating' and c.lock_expires_at < now())
+        )
+      returning c.id as connection_id, c.lease_id as lease_id, vs.decrypted_secret as refresh_token;
+  -- 対象接続が存在しない、対応するVault Secretが存在しない/空/空白のみ、
+  -- status条件を満たさない（inactive、またはロック中で期限内のrotating）の
+  -- いずれの場合も、上のUPDATEは0行のまま完了し、呼び出し元へは0行を返す
+  -- （理由は区別しない。呼び出し元はconcur_oauth_not_connected等、単一の
+  -- 安全なコードへまとめる）。期限切れ後の再取得では、WHERE句の
+  -- 「c.lock_expires_at < now()」が真になるため通常どおりUPDATEが成功し、
+  -- v_lease_id（今回新しく生成した値）へ差し替わる＝再取得のたびに
+  -- lease_idが変わる。
 end;
 $$;
 
@@ -227,9 +248,13 @@ grant execute on function get_concur_refresh_token_for_edge(uuid) to service_rol
 comment on function get_concur_refresh_token_for_edge(uuid) is
   'Edge Function専用（service_roleのみEXECUTE可）。指定した会社（またはNULLで'
   '既定接続）の現在のRefresh Tokenを復号して返すと同時に、新しいlease_idで'
-  'ローテーション用のリース（status=rotating、30秒）を獲得する。ロック中・'
-  '接続なし・Vault Secretが存在しない場合は0行（またはrefresh_tokenを含まない'
-  '行）を返す。呼び出し元はconnection_id・lease_idを保持し、成功・失敗いずれの'
+  'ローテーション用のリース（status=rotating、30秒）を獲得する。取得対象は'
+  'status=active・error、またはstatus=rotatingかつlock_expires_at<nowの行の'
+  'みで、inactiveの行は対象外。対応するVault Secretが存在しない・空文字・'
+  '空白のみの場合も対象外（単一のUPDATE ... FROM ... RETURNINGで判定する'
+  'ため、この場合は接続行のstatus・lease_id・lock_expires_atのいずれも変更'
+  'されない）。ロック中・接続なし・Vault Secret不在のいずれも0行を返す（理由は'
+  '区別しない）。呼び出し元はconnection_id・lease_idを保持し、成功・失敗いずれの'
   '場合も必ずcomplete_concur_oauth_refresh()へその両方を渡してリースを'
   '解放すること。Token値をRAISE・NOTICE・ログへ出さないこと。';
 

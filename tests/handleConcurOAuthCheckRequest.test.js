@@ -296,6 +296,56 @@ describe("handleConcurOAuthCheckRequest（未接続・ロック中）", () => {
     expect(body.error.code).toBe("concur_oauth_not_connected");
   });
 
+  it("Vault Secretが不在／空文字（RPC側で単一UPDATE...FROM...RETURNINGが0行になるケース）でも同じconcur_oauth_not_connected。OAuth通信は発生しない", async () => {
+    // get_concur_refresh_token_for_edge()の改訂後は、Vault Secretが存在しない・
+    // 空文字・空白のみの場合、RPC自体が0行を返す（接続行のstatus等は一切
+    // 変更されない）。アダプタ層ではこれも「未登録」「ロック中」と同じnullとして
+    // 表れるため、ハンドラー側の外部レスポンスは変わらないことを確認する。
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(null);
+    const refreshAccessToken = vi.fn();
+    const completeOAuthRefresh = vi.fn();
+
+    const { status, body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      refreshAccessToken,
+      completeOAuthRefresh,
+    });
+
+    expect(status).toBe(503);
+    expect(body.error.code).toBe("concur_oauth_not_connected");
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+    // Vault Secret不在の場合、RPC側でリース自体が獲得されない（改訂後の設計）
+    // ため、Edge Function側がcompleteを呼んでリースを解放する必要も無い。
+    expect(completeOAuthRefresh).not.toHaveBeenCalled();
+  });
+
+  it("（防御的コード）getRefreshTokenForEdgeがconnectionId／leaseIdはあるがrefreshTokenを含まない不正な形の値を返してもconcur_oauth_not_connectedとして安全に扱う", async () => {
+    // 改訂後のRPC設計では本来起こり得ない形（アダプタ側のバグ等を想定した
+    // 防御的なテスト）。handleConcurOAuthCheckRequest.js側のガード
+    // （!lease.refreshToken）が引き続き機能することを確認する。
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue({
+      connectionId: "dummy-connection-id",
+      leaseId: "dummy-lease-id",
+      refreshToken: "",
+    });
+    const refreshAccessToken = vi.fn();
+
+    const { status, body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      refreshAccessToken,
+    });
+
+    expect(status).toBe(503);
+    expect(body.error.code).toBe("concur_oauth_not_connected");
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+  });
+
   it("getRefreshTokenForEdgeが例外を投げた場合はinternal_error", async () => {
     const getRefreshTokenForEdge = vi.fn().mockRejectedValue(new Error("db error"));
 

@@ -1082,6 +1082,8 @@ completeの呼び出しタイミング・エラーコードのマッピング等
 | `get_concur_refresh_token_for_edge` / `complete_concur_oauth_refresh` RPC | コード上は定義済みだが、Migration未適用のため実際のDBには存在しない |
 | `check-concur-oauth`のコード（クライアント分離・RPC呼び出し） | 実装済み。上記RPCを呼ぶ構造になっているが、RPC自体が無いため実際には呼び出せない（安全な状態） |
 | `resolveConcurOAuthConfig.js` | `CONCUR_REFRESH_TOKEN`をSecretsから読まなくなった（Vault RPC経由に変更） |
+| `get_concur_refresh_token_for_edge()`のVault Secret不在時の挙動 | 修正済み。単一のUPDATE ... FROM ... RETURNINGで、Vault Secretが存在しない・空文字・空白のみの場合は接続行を一切変更しない（以前は先にrotatingへ更新してから確認していたため、この場合に30秒間ロックされたままになる欠陥があった） |
+| `status`列の意味 | 確定済み。`active`/`error`/期限切れ`rotating`のみ取得対象、`inactive`（既定値）は明示的に無効化された接続として取得対象外 |
 | Vaultへの実際のRefresh Token登録（`vault.create_secret()`） | 未実施。Migration適用後の手作業とする |
 | `CONCUR_OAUTH_CHECK_ENABLED`の有効化 | 未実施（未設定＝無効のまま） |
 | Edge Function側ロジックの自動テスト | 実装済み（Node/vitestのモックテスト） |
@@ -1119,7 +1121,14 @@ Supabaseプロジェクト側に、CLIのmigration適用履歴
    `supabase/schema.sql`のPhase 12部分を貼り付け）
 3. Concur側で実際のRefresh Tokenを確認できたら、`vault.create_secret()`で
    Vaultへ登録し、返ってきたUUIDを`concur_oauth_connections.vault_secret_id`へ
-   持つ行を1件作成する（`company_id`は現時点では`null`のままでよい）
+   持つ行を1件作成する（`company_id`は現時点では`null`のままでよい）。
+   **`status`列は明示的に`'active'`を指定して作成すること**（例：
+   `insert into concur_oauth_connections (vault_secret_id, status) values
+   ('<vault.create_secret()が返したUUID>', 'active');`）。`status`列の既定値は
+   `'inactive'`（明示的に無効化された接続の意味）であり、`inactive`のままだと
+   `get_concur_refresh_token_for_edge()`の取得対象にならず、いつまで経っても
+   `concur_oauth_not_connected`のままになる（詳細はsupabase/schema.sqlの
+   Phase 12、`concur_oauth_connections.status`列コメント参照）
 4. `CONCUR_CLIENT_ID`・`CONCUR_CLIENT_SECRET`・`CONCUR_TOKEN_URL`をSupabase
    Secretsへ登録する（`CONCUR_REFRESH_TOKEN`はもう登録しない）
 5. `check-concur-oauth`をdeployする
