@@ -258,11 +258,13 @@ Supabase運用モードでログイン中の利用者は、経費申請前に領
 - **経費タイプID移行フラグ（`company.concurExpenseTypeIdMode`）**：上記の設計は、実際にConcur EXP_KEYへの移行が完了した会社にだけ適用してよい。既存の経費タイプID（例：`train_local`）は移行前のBot内部スラッグのままの会社が大半のため、`company.concurExpenseTypeIdMode`が明示的に文字列`"concur_exp_key"`である会社だけを「移行済み」として扱う（数字・桁数・先頭ゼロの有無などIDの見た目からの推測は行わない）。未設定の会社（`company-a`・`sample-company`を含む既存の全社）は、質問フロー・判定機能は従来どおり利用できるが、Concur登録カード自体を表示せず、Edge Functionへ直接リクエストしても拒否する。このフラグを立てる管理画面UIは今回追加しておらず、会社ごとに全経費タイプの移行を確認した後、config側（`draft_configs.company_settings`）へ直接設定する運用を想定している
 - Quick Expense作成用のSupabase Edge Function `create-concur-quick-expense`（`supabase/functions/create-concur-quick-expense/`）：Supabaseユーザー認証（JWT検証＋会社所属確認）、公開済み経費タイプ一覧との照合＋経費タイプID移行フラグの確認（`verifyExpenseTypeForQuickExpense.js`）、入力検証、共通エラー形式までを実装済み
 - フロントエンド（`src/data/concurApi.js`）から上記Edge Functionを呼び出す`createQuickExpense()`
-- Concur OAuth2「Refresh Token Grant」でAccess Tokenを更新するモジュール一式（`refreshConcurAccessToken.js`ほか、`supabase/functions/create-concur-quick-expense/`）。**現時点ではどこからも呼び出されていない未配線の状態**で、token endpointへの実通信は行っていない（詳細は[Supabaseセットアップガイド Step 18](docs/supabase-setup.md)参照）
+- Concur OAuth2「Refresh Token Grant」でAccess Tokenを更新するモジュール一式（`refreshConcurAccessToken.js`ほか、`supabase/functions/_shared/concur-oauth/`。複数Edge Functionから再利用できるよう共有ディレクトリへ配置）。既存の`create-concur-quick-expense`（Quick Expense作成処理）とは未接続で、token endpointへの実通信も行っていない
+- **`check-concur-oauth`（`supabase/functions/check-concur-oauth/`）**：上記OAuthモジュールの疎通確認だけを行う、**platform_admin専用**のEdge Function。既存の「Concurに登録」ボタン・`create-concur-quick-expense`とは未接続。通常は無効で、`CONCUR_OAUTH_CHECK_ENABLED`というSecretが厳密に文字列`"true"`である場合だけtoken endpointへの実通信を許可する（詳細は[Supabaseセットアップガイド Step 18](docs/supabase-setup.md)参照）。トークン本体（access_token/refresh_token等）は成功時も一切レスポンスへ返さず、`connected`・`hasGeolocation`・`expiresInPresent`・`refreshTokenRotated`といった真偽値だけを返す。**Refresh Tokenローテーション（Concur側から新しいRefresh Tokenが返るケース）の安全な保存方式が未整備のため、その状態が発生した場合は新しいRefresh Tokenを保存せずそのまま破棄し、成功扱いにせず「認証情報の更新が必要」という固定エラー（`concur_oauth_rotation_unsupported`）を返す。保存方式が整備されるまで`CONCUR_OAUTH_CHECK_ENABLED`は有効化しないこと**
 
 未実装（今後の対応が必要）:
 
 - 上記OAuthモジュールをQuick Expense作成処理へ実際に組み込むこと、Concur APIへの実際のHTTPリクエスト、Identity API経由のuserID解決（`create-concur-quick-expense`は現在**固定のスタブ応答**を返すのみです）
+- 新しいRefresh Tokenのローテーション時の安全な保存方式（Supabase Secretsの自動更新・DB保存等）。これが整備されるまで、`check-concur-oauth`の`CONCUR_OAUTH_CHECK_ENABLED`は有効化しない方針とする
 - Concur側の認証情報（Client ID/Secret等）の登録（Supabase Secretsへの登録は未実施）
 - 領収書画像のConcurへのアップロード連携
 - 経費タイプID移行フラグ（`concurExpenseTypeIdMode`）を安全に有効化するための管理画面UI（現状はconfigへの直接設定のみ）

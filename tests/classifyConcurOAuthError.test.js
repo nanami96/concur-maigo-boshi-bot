@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildConcurOAuthError } from "../supabase/functions/create-concur-quick-expense/classifyConcurOAuthError.js";
+import { buildConcurOAuthError } from "../supabase/functions/_shared/concur-oauth/classifyConcurOAuthError.js";
 
 describe("buildConcurOAuthError", () => {
   it.each([

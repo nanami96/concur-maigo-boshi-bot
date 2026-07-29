@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { refreshConcurAccessToken } from "../supabase/functions/create-concur-quick-expense/refreshConcurAccessToken.js";
+import { refreshConcurAccessToken } from "../supabase/functions/_shared/concur-oauth/refreshConcurAccessToken.js";
 
 // 以下の認証情報・トークン値はすべてテスト専用のダミー値であり、
 // 実際のConcur側の値ではない。本物のtoken endpointへは一切通信しない

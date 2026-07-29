@@ -1,11 +1,11 @@
 // Concur OAuth（Refresh Token Grant）に必要なSupabase Secretsの読取・
 // 設定確認だけを担当する、Deno固有のAPIに一切依存しない純粋関数。
 //
-// 実際にDeno.env.get()を呼ぶのは、この関数の呼び出し元（将来のindex.ts側の
-// 配線。今回のコミットではまだ配線しない）であり、このファイル自身は
-// 「envという名前で渡された値の集合」を検証するだけに留める。これにより
-// Node/vitestから直接テストできる（describeAuthHeaderForLogging.js等、
-// このディレクトリの既存ファイルと同じ方針）。
+// 実際にDeno.env.get()を呼ぶのは、この関数の呼び出し元（各Edge Function側の
+// 配線）であり、このファイル自身は「envという名前で渡された値の集合」を
+// 検証するだけに留める。これによりNode/vitestから直接テストできる
+// （supabase/functions/*/describeAuthHeaderForLogging.js等、このプロジェクト
+// 全体で踏襲している既存の方針と同じ）。
 //
 // 参照するSecret名（実値はこの関数の引数として渡されるだけで、このファイル
 // 自体はいかなる実値もハードコードしない）：

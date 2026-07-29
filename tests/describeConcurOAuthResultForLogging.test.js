@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { describeConcurOAuthResultForLogging } from "../supabase/functions/create-concur-quick-expense/describeConcurOAuthResultForLogging.js";
+import { describeConcurOAuthResultForLogging } from "../supabase/functions/_shared/concur-oauth/describeConcurOAuthResultForLogging.js";
 
 // 以下のトークン値はすべてテスト専用のダミー値であり、実際のConcur側の
 // トークンではない。

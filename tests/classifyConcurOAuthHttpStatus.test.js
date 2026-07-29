@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyConcurOAuthHttpStatus } from "../supabase/functions/create-concur-quick-expense/classifyConcurOAuthHttpStatus.js";
+import { classifyConcurOAuthHttpStatus } from "../supabase/functions/_shared/concur-oauth/classifyConcurOAuthHttpStatus.js";
 
 describe("classifyConcurOAuthHttpStatus", () => {
   it.each([200, 201, 204, 299])("2xx(%i)はnull（正常、後続の検証へ進む）", (status) => {

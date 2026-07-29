@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveConcurOAuthConfig } from "../supabase/functions/create-concur-quick-expense/resolveConcurOAuthConfig.js";
+import { resolveConcurOAuthConfig } from "../supabase/functions/_shared/concur-oauth/resolveConcurOAuthConfig.js";
 
 // 以下の値はすべてテスト専用のダミー値であり、実際のConcur側の
 // 認証情報ではない。

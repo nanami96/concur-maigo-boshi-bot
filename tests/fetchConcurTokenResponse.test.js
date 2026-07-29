@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fetchConcurTokenResponse } from "../supabase/functions/create-concur-quick-expense/fetchConcurTokenResponse.js";
+import { fetchConcurTokenResponse } from "../supabase/functions/_shared/concur-oauth/fetchConcurTokenResponse.js";
 
 // 本物のtoken endpointへは一切通信しない。fetchImplを差し替えたモックのみを使う。
 const DUMMY_REQUEST = {

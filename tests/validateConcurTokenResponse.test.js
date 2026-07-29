@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateConcurTokenResponse } from "../supabase/functions/create-concur-quick-expense/validateConcurTokenResponse.js";
+import { validateConcurTokenResponse } from "../supabase/functions/_shared/concur-oauth/validateConcurTokenResponse.js";
 
 // 以下のトークン値はすべてテスト専用のダミー値であり、実際のConcur側の
 // トークンではない。

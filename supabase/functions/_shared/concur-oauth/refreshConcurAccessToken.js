@@ -6,13 +6,19 @@
 // validateConcurTokenResponse.js（tokenレスポンスの検証）→
 // describeConcurOAuthResultForLogging.js（ログ用の安全な要約）の順で処理する。
 //
-// 【重要・今回のコミット時点の位置づけ】
-// このファイルはOAuthモジュール単体としてのみ実装されており、
-// createQuickExpenseStub.js・handleQuickExpenseRequest.js・index.tsの
-// いずれからも呼び出されていない（意図的に未配線）。「Concurに登録」
-// ボタンを押しても、この関数・token endpointへの通信は一切発生しない。
-// 実際にtoken endpointへ通信するのは、コードレビュー・Secrets登録後の
-// 別工程とする。
+// 【重要・現時点の位置づけ】
+// このファイルはsupabase/functions/_shared/concur-oauth/に置かれた共有
+// モジュールで、複数のEdge Functionから安全に再利用できるようにしている
+// （Supabase Functionsの`_shared`ディレクトリ規約：アンダースコアで始まる
+// ディレクトリは独立した関数として扱われず、他の関数からの相対import経由で
+// デプロイバンドルへ取り込まれる）。
+//
+// 現時点では supabase/functions/check-concur-oauth/（platform_admin専用の
+// OAuth疎通確認Function）だけがこの関数を呼び出す。既存の
+// create-concur-quick-expense（createQuickExpenseStub.js・
+// handleQuickExpenseRequest.js・index.ts）からは引き続き一切呼び出されて
+// いない（「Concurに登録」ボタンを押しても、この関数・token endpointへの
+// 通信は発生しない）。
 //
 // 【戻り値の扱いに関する重要な注意】
 // ok:trueの場合に返すtokens（accessToken/refreshToken等の実際の値を含む）は、

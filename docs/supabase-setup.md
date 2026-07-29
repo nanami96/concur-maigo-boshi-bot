@@ -595,10 +595,12 @@ Custom SMTP（Resend等）へ切り替えても、**アプリ側のコード変�
 
 ## Step 18. Concur OAuth（Access Token取得）用のSupabase Secrets
 
-`create-concur-quick-expense` Edge Function内に、Concur側のOAuth2「Refresh
-Token Grant」でAccess Tokenを更新するためのモジュール（`refreshConcurAccessToken.js`
-ほか）を用意しています。**現時点ではこのモジュールはどこからも呼び出されておらず
-（未配線）、Concur APIへの実通信は一切行いません。** 以下は、将来実際に配線・
+`supabase/functions/_shared/concur-oauth/`に、Concur側のOAuth2「Refresh
+Token Grant」でAccess Tokenを更新するための共有モジュール（`refreshConcurAccessToken.js`
+ほか）を用意しています。**このモジュールは既存の`create-concur-quick-expense`
+（Quick Expense作成処理）とは未接続です。** 呼び出すのは後述の
+`check-concur-oauth`（platform_admin専用の疎通確認Function）だけで、こちらも
+通常は無効化されており、Concur APIへの実通信は行いません。以下は、将来実際に
 デプロイする際に登録することになるSecret名の一覧です（実際の値はこのドキュメントは
 もちろん、コード・`.env.example`・ログのいずれにも書きません）。
 
@@ -607,12 +609,30 @@ Token Grant」でAccess Tokenを更新するためのモジュール（`refreshC
 | `CONCUR_CLIENT_ID` | Concur App Managementで発行されたClient ID | 必須 |
 | `CONCUR_CLIENT_SECRET` | 同上のClient Secret | 必須 |
 | `CONCUR_REFRESH_TOKEN` | 既に取得済みのRefresh Token | 必須 |
-| `CONCUR_TOKEN_URL` | Concur側のtoken endpoint（例: `https://{リージョン}.api.concursolutions.com/oauth2/v0/token`。会社ごとに異なるため既定値へのフォールバックは行わず、未設定時は安全側で失敗させる設計） | 必須 |
+| `CONCUR_TOKEN_URL` | Concur側のtoken endpoint（例: `https://{リージョン}.api.concursolutions.com/oauth2/v0/token`。会社ごとに異なるため既定値へのフォールバックは行わず、未設定時は安全側で失敗させる設計。`https`以外のスキームも同様に拒否する） | 必須 |
 | `CONCUR_SCOPE` | Refresh Token Grantに含めるscope | 任意 |
+| `CONCUR_OAUTH_CHECK_ENABLED` | `check-concur-oauth`（次項）がtoken endpointへ実際に通信することを許可する安全ゲート。厳密に文字列`"true"`の場合だけ有効になる（未設定・`"false"`・大文字違い等は全て無効） | 任意（未設定＝無効が既定） |
 
 登録方法は他のSecret（`AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT`等）と同様、Supabase
 ダッシュボードの「Edge Functions」→「Secrets」、またはSupabase CLIの
 `supabase secrets set`で行います（値は絶対にリポジトリへコミットしないこと）。
+
+### `check-concur-oauth`（OAuth疎通確認用Edge Function）について
+
+- **platform_admin専用**：`is_platform_admin()`（既存のSECURITY DEFINER関数）
+  でサーバー側から確認する。一般利用者・会社のadmin（company_admin）は呼び出せない
+- 既存のConcur登録処理（「Concurに登録」ボタン・`create-concur-quick-expense`）とは
+  未接続
+- 通常は`CONCUR_OAUTH_CHECK_ENABLED`が無効なため、呼び出してもtoken endpointへは
+  一切通信せず、`{ connected: false, status: "disabled" }`を返すだけ
+- 有効化した場合でも、レスポンスにトークン本体（access_token/refresh_token等）・
+  Client Secret・token endpoint URL・geolocationの実URL・scopeの生値は一切含めない
+  （`connected`・`hasGeolocation`・`expiresInPresent`・`refreshTokenRotated`という
+  真偽値だけを返す）
+- Concur側から新しいRefresh Token（ローテーション）が返された場合の安全な保存方式
+  （Supabase Secretsの自動更新・DB保存等）がまだ実装されていないため、この状態が
+  発生した場合は成功として扱わず、認証情報の更新が必要という固定エラーを返す。
+  これが整備されるまで、`CONCUR_OAUTH_CHECK_ENABLED`は有効化しない運用を推奨する
 このEdge FunctionはVite/GitHub Pagesの静的フロントから直接呼ばれるものではなく、
 Concur側の認証情報はSupabase Secretsにのみ保存し、フロントエンド
 （`VITE_`で始まる環境変数）には一切置きません。

@@ -48,3 +48,16 @@ verify_jwt = true
 # verify_jwt = true にしても既存の呼び出し方式との不整合は無い。
 [functions.create-concur-quick-expense]
 verify_jwt = true
+
+# check-concur-oauth：Concur OAuth（Refresh Token Grant）の疎通確認だけを行う、
+# platform_admin専用のFunction。既存の「Concurに登録」ボタン・
+# create-concur-quick-expenseとは未接続で、通常はCONCUR_OAUTH_CHECK_ENABLED
+# （Secret、厳密に"true"の場合のみ有効）が未設定のため、実際には何も
+# 通信しない安全な状態のまま追加している（このコミット時点ではdeployしていない）。
+# 他のEdge Functionと同じ理由でverify_jwtを明示的にtrueとする：関数内部
+# （index.ts・resolveConcurOAuthCheckAuthorization.js）でもauth.getUser()に
+# よる独立した二重チェック・is_platform_admin()によるサーバー側の権限確認を
+# 行っているため、これを無効化しても最終的な安全性は失われない設計だが、
+# 暗黙のデフォルトに依存しない・trueであることを保証するため明示している。
+[functions.check-concur-oauth]
+verify_jwt = true
