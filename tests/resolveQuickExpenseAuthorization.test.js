@@ -77,7 +77,7 @@ describe("resolveQuickExpenseAuthorization", () => {
 
   it("有効なJWT + company_members所属ありの場合はauthorized（membershipをそのまま返す）", async () => {
     const user = { id: "user-1" };
-    const membership = { company_id: "company-a", role: "user" };
+    const membership = { company_code: "company-a", role: "user" };
 
     const result = await resolveQuickExpenseAuthorization({
       authHeader: "Bearer valid.jwt",
@@ -101,7 +101,7 @@ describe("resolveQuickExpenseAuthorization", () => {
       fetchUser: async () => resolvedUser,
       fetchCompanyMembership: async (user) => {
         receivedUser = user;
-        return { company_id: "company-a", role: "user" };
+        return { company_code: "company-a", role: "user" };
       },
     });
 

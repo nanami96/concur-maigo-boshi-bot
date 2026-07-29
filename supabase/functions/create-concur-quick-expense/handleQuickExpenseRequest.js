@@ -15,21 +15,29 @@
 //      - 認証済みだが所属会社なし → forbidden（403）
 //   3. リクエスト本文のJSON解析
 //   4. 入力検証（validateQuickExpenseRequest.js）
-//   5. 認証済みユーザーが実際に所属する会社と、本文で申告された companyId が
-//      一致するかを確認する（フロントから渡された値を認証の根拠にしない。
-//      ステップ2で取得済みのmembershipをそのまま使うため、DB問い合わせは
-//      追加で発生しない）→ 不一致なら forbidden（403）
+//   5. 認証済みユーザーが実際に所属する会社（company_code）と、本文で申告
+//      された companyId（フロントも一貫してcompany_codeを送る。
+//      src/lib/concurRegistrationData.js参照）が一致するかを確認する
+//      （フロントから渡された値を認証の根拠にしない。ステップ2で取得済みの
+//      membershipをそのまま使うため、DB問い合わせは追加で発生しない）
+//      → 不一致なら forbidden（403）
 //   6. Concur側スタブ処理の呼び出し
 //   7. 成功結果を返す
+//
+// companyIdの値空間について（重要）：
+//   membership.company_code・本文のcompanyIdは、いずれも
+//   companies.company_code（人が識別するためのスラッグ）であり、
+//   company_members.company_id（Supabase内部UUID）ではない。
+//   fetchCompanyMembership()がこのcompany_codeをどう解決するかは
+//   index.ts・resolveMembershipFromPublicConfigRow.js参照。
 //
 // このEdge Functionが返しうるエラーコード：
 //   - method_not_allowed      … POST以外のメソッド
 //   - unauthorized            … Authorizationヘッダーが無い、またはSupabase
 //                                ユーザーとして解決できない（トークンが不正・
 //                                期限切れ等）
-//   - forbidden               … 認証は成功したが、company_membersに所属が
-//                                無い、または本文のcompanyIdが実際の所属と
-//                                一致しない
+//   - forbidden               … 認証は成功したが、所属会社が無い、または
+//                                本文のcompanyIdが実際の所属と一致しない
 //   - invalid_json            … リクエストボディがJSONとして解析できない
 //   - validation_error        … 必須項目の不足・型/形式の不正
 //                                （validateQuickExpenseRequest.js参照）
@@ -65,8 +73,9 @@ const FORBIDDEN_MESSAGE = "この操作を行う権限がありません。";
  * @param {(authHeader: string) => Promise<object|null>} input.fetchUser
  *   Authorizationヘッダーから呼び出し元ユーザーを解決する関数
  *   （Denoでは supabase.auth.getUser() 経由。解決できない場合はnullを返す想定）。
- * @param {(user: object) => Promise<{ company_id: string, role: string }|null>} input.fetchCompanyMembership
- *   解決したユーザーのcompany_members所属行（1件、無ければnull）を取得する関数。
+ * @param {(user: object) => Promise<{ company_code: string, role: string }|null>} input.fetchCompanyMembership
+ *   解決したユーザーの所属会社（company_code。Supabase内部UUIDではない。
+ *   index.ts参照）とroleを取得する関数。未所属ならnull。
  * @param {typeof resolveQuickExpenseAuthorization} [input.resolveAuthorization]
  *   認証・所属確認のロジック本体。既定はresolveQuickExpenseAuthorization
  *   （実運用の呼び出し元・index.tsは指定不要。テストでの差し替え用）。
@@ -112,11 +121,12 @@ export async function handleQuickExpenseRequest({
     return { status: 400, body: { result: null, error: validationError } };
   }
 
-  // 認証済みユーザーが実際に所属する会社（ステップ2で取得済みのmembership）と、
-  // 本文で申告されたcompanyIdが一致するかを確認する。フロントから渡された
+  // 認証済みユーザーが実際に所属する会社（ステップ2で取得済みのmembership、
+  // company_code）と、本文で申告されたcompanyId（同じくcompany_code。
+  // ファイル冒頭コメント参照）が一致するかを確認する。フロントから渡された
   // companyIdだけを信用して処理を進めない（要件：フロントの値を認証根拠に
   // 使わない）。
-  if (authResult.membership.company_id !== validated.companyId) {
+  if (authResult.membership.company_code !== validated.companyId) {
     return { status: 403, body: errorBody("forbidden", FORBIDDEN_MESSAGE) };
   }
 

@@ -8,7 +8,7 @@ import { handleQuickExpenseRequest } from "../supabase/functions/create-concur-q
 // ため、実際のHTTPサーバー・Supabaseプロジェクト・fetchは一切使わない。
 
 const VALID_USER = { id: "user-1" };
-const VALID_MEMBERSHIP = { company_id: "company-a", role: "user" };
+const VALID_MEMBERSHIP = { company_code: "company-a", role: "user" };
 
 function buildValidBody(overrides = {}) {
   return {
@@ -304,7 +304,7 @@ describe("handleQuickExpenseRequest", () => {
 
       const { status, body } = await handleQuickExpenseRequest({
         method: "POST",
-        ...buildAuthedInput({ fetchCompanyMembership: async () => ({ company_id: "company-b", role: "user" }) }),
+        ...buildAuthedInput({ fetchCompanyMembership: async () => ({ company_code: "company-b", role: "user" }) }),
         parseBody: parseBodyFor(buildValidBody({ companyId: "company-a" })),
         createQuickExpense,
       });

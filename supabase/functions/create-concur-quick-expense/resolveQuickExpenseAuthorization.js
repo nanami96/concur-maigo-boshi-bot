@@ -15,14 +15,17 @@
 //   2. fetchUser(authHeader) が呼び出し元ユーザーを解決できない
 //      （JWTが不正・期限切れ・そもそもユーザーのセッションJWTではない
 //      新形式のpublishable/secret key自体を渡された場合等） → unauthorized
-//   3. ユーザーは解決できたが、company_membersに所属が無い → forbidden
+//   3. ユーザーは解決できたが、所属会社が無い → forbidden
 //      （ocr-receiptと同じ、コスト濫用対策の最終防御。Quick Expense作成も
 //      どこかの会社に所属していないユーザーが使う理由が無い）。
 //   4. 上記いずれもクリアした場合はauthorized。呼び出し元が確認した
-//      company_membersの1行（membership: { company_id, role }）をそのまま
-//      返す。これを使って、リクエスト本文のcompanyIdが実際の所属と一致
-//      するかを、呼び出し元（handleQuickExpenseRequest.js）が本文解析後に
-//      追加でチェックする（company_idは会社を横断して使い回されるIDのため、
+//      所属情報（membership: { company_code, role }）をそのまま返す。
+//      company_codeは company_members.company_id（Supabase内部UUID）では
+//      なく companies.company_code（スラッグ）であることに注意
+//      （index.ts・resolveMembershipFromPublicConfigRow.js参照）。
+//      これを使って、リクエスト本文のcompanyIdが実際の所属と一致するかを、
+//      呼び出し元（handleQuickExpenseRequest.js）が本文解析後に追加で
+//      チェックする（company_codeは会社を横断して使い回される識別子のため、
 //      認証済みユーザーの実際の所属と、本文中で申告されたcompanyIdが一致
 //      することを別途確認する必要がある。フロントから渡された値を認証の
 //      根拠にはしない）。
@@ -33,7 +36,7 @@
 // いるのと同じ前提）。
 //
 // roleによる絞り込み（admin限定等）はここでは行わない。Quick Expenseの
-// 作成は一般利用者（role='user'）が使う機能であり、company_membersに
+// 作成は一般利用者（role='user'）が使う機能であり、いずれかの会社に
 // 所属していること自体が唯一の権限根拠となる（admin限定にする理由が無い）。
 export async function resolveQuickExpenseAuthorization({ authHeader, fetchUser, fetchCompanyMembership }) {
   if (!authHeader) {

@@ -8,12 +8,24 @@
 //
 // 認証について：
 //   ocr-receipt/index.tsと同じ「Authorizationヘッダー確認 → auth.getUser() →
-//   company_members所属確認」の認証境界を実装している（実際の判定ロジックは
+//   所属会社確認」の認証境界を実装している（実際の判定ロジックは
 //   resolveQuickExpenseAuthorization.js、Deno固有のI/OはこのファイルのbuildAuthAdapters()
 //   が担当。ocr-receipt/index.tsのresolveAuthorization()と同じ役割分担）。
 //   さらに、認証済みユーザーが実際に所属する会社と、リクエスト本文の
 //   companyIdが一致するかもhandleQuickExpenseRequest.js側で確認する
 //   （フロントから渡された値を認証の根拠にしない）。
+//
+//   companyId比較の実装について（重要）：
+//   リクエスト本文のcompanyIdは、フロント（src/lib/concurRegistrationData.js）が
+//   一貫してcompany_code（人が識別するためのスラッグ。例："sample-company"）を
+//   指すものとして生成している。一方、company_membersテーブルが持つのは
+//   company_id（companies.idへのSupabase内部UUID）であり、company_codeでは
+//   ない。この2つを取り違えて比較すると、正規のリクエストであっても
+//   常に不一致（forbidden）になってしまう。そのため、fetchCompanyMembership()は
+//   company_membersを直接読むのではなく、既存のget_my_public_config() RPC
+//   （Phase 7、一般利用者Bot画面が既に使っている、roleを問わず所属会社の
+//   company_codeを解決するSECURITY DEFINER関数）を呼び出し、company_codeを
+//   取得する（詳細はresolveMembershipFromPublicConfigRow.js参照）。
 //
 //   このEdge Functionは現状スタブ応答のみを返し、実際のConcurへのアクセス・
 //   実データの作成を一切行わないが、認証自体は「実データを扱うようになって
@@ -26,6 +38,7 @@
 // describeAuthHeaderForLogging.js参照）。
 import { handleQuickExpenseRequest } from "./handleQuickExpenseRequest.js";
 import { describeAuthHeaderForLogging } from "./describeAuthHeaderForLogging.js";
+import { resolveMembershipFromPublicConfigRow } from "./resolveMembershipFromPublicConfigRow.js";
 
 // ブラウザから直接このEdge Functionを叩けるオリジンの許可リスト
 // （supabase/functions/ocr-receipt/index.tsと同じ考え方・同じ既定値。
@@ -98,21 +111,28 @@ async function buildAuthAdapters(authHeader, log) {
       }
       return data.user;
     },
-    fetchCompanyMembership: async (user) => {
-      // company_membersはuser_idにunique制約があるため（1ユーザー1社、
-      // supabase/schema.sql参照）、該当行は最大1件。既存の
-      // src/data/membershipRepository.jsのfetchMyRole()と同じ
-      // .maybeSingle()を使う。
-      const { data, error } = await supabase
-        .from("company_members")
-        .select("company_id, role")
-        .eq("user_id", user.id)
-        .maybeSingle();
+    // 引数のuserは使わない：get_my_public_config()はauth.uid()（＝呼び出し元の
+    // JWTから解決される、fetchUser()が返したのと同じユーザー）を内部で
+    // 参照するSECURITY DEFINER関数のため、ここで改めてuser.idを渡す必要が
+    // 無い（呼び出しインターフェースはresolveQuickExpenseAuthorization.jsとの
+    // 互換性のためそのまま残す）。
+    fetchCompanyMembership: async () => {
+      // company_membersを直接SELECTしてcompany_id（Supabase内部UUID）を
+      // 取るのではなく、get_my_public_config()（Phase 7、一般利用者Bot画面が
+      // 既に使っているSECURITY DEFINER RPC）を呼び、company_code（フロントの
+      // companyIdと同じ値空間）を取得する（理由はファイル冒頭コメント・
+      // resolveMembershipFromPublicConfigRow.js参照）。
+      const { data, error } = await supabase.rpc("get_my_public_config");
 
       if (error) {
         throw error;
       }
-      return data ?? null;
+
+      // get_my_public_config()はreturns tableのため、supabase-jsからは
+      // 常に配列で返る（未所属なら0件）。get_public_config同様の扱い
+      // （src/data/publicConfigRepository.js参照）。
+      const row = Array.isArray(data) ? data[0] : data;
+      return resolveMembershipFromPublicConfigRow(row);
     },
   };
 }
