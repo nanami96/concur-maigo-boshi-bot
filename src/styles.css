@@ -3538,6 +3538,95 @@ textarea.resultFieldInput {
   color: #1e7a34;
 }
 
+/* 招待コードの表示ボックス＋コピーボタン（InviteCodeBox.jsx）。
+   会社作成完了画面・招待コード再発行の両方で共有する。 */
+.inviteCodeWrap {
+  margin-top: 16px;
+}
+
+.inviteCodeBox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: 480px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 12px 14px 16px;
+}
+
+.inviteCodeValue {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  overflow-wrap: anywhere;
+}
+
+.inviteCodeCopyButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fafafa;
+  color: #2563eb;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.inviteCodeCopyButton:hover {
+  background: #f0f4ff;
+  border-color: #c7d2fe;
+}
+
+.inviteCodeCopyButton:active {
+  background: #e0e7ff;
+}
+
+.inviteCodeCopyIcon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.inviteCodeToast {
+  position: fixed;
+  left: 50%;
+  bottom: 32px;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #1f2c44;
+  color: #fff;
+  font-size: 14px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.25);
+}
+
+.inviteCodeToast.success .inviteCodeCopyIcon {
+  color: #4ade80;
+}
+
+.inviteCodeToast.error {
+  background: #7f1d1d;
+}
+
+.inviteCodeToast.error .inviteCodeCopyIcon {
+  color: #fecaca;
+}
+
 .authModeSwitchLink {
   display: block;
   margin: 16px auto 0;

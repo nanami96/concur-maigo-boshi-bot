@@ -9,6 +9,7 @@ import {
 } from "../data/membershipRepository";
 import { resolveMembershipErrorMessage } from "./membershipErrorMessages";
 import ConfirmDialog from "./ConfirmDialog";
+import InviteCodeBox from "./InviteCodeBox";
 
 const ROLE_LABELS = { user: "一般ユーザー", admin: "管理者" };
 
@@ -248,9 +249,7 @@ export default function UserManagementPanel({
           <p className="settingsErrorText" role="alert">
             以下のコードは今この画面でしか表示されません。必ず控えてください。
           </p>
-          <p className="authSentMessage">
-            <strong>{inviteCodeState.code}</strong>
-          </p>
+          <InviteCodeBox code={inviteCodeState.code} />
         </>
       )}
 

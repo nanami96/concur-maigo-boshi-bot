@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createPlatformCompany } from "../data/membershipRepository";
 import { resolveMembershipErrorMessage } from "./membershipErrorMessages";
+import InviteCodeBox from "./InviteCodeBox";
 
 // platform_admin専用の「＋新しい会社を作成」画面。
 //
@@ -56,9 +57,7 @@ export default function CreatePlatformCompanyScreen({ onCreated, onCancel }) {
           <br />
           コードが分からなくなった場合は、管理画面から新しい招待コードを再発行できます。
         </p>
-        <p className="authSentMessage">
-          <strong>{createdCompany.inviteCode}</strong>
-        </p>
+        <InviteCodeBox code={createdCompany.inviteCode} />
         <button
           type="button"
           className="importConfirmButton"
