@@ -324,6 +324,16 @@ export default function ExpenseTypeSettings({ editor }) {
     }
   }, [isAdding]);
 
+  // 上部リンクは押した後も消さず、常に「登録フォームへ移動する」ための入り口として
+  // 表示し続ける。フォームが既に開いている（isAddingが既にtrue）場合はstateが
+  // 変化しないため上のuseEffectが再発火せず、2回目以降のクリックでスクロールが
+  // 起きなくなる。そのため、クリック時に直接スクロールも行い、常に確実に
+  // フォームの位置まで移動できるようにする。
+  function handleJumpToAddForm() {
+    setIsAdding(true);
+    addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
   const filtered = useMemo(() => {
     return editor.expenseTypes.filter((expenseType) => {
       if (keyword && !expenseType.name.includes(keyword)) return false;
@@ -354,11 +364,9 @@ export default function ExpenseTypeSettings({ editor }) {
     <div className="settingsPanel">
       <div className="settingsPanelHeader">
         <h2>経費タイプ</h2>
-        {!isAdding && (
-          <button type="button" className="flowAddOptionButton" onClick={() => setIsAdding(true)}>
-            ＋ 経費タイプを追加
-          </button>
-        )}
+        <button type="button" className="flowAddOptionButton" onClick={handleJumpToAddForm}>
+          ＋ 経費タイプを追加
+        </button>
       </div>
 
       {isEmpty && !isAdding && <p className="flowEmptyOptionsHint">経費タイプがまだありません。</p>}
