@@ -19,10 +19,35 @@
 //   （useResolvedBotConfig.js等）が既に本番で使っている。この既存の仕組みを
 //   再利用することで、新しいSECURITY DEFINER関数・RLS変更を一切追加せずに
 //   company_codeを取得できる。
+//
+// Commit H：concurExpenseTypeMappingsもここで一緒に取り出す。
+//   get_my_public_config()が返すconfig_snapshotは、公開中のBot画面が実際に
+//   参照しているものと全く同じ値（=下書きではなく公開済みの設定）であり、
+//   config_snapshot.concur.expenseTypeMappingsはbuildConfigFromFlow.jsが
+//   常に配列として埋め込む（Concur未導入の会社・Phase 11適用前に公開された
+//   古いconfig_snapshotではキー自体が無いこともあるため、フロント側の
+//   src/lib/concurRegistrationConfig.jsのresolveConcurExpenseTypeMappings()と
+//   同じ「無ければ安全に空配列」というフォールバックをここでも行う）。
+//   下書き（draft_configs）ではなく公開済み設定を正とする理由：
+//     ・一般利用者が実際に見ているBot画面・ConcurRegistrationPanel.jsxは
+//       常に公開済み設定だけを反映しており、下書きの内容は一切見えない。
+//       送信内容の検証も、利用者が実際に見た内容と同じ基準で行うべきである。
+//     ・そもそも一般利用者（role='user'）はdraft_configsをRLS
+//       （draft_configs_select_admin）で読めないため、下書きを正にする
+//       実装は技術的にも成立しない。
+function resolveConcurExpenseTypeMappings(configSnapshot) {
+  const mappings = configSnapshot?.concur?.expenseTypeMappings;
+  return Array.isArray(mappings) ? mappings : [];
+}
+
 export function resolveMembershipFromPublicConfigRow(row) {
   if (!row || typeof row.company_code !== "string" || row.company_code.trim() === "") {
     return null;
   }
 
-  return { company_code: row.company_code, role: row.role ?? null };
+  return {
+    company_code: row.company_code,
+    role: row.role ?? null,
+    concurExpenseTypeMappings: resolveConcurExpenseTypeMappings(row.config_snapshot),
+  };
 }

@@ -8,7 +8,17 @@ import { handleQuickExpenseRequest } from "../supabase/functions/create-concur-q
 // ため、実際のHTTPサーバー・Supabaseプロジェクト・fetchは一切使わない。
 
 const VALID_USER = { id: "user-1" };
-const VALID_MEMBERSHIP = { company_code: "company-a", role: "user" };
+
+// buildValidBody()が申告するcompanyId/policyId/botExpenseTypeId/
+// concurExpenseTypeIdと完全一致する、テスト専用のダミーmapping
+// （実際のConcur Expense Type Codeではない）。
+const VALID_MAPPING = {
+  companyId: "company-a",
+  policyId: "policy-x",
+  botExpenseTypeId: "taxi",
+  concurExpenseTypeId: "CONCUR_TAXI_A_X",
+};
+const VALID_MEMBERSHIP = { company_code: "company-a", role: "user", concurExpenseTypeMappings: [VALID_MAPPING] };
 
 function buildValidBody(overrides = {}) {
   return {
@@ -376,6 +386,182 @@ describe("handleQuickExpenseRequest", () => {
 
       logSpy.mockRestore();
       errorSpy.mockRestore();
+    });
+  });
+
+  // mappingの値（Concur Expense Type Code）はすべてテスト専用のダミー値であり、
+  // 実際のConcur側のコードではない。
+  describe("Concur Expense Type Mapping検証", () => {
+    it("正常なmappingが1件一致する場合はスタブ処理が実行され200を返す", async () => {
+      const createQuickExpense = vi.fn().mockResolvedValue({
+        result: { quickExpenseId: "stub_quick_expense_id", status: "stubbed" },
+        error: null,
+      });
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput(),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(200);
+      expect(body.error).toBeNull();
+      expect(createQuickExpense).toHaveBeenCalledTimes(1);
+    });
+
+    it("concurExpenseTypeIdが一致しない場合はmapping_not_found（403）。スタブは呼ばれない", async () => {
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput(),
+        parseBody: parseBodyFor(buildValidBody({ concurExpenseTypeId: "FORGED_CODE" })),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(403);
+      expect(body.result).toBeNull();
+      expect(body.error.code).toBe("mapping_not_found");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("policyIdが所属会社のmappingと一致しない場合はmapping_not_found（403）。スタブは呼ばれない", async () => {
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput(),
+        parseBody: parseBodyFor(buildValidBody({ policyId: "does_not_exist" })),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(403);
+      expect(body.error.code).toBe("mapping_not_found");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("botExpenseTypeIdが所属会社のmappingと一致しない場合はmapping_not_found（403）。スタブは呼ばれない", async () => {
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput(),
+        parseBody: parseBodyFor(buildValidBody({ botExpenseTypeId: "does_not_exist" })),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(403);
+      expect(body.error.code).toBe("mapping_not_found");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("所属会社のmappingが0件（Concur未導入の会社）の場合はmapping_not_found（403）。スタブは呼ばれない", async () => {
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({
+          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", concurExpenseTypeMappings: [] }),
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(403);
+      expect(body.error.code).toBe("mapping_not_found");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("concurExpenseTypeMappings自体が未定義（古いconfig_snapshot等）の場合もmapping_not_found（403）。例外にならない", async () => {
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({
+          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user" }),
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(403);
+      expect(body.error.code).toBe("mapping_not_found");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("concurExpenseTypeMappingsが配列でない（型不正な設定データ）場合もmapping_not_found（403）。例外にならない", async () => {
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({
+          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", concurExpenseTypeMappings: "not-an-array" }),
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(403);
+      expect(body.error.code).toBe("mapping_not_found");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("同じcompanyId・policyId・botExpenseTypeIdのmappingが複数存在する場合はmultiple_mappings_found（403）。スタブは呼ばれない", async () => {
+      const createQuickExpense = vi.fn();
+      const duplicatedMappings = [
+        VALID_MAPPING,
+        { ...VALID_MAPPING, concurExpenseTypeId: "CONCUR_TAXI_A_X_DUPLICATE" },
+      ];
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({
+          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", concurExpenseTypeMappings: duplicatedMappings }),
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(403);
+      expect(body.error.code).toBe("multiple_mappings_found");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("他社のmappingしか無い場合はmapping_not_found（403）。他社設定の流用不可", async () => {
+      const createQuickExpense = vi.fn();
+      const otherCompanyMapping = { companyId: "company-b", policyId: "policy-x", botExpenseTypeId: "taxi", concurExpenseTypeId: "CONCUR_TAXI_A_X" };
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({
+          fetchCompanyMembership: async () => ({ company_code: "company-a", role: "user", concurExpenseTypeMappings: [otherCompanyMapping] }),
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(403);
+      expect(body.error.code).toBe("mapping_not_found");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("mapping検証エラーの本文にmapping全体やconfig_snapshotが含まれない", async () => {
+      const secretLikeCode = "SHOULD_NOT_LEAK_MAPPING_CONTENTS";
+
+      const { body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({
+          fetchCompanyMembership: async () => ({
+            company_code: "company-a",
+            role: "user",
+            concurExpenseTypeMappings: [{ ...VALID_MAPPING, concurExpenseTypeId: secretLikeCode }],
+          }),
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+      });
+
+      expect(JSON.stringify(body)).not.toContain(secretLikeCode);
     });
   });
 });

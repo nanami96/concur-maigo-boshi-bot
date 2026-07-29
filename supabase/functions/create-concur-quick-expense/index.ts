@@ -27,6 +27,13 @@
 //   company_codeを解決するSECURITY DEFINER関数）を呼び出し、company_codeを
 //   取得する（詳細はresolveMembershipFromPublicConfigRow.js参照）。
 //
+//   get_my_public_config()が返すconfig_snapshotには、同じ会社の公開済み
+//   Concur Expense Type Mapping（config_snapshot.concur.expenseTypeMappings）も
+//   含まれているため、company_codeと同時にこれも取り出し、
+//   handleQuickExpenseRequest.js側でpolicyId・botExpenseTypeId・
+//   concurExpenseTypeIdの検証（verifyConcurExpenseTypeMapping.js）に使う
+//   （フロントから送られたこれらの値もそのまま信用しない。Commit H）。
+//
 //   このEdge Functionは現状スタブ応答のみを返し、実際のConcurへのアクセス・
 //   実データの作成を一切行わないが、認証自体は「実データを扱うようになって
 //   から追加する」のではなく最初から必須にする（後回しにするとデプロイ後に

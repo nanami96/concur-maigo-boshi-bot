@@ -21,8 +21,14 @@
 //      （フロントから渡された値を認証の根拠にしない。ステップ2で取得済みの
 //      membershipをそのまま使うため、DB問い合わせは追加で発生しない）
 //      → 不一致なら forbidden（403）
-//   6. Concur側スタブ処理の呼び出し
-//   7. 成功結果を返す
+//   6. Concur Expense Type Mappingの検証（verifyConcurExpenseTypeMapping.js）
+//      … フロントから送られたpolicyId・botExpenseTypeId・concurExpenseTypeIdを
+//      そのまま信用せず、認証済みユーザーの所属会社が実際に公開している
+//      mapping（membership.concurExpenseTypeMappings、公開済みconfig_snapshot
+//      由来）と完全一致する行が1件だけ存在するかを確認する
+//      → 一致なし／複数一致は forbidden（403）
+//   7. Concur側スタブ処理の呼び出し
+//   8. 成功結果を返す
 //
 // companyIdの値空間について（重要）：
 //   membership.company_code・本文のcompanyIdは、いずれも
@@ -32,20 +38,25 @@
 //   index.ts・resolveMembershipFromPublicConfigRow.js参照。
 //
 // このEdge Functionが返しうるエラーコード：
-//   - method_not_allowed      … POST以外のメソッド
-//   - unauthorized            … Authorizationヘッダーが無い、またはSupabase
-//                                ユーザーとして解決できない（トークンが不正・
-//                                期限切れ等）
-//   - forbidden               … 認証は成功したが、所属会社が無い、または
-//                                本文のcompanyIdが実際の所属と一致しない
-//   - invalid_json            … リクエストボディがJSONとして解析できない
-//   - validation_error        … 必須項目の不足・型/形式の不正
-//                                （validateQuickExpenseRequest.js参照）
-//   - internal_error          … 上記以外の予期しない例外
-//   - concur_not_configured   … 【予約済み・現時点では未使用】実際にConcurへ
-//                                接続するようになった際、Concur側の認証情報
-//                                が利用できない場合に使うためのコード
-//                                （createQuickExpenseStub.js参照）。
+//   - method_not_allowed        … POST以外のメソッド
+//   - unauthorized              … Authorizationヘッダーが無い、または
+//                                  Supabaseユーザーとして解決できない
+//                                  （トークンが不正・期限切れ等）
+//   - forbidden                 … 認証は成功したが、所属会社が無い、または
+//                                  本文のcompanyIdが実際の所属と一致しない
+//   - invalid_json              … リクエストボディがJSONとして解析できない
+//   - validation_error          … 必須項目の不足・型/形式の不正
+//                                  （validateQuickExpenseRequest.js参照）
+//   - mapping_not_found         … policyId・botExpenseTypeId・
+//                                  concurExpenseTypeIdの組み合わせが、
+//                                  所属会社の公開済みmappingに存在しない
+//   - multiple_mappings_found   … 同じcompanyId・policyId・botExpenseTypeIdの
+//                                  mappingが複数存在する（設定データの不整合）
+//   - internal_error            … 上記以外の予期しない例外
+//   - concur_not_configured     … 【予約済み・現時点では未使用】実際にConcurへ
+//                                  接続するようになった際、Concur側の認証情報
+//                                  が利用できない場合に使うためのコード
+//                                  （createQuickExpenseStub.js参照）。
 //
 // 戻り値は { status, body } で、呼び出し元（index.ts）はこれをそのまま
 // new Response(JSON.stringify(body), { status, headers: corsHeaders }) へ
@@ -54,6 +65,7 @@
 import { validateQuickExpenseRequest } from "./validateQuickExpenseRequest.js";
 import { createQuickExpenseStub } from "./createQuickExpenseStub.js";
 import { resolveQuickExpenseAuthorization } from "./resolveQuickExpenseAuthorization.js";
+import { verifyConcurExpenseTypeMapping } from "./verifyConcurExpenseTypeMapping.js";
 
 function errorBody(code, message, details = []) {
   return { result: null, error: { code, message, details } };
@@ -73,9 +85,11 @@ const FORBIDDEN_MESSAGE = "この操作を行う権限がありません。";
  * @param {(authHeader: string) => Promise<object|null>} input.fetchUser
  *   Authorizationヘッダーから呼び出し元ユーザーを解決する関数
  *   （Denoでは supabase.auth.getUser() 経由。解決できない場合はnullを返す想定）。
- * @param {(user: object) => Promise<{ company_code: string, role: string }|null>} input.fetchCompanyMembership
+ * @param {(user: object) => Promise<{ company_code: string, role: string, concurExpenseTypeMappings: Array }|null>} input.fetchCompanyMembership
  *   解決したユーザーの所属会社（company_code。Supabase内部UUIDではない。
- *   index.ts参照）とroleを取得する関数。未所属ならnull。
+ *   index.ts参照）・role・所属会社が公開しているConcur Expense Type
+ *   Mapping（concurExpenseTypeMappings。無ければ空配列）を取得する関数。
+ *   未所属ならnull。
  * @param {typeof resolveQuickExpenseAuthorization} [input.resolveAuthorization]
  *   認証・所属確認のロジック本体。既定はresolveQuickExpenseAuthorization
  *   （実運用の呼び出し元・index.tsは指定不要。テストでの差し替え用）。
@@ -128,6 +142,24 @@ export async function handleQuickExpenseRequest({
   // 使わない）。
   if (authResult.membership.company_code !== validated.companyId) {
     return { status: 403, body: errorBody("forbidden", FORBIDDEN_MESSAGE) };
+  }
+
+  // フロントから送られたpolicyId・botExpenseTypeId・concurExpenseTypeIdを
+  // そのまま信用せず、所属会社が実際に公開しているmappingと完全一致する
+  // 行が1件だけ存在するかを確認する（要件：フロントの値を認証・実行の
+  // 根拠にしない）。エラー本文にはmapping全体やconfig_snapshotを一切
+  // 含めない（固定のメッセージ・reason区別しないcodeのみ）。
+  const mappingCheck = verifyConcurExpenseTypeMapping({
+    mappings: authResult.membership.concurExpenseTypeMappings,
+    companyId: validated.companyId,
+    policyId: validated.policyId,
+    botExpenseTypeId: validated.botExpenseTypeId,
+    concurExpenseTypeId: validated.concurExpenseTypeId,
+  });
+
+  if (!mappingCheck.valid) {
+    const code = mappingCheck.reason === "conflict" ? "multiple_mappings_found" : "mapping_not_found";
+    return { status: 403, body: errorBody(code, FORBIDDEN_MESSAGE) };
   }
 
   let stubResult;
