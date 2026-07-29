@@ -2373,6 +2373,32 @@ button {
   border-top: 1px solid rgba(22, 32, 51, 0.1);
 }
 
+.userManagementConcurCheckSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(22, 32, 51, 0.1);
+}
+
+.concurOAuthCheckResultList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.concurOAuthCheckResultList li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
 .flowCreateFirstQuestionButton,
 .resultAddCandidateButton,
 .resultCandidateRemoveButton,
