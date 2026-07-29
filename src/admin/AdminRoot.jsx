@@ -34,6 +34,7 @@ import ExpenseTypeSettings from "./ExpenseTypeSettings";
 import InitialSetupScreen from "./InitialSetupScreen";
 import ExcelImportSection from "./ExcelImportSection";
 import UserManagementPanel from "./UserManagementPanel";
+import ExternalServiceSettings from "./ExternalServiceSettings";
 import CreatePlatformCompanyScreen from "./CreatePlatformCompanyScreen";
 
 const NEW_COMPANY_ID = "__new__";
@@ -278,6 +279,8 @@ function AdminWorkspace({
             {settingsTab === "policies" && <PolicySettings editor={editor} />}
             {settingsTab === "expenseTypes" && <ExpenseTypeSettings editor={editor} />}
           </div>
+
+          <ExternalServiceSettings isPlatformAdmin={Boolean(isPlatformAdmin)} />
         </>
       )}
 

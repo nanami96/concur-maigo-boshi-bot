@@ -2373,13 +2373,33 @@ button {
   border-top: 1px solid rgba(22, 32, 51, 0.1);
 }
 
-.userManagementConcurCheckSection {
+/* 外部サービス連携セクション（src/admin/ExternalServiceSettings.jsx）。
+   既存の.settingsCard（枠線・背景・padding）と併用し、カード内の要素間だけに
+   gapを設ける（.settingsCard自体は他の設定カード（PolicySettings等）でも
+   共有しているため、そちらのレイアウトに影響しないよう別クラスで追加する）。 */
+.settingsConcurConnectionSection {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(22, 32, 51, 0.1);
+  gap: 10px;
+}
+
+/* 直前の.adminTabPanel（角丸・白背景のカード）とこのセクションの間に余白を
+   設ける。.adminTabs・.adminSectionTabsと同じ20pxを使い、ページ内の
+   トップレベルブロック間の間隔を既存の他箇所と揃える。 */
+.externalServiceSettingsPanel {
+  margin-top: 20px;
+}
+
+/* h2/h3の既定の上下marginがflexのgapに上乗せされ、見出し直後の余白が
+   意図より広くなってしまうため、この見出しの直後だけmarginを0にし、
+   gapの分だけの間隔にする（他の.settingsPanel利用箇所には影響させない）。 */
+.settingsExternalServicesHeading {
+  margin: 0;
+}
+
+.settingsConcurConnectionSection h3,
+.settingsConcurConnectionSection p {
+  margin: 0;
 }
 
 .concurOAuthCheckResultList {
