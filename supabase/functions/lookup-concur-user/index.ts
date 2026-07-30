@@ -215,14 +215,8 @@ async function parseRequestBody(req) {
 Deno.serve(async (req) => {
   const requestId = crypto.randomUUID().slice(0, 8);
   const startedAt = Date.now();
-  // detailsは【一時的なデバッグログ・要削除】concur_identity_rejected調査用の
-  // 構造化オブジェクト（buildSafeIdentityRejectedDebugLog.js参照。status・
-  // サニタイズ済みのerror/error_description等）だけを想定した任意の第2引数。
-  // 文字列連結で埋め込まず、JSON.stringifyでそのまま構造化して出力する
-  // （サニタイズ済みの値のみがここに渡ってくる前提）。
-  const log = (stage, details) => {
-    const suffix = details === undefined ? "" : ` ${JSON.stringify(details)}`;
-    console.log(`[lookup-concur-user:${requestId}] ${stage} (+${Date.now() - startedAt}ms)${suffix}`);
+  const log = (stage) => {
+    console.log(`[lookup-concur-user:${requestId}] ${stage} (+${Date.now() - startedAt}ms)`);
   };
 
   const origin = req.headers.get("origin") ?? "";
@@ -270,14 +264,6 @@ Deno.serve(async (req) => {
     companyId: null, // 現時点では単一の既定接続のみ（複数会社対応は将来の拡張）。
     getRefreshTokenForEdge: vaultAdapters.getRefreshTokenForEdge,
     completeOAuthRefresh: vaultAdapters.completeOAuthRefresh,
-    // 【一時的なデバッグログ・要削除】concur_identity_rejected（Identity APIが
-    // 401/403を返した場合）の原因調査のため、既存のlog()をそのまま渡す。
-    // lookupConcurUser.js側でstatus・サニタイズ済みのerror/error_description等、
-    // 安全な情報だけを構造化オブジェクトとして記録する（生レスポンス本文・
-    // Access Token・Refresh Token・Client Secret・userName・userID・
-    // メールアドレス等はここでは一切渡さない）。
-    // デバッグが終わったら、このlogの受け渡しごと削除すること。
-    log,
   });
 
   log(`終了 (status=${status}, errorCode=${responseBody?.error?.code ?? "none"})`);

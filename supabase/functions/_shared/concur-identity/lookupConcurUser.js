@@ -25,7 +25,6 @@ import { fetchConcurIdentityLookupResponse } from "./fetchConcurIdentityLookupRe
 import { classifyConcurIdentityHttpStatus } from "./classifyConcurIdentityHttpStatus.js";
 import { validateConcurIdentityLookupResponse } from "./validateConcurIdentityLookupResponse.js";
 import { buildConcurIdentityLookupError } from "./classifyConcurIdentityLookupError.js";
-import { buildSafeIdentityRejectedDebugLog } from "./buildSafeIdentityRejectedDebugLog.js";
 
 function failure(code) {
   return { ok: false, error: buildConcurIdentityLookupError(code) };
@@ -35,33 +34,6 @@ function isNonEmptyString(value) {
   return typeof value === "string" && value.trim() !== "";
 }
 
-// 【一時的なデバッグログ・要削除】concur_identity_rejected（Identity APIが
-// 401/403を返した場合）の原因調査のためだけに、buildSafeIdentityRejectedDebugLog.js
-// で組み立てた「どの公式エラースキーマ（scim/concur/oauth）に近いか・各スキーマの
-// 短いコード値（サニタイズ済み）・detail/message/messagesの有無（真偽値のみ）」
-// を構造化オブジェクトとしてログへ渡す。デバッグが終わったら、この関数呼び出し
-// 箇所ごと削除すること（下記lookupConcurUser()内の呼び出し箇所、およびこの
-// 関数自体）。
-//
-// 【安全性について】ここで渡すのはstatus・bodyTextだけであり、こちらが送信した
-// Access Token・Refresh Token・Client Secret・Authorizationヘッダーの値は
-// 引数として一切渡していない・参照していない。bodyText自体（レスポンス本文の
-// 生の値）はログへは出さず、buildSafeIdentityRejectedDebugLog.js内部でJSON解析・
-// 各スキーマのフィールド抽出・サニタイズにのみ使い、抽出後の安全な値
-// （短いコード・真偽値）だけをログへ渡す。detail/message/messagesの本文
-// そのものは一切ログへ渡さない。
-function logRejectedIdentityLookupForDebug(log, status, bodyText, headers) {
-  if (typeof log !== "function") {
-    return;
-  }
-  try {
-    const safeDetails = buildSafeIdentityRejectedDebugLog({ status, bodyText, headers });
-    log("[DEBUG][concur_identity_rejected 一時デバッグ・要削除]", safeDetails);
-  } catch {
-    // ログ出力自体の失敗は本処理へ影響させない。
-  }
-}
-
 /**
  * @param {object} input
  * @param {string} input.geolocation OAuth token応答のgeolocation値（Identity APIのベースURL）。
@@ -69,17 +41,12 @@ function logRejectedIdentityLookupForDebug(log, status, bodyText, headers) {
  * @param {string} input.userName 検索対象のConcurログインID（呼び出し元で検証済みであること）。
  * @param {typeof fetch} [input.fetchImpl] テスト用の差し替え。既定はグローバルfetch。
  * @param {number} [input.timeoutMs] token endpointへのfetchのタイムアウト（ミリ秒）。
- * @param {(message: string, details?: object) => void} [input.log] 【一時的なデバッグログ・要削除】
- *   concur_identity_rejected発生時に、安全に抽出・サニタイズ済みの情報
- *   （status・errorSchema・scimType・apiCode等。
- *   buildSafeIdentityRejectedDebugLog.js参照）だけを構造化オブジェクトとして
- *   記録するために使う。指定しない場合は何もログ出力しない。
  * @returns {Promise<
  *   | { ok: true, userId: string }
  *   | { ok: false, error: { code: string, message: string } }
  * >}
  */
-export async function lookupConcurUser({ geolocation, accessToken, userName, fetchImpl, timeoutMs, log }) {
+export async function lookupConcurUser({ geolocation, accessToken, userName, fetchImpl, timeoutMs }) {
   if (!isNonEmptyString(geolocation)) {
     return failure("concur_identity_geolocation_missing");
   }
@@ -102,20 +69,6 @@ export async function lookupConcurUser({ geolocation, accessToken, userName, fet
 
   const httpErrorCode = classifyConcurIdentityHttpStatus(fetchResult.response.status);
   if (httpErrorCode) {
-    // 【一時的なデバッグログ・要削除】concur_identity_rejected（401/403）の
-    // 場合だけ、原因調査のため許可リスト済みの安全な情報だけを記録する。
-    // レスポンス本文自体は下のbuildSafeIdentityRejectedDebugLog()内でJSON解析・
-    // サニタイズにのみ使い、ログへは出さない。
-    // Access Token・Refresh Token・Client Secret等はここで一切参照しない。
-    if (httpErrorCode === "concur_identity_rejected") {
-      const responseHeaders = fetchResult.response.headers;
-      try {
-        const debugBodyText = await fetchResult.response.text();
-        logRejectedIdentityLookupForDebug(log, fetchResult.response.status, debugBodyText, responseHeaders);
-      } catch {
-        logRejectedIdentityLookupForDebug(log, fetchResult.response.status, undefined, responseHeaders);
-      }
-    }
     return failure(httpErrorCode);
   }
 

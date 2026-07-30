@@ -16,7 +16,6 @@ describe("validateConcurTokenResponse（正常系）", () => {
       expiresIn: null,
       scope: null,
       geolocation: null,
-      idToken: null,
     });
   });
 
@@ -38,7 +37,6 @@ describe("validateConcurTokenResponse（正常系）", () => {
       expiresIn: 3600,
       scope: "dummy.scope",
       geolocation: "https://example-dummy.concursolutions.test",
-      idToken: null,
     });
   });
 
@@ -61,55 +59,6 @@ describe("validateConcurTokenResponse（正常系）", () => {
 
     expect(result.ok).toBe(true);
     expect(result.tokens.scope).toBeNull();
-  });
-});
-
-// 【一時的なデバッグログ・要削除】id_token（OIDCのJWT）の検証テスト。
-// concur_principal_type_diagnostic（401原因切り分け用の一時診断）でだけ
-// 使う想定で、access_token等の既存検証には影響しない。
-describe("validateConcurTokenResponse（id_token）", () => {
-  it("id_tokenがある場合、tokens.idTokenへそのまま保持する", () => {
-    const result = validateConcurTokenResponse({
-      access_token: "dummy-access-token",
-      id_token: "dummy.jwt.token",
-    });
-
-    expect(result.ok).toBe(true);
-    expect(result.tokens.idToken).toBe("dummy.jwt.token");
-  });
-
-  it("id_tokenが無い場合はidToken:null（既存の検証は壊れない）", () => {
-    const result = validateConcurTokenResponse({ access_token: "dummy-access-token" });
-
-    expect(result.ok).toBe(true);
-    expect(result.tokens.idToken).toBeNull();
-  });
-
-  it("id_tokenが空文字・空白のみの場合はidToken:null（応答全体は拒否しない）", () => {
-    expect(validateConcurTokenResponse({ access_token: "dummy-access-token", id_token: "" }).tokens.idToken).toBeNull();
-    expect(validateConcurTokenResponse({ access_token: "dummy-access-token", id_token: "   " }).tokens.idToken).toBeNull();
-  });
-
-  it("id_tokenが文字列以外の型の場合はok:false（他の任意項目と同じ厳格さ）", () => {
-    expect(validateConcurTokenResponse({ access_token: "dummy-access-token", id_token: 123 }).ok).toBe(false);
-    expect(validateConcurTokenResponse({ access_token: "dummy-access-token", id_token: {} }).ok).toBe(false);
-    expect(validateConcurTokenResponse({ access_token: "dummy-access-token", id_token: [] }).ok).toBe(false);
-  });
-
-  it("id_tokenの有無にかかわらず、access_token等の既存検証結果は変わらない", () => {
-    const withoutIdToken = validateConcurTokenResponse({ access_token: "dummy-access-token", scope: "dummy.scope" });
-    const withIdToken = validateConcurTokenResponse({ access_token: "dummy-access-token", scope: "dummy.scope", id_token: "dummy.jwt.token" });
-
-    expect(withoutIdToken.tokens.accessToken).toBe(withIdToken.tokens.accessToken);
-    expect(withoutIdToken.tokens.scope).toBe(withIdToken.tokens.scope);
-  });
-
-  it("id_tokenはログ・エラーへ一切含まれない（この関数の戻り値の範囲では、指定した名前のキー以外に漏れない）", () => {
-    const result = validateConcurTokenResponse({ access_token: "dummy-access-token", id_token: "DUMMY_ID_TOKEN_SHOULD_ONLY_BE_IN_IDTOKEN_FIELD" });
-
-    expect(Object.keys(result.tokens).sort()).toEqual(
-      ["accessToken", "refreshToken", "tokenType", "expiresIn", "scope", "geolocation", "idToken"].sort(),
-    );
   });
 });
 

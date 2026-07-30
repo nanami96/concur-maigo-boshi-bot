@@ -80,56 +80,9 @@ import { validateConcurIdentityLookupRequest } from "../_shared/concur-identity/
 import { buildConcurIdentityLookupError } from "../_shared/concur-identity/classifyConcurIdentityLookupError.js";
 import { lookupConcurUser } from "../_shared/concur-identity/lookupConcurUser.js";
 import { refreshConcurAccessToken } from "../_shared/concur-oauth/refreshConcurAccessToken.js";
-import { buildSafeConcurOAuthScopeDiagnosticLog } from "../_shared/concur-identity/buildSafeConcurOAuthScopeDiagnosticLog.js";
-import { buildSafeConcurPrincipalTypeDiagnosticLog } from "../_shared/concur-identity/buildSafeConcurPrincipalTypeDiagnosticLog.js";
 
 function respondWithLocalCode(code) {
   return buildLookupConcurUserErrorResponse(buildLookupConcurUserError(code));
-}
-
-// 【一時的なデバッグログ・要削除】concur_identity_rejected（401）の原因切り分けの
-// ため、実際に付与されたscopeにidentity.user.ids.readが含まれるかどうかの
-// 真偽値だけを記録する。scopeの生値・件数・他のscope名、Access Token・
-// Refresh Token・Client Secret・userName・userIDはここでは一切参照しない
-// （buildSafeConcurOAuthScopeDiagnosticLog.js参照）。このハンドラ自体が
-// platform_admin専用（resolveLookupConcurUserAuthorization.js）のため、
-// ここに到達する時点で「platform_adminによるIdentity検索」であることが
-// 保証されている。デバッグが終わったら、この関数呼び出し箇所ごと削除すること。
-function logConcurOAuthScopeDiagnosticForDebug(log, scope) {
-  if (typeof log !== "function") {
-    return;
-  }
-  try {
-    log(
-      "[DEBUG][concur_oauth_scope_diagnostic 一時デバッグ・要削除]",
-      buildSafeConcurOAuthScopeDiagnosticLog({ scope }),
-    );
-  } catch {
-    // ログ出力自体の失敗は本処理へ影響させない。
-  }
-}
-
-// 【一時的なデバッグログ・要削除】concur_identity_rejected（401）の原因切り分けの
-// ため、OAuth Tokenレスポンスのid_token（OIDCのJWT）からconcur.typeクレームの
-// 有無・安全化した値だけを記録する。id_token全体・Access Token・Refresh
-// Token・Client Secretはここでは一切参照しない
-// （buildSafeConcurPrincipalTypeDiagnosticLog.js参照）。この診断結果は
-// あくまで参考情報であり、署名検証済みの認証根拠として扱ってはならず、
-// Identity API呼び出し・認証判定の分岐には一切使用しない
-// （id_tokenが無い場合も通常どおりIdentity APIを呼ぶ）。
-// デバッグが終わったら、この関数呼び出し箇所ごと削除すること。
-function logConcurPrincipalTypeDiagnosticForDebug(log, idToken) {
-  if (typeof log !== "function") {
-    return;
-  }
-  try {
-    log(
-      "[DEBUG][concur_principal_type_diagnostic 一時デバッグ・要削除]",
-      buildSafeConcurPrincipalTypeDiagnosticLog({ idToken }),
-    );
-  } catch {
-    // ログ出力自体の失敗は本処理へ影響させない。
-  }
 }
 
 // OAuth失敗時・予期しない例外時にリースを解放するためのベストエフォート呼び出し。
@@ -161,15 +114,6 @@ async function safeCompleteFailure(completeOAuthRefresh, connectionId, leaseId, 
  * @param {typeof refreshConcurAccessToken} [input.refreshAccessToken]
  * @param {typeof lookupConcurUser} [input.lookupUser]
  * @param {typeof fetch} [input.fetchImpl] テスト用の差し替え（refreshAccessToken・lookupUserへ素通しする）。
- * @param {(message: string, details?: object) => void} [input.log] 【一時的なデバッグログ・要削除】
- *   concur_identity_rejected発生時の調査用。lookupUser()へそのまま渡すだけで、
- *   この関数自身はログ出力しない（detailsは許可リスト済みの安全な構造化情報のみ）。
- *   加えて、この関数自身がOAuth Tokenのscope診断（concur_oauth_scope_diagnostic。
- *   identity.user.ids.readの有無の真偽値のみ）と、principal種別診断
- *   （concur_principal_type_diagnostic。id_tokenのconcur.typeクレームの有無・
- *   安全化した値のみ。署名検証済みの認証根拠としては扱わない）を、
- *   それぞれ1回だけ記録する（logConcurOAuthScopeDiagnosticForDebug・
- *   logConcurPrincipalTypeDiagnosticForDebug参照）。
  * @returns {Promise<{ status: number, body: { result: object|null, error: object|null } }>}
  */
 export async function handleLookupConcurUserRequest({
@@ -186,7 +130,6 @@ export async function handleLookupConcurUserRequest({
   refreshAccessToken = refreshConcurAccessToken,
   lookupUser = lookupConcurUser,
   fetchImpl,
-  log,
 }) {
   if (method !== "POST") {
     return { status: 405, body: { result: null, error: { code: "method_not_allowed", message: "許可されていないメソッドです。" } } };
@@ -263,17 +206,11 @@ export async function handleLookupConcurUserRequest({
   }
 
   // ここまでで「Refresh Tokenの保存成功」が確定した場合にのみ、Identity APIへ進む。
-  const { accessToken, geolocation, scope, idToken } = oauthResult.tokens;
-
-  logConcurOAuthScopeDiagnosticForDebug(log, scope);
-  logConcurPrincipalTypeDiagnosticForDebug(log, idToken);
+  const { accessToken, geolocation } = oauthResult.tokens;
 
   let lookupResult;
   try {
-    // logは【一時的なデバッグログ・要削除】concur_identity_rejected発生時の
-    // 調査用にlookupUser()内部だけで使われる（ここではAccess Token等を
-    // 一切渡していない）。
-    lookupResult = await lookupUser({ geolocation, accessToken, userName, fetchImpl, log });
+    lookupResult = await lookupUser({ geolocation, accessToken, userName, fetchImpl });
   } catch {
     return respondWithLocalCode("internal_error");
   }
