@@ -18,6 +18,13 @@
 //     具体的な値までは明記されていない。本文がJSONであるため、この実装では
 //     application/jsonを明示する（Concur固有の要求ではなく、JSON本文を
 //     送る際の標準的なHTTP実装判断）。
+//   - concur-correlationid（任意ヘッダー）: "is a Concur specific custom
+//     header used for technical support in the form of a RFC 4122 A
+//     Universally Unique IDentifier (UUID) URN Namespace"。"Required"の
+//     指定は無いが、技術サポート照会用に毎回付与する（呼び出し元が渡さない
+//     場合はgenerateConcurCorrelationId.jsでリクエストごとに新しいUUIDを
+//     生成する）。userID・経費内容・Access Token等は一切含めない、
+//     単なるランダムなUUIDであり、Authorization等の機密情報と結合しない。
 //   - ベースURL（geolocation）: OAuth token応答のgeolocation値をそのまま
 //     使う（他のConcur API呼び出し（Identity等）と同じ方針。固定のURLを
 //     決め打ちしない）。
@@ -25,6 +32,8 @@
 // userID・contextTypeはパスセグメントへ直接埋め込むため、念のため
 // encodeURIComponentでエスケープする（公式ドキュメントが要求している
 // わけではないが、パス injectionを防ぐ一般的な実装上の配慮）。
+import { generateConcurCorrelationId } from "./generateConcurCorrelationId.js";
+
 function stripTrailingSlash(value) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
@@ -36,9 +45,17 @@ function stripTrailingSlash(value) {
  * @param {string} input.userId 呼び出し元が解決済みのConcur userID（このモジュールは検証・取得を行わない）。
  * @param {string} input.contextType validateConcurQuickExpenseRequest.jsが返す値（現時点で唯一"TRAVELER"）。
  * @param {object} input.quickExpenseBody validateConcurQuickExpenseRequest.jsが返す、公式Request Body形式のオブジェクト。
+ * @param {string} [input.correlationId] concur-correlationidヘッダーの値。省略時はリクエストごとに新しいUUIDを生成する。
  * @returns {{ url: string, method: "POST", headers: Record<string,string>, body: string }}
  */
-export function buildConcurQuickExpenseRequest({ geolocation, accessToken, userId, contextType, quickExpenseBody }) {
+export function buildConcurQuickExpenseRequest({
+  geolocation,
+  accessToken,
+  userId,
+  contextType,
+  quickExpenseBody,
+  correlationId = generateConcurCorrelationId(),
+}) {
   const encodedUserId = encodeURIComponent(userId);
   const encodedContextType = encodeURIComponent(contextType);
   const url = `${stripTrailingSlash(geolocation)}/quickexpense/v4/users/${encodedUserId}/context/${encodedContextType}/quickexpenses`;
@@ -50,6 +67,7 @@ export function buildConcurQuickExpenseRequest({ geolocation, accessToken, userI
       "Content-Type": "application/json",
       Accept: "application/json",
       Authorization: `Bearer ${accessToken}`,
+      "concur-correlationid": correlationId,
     },
     body: JSON.stringify(quickExpenseBody),
   };

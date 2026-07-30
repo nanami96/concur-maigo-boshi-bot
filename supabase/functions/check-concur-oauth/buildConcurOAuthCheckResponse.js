@@ -59,10 +59,26 @@ export function classifyConcurOAuthCheckHttpStatus(code) {
 }
 
 /**
- * @param {{ hasGeolocation?: boolean, expiresInPresent?: boolean, rotated?: boolean }} input
+ * @param {{
+ *   hasGeolocation?: boolean,
+ *   expiresInPresent?: boolean,
+ *   rotated?: boolean,
+ *   scopePresent?: boolean,
+ *   hasQuickExpenseWriteScope?: boolean,
+ *   hasUserReadScope?: boolean,
+ *   hasIdentityUserIdsReadScope?: boolean,
+ * }} input
  * @returns {{ status: number, body: { result: object, error: null } }}
  */
-export function buildConcurOAuthCheckSuccessResponse({ hasGeolocation, expiresInPresent, rotated }) {
+export function buildConcurOAuthCheckSuccessResponse({
+  hasGeolocation,
+  expiresInPresent,
+  rotated,
+  scopePresent,
+  hasQuickExpenseWriteScope,
+  hasUserReadScope,
+  hasIdentityUserIdsReadScope,
+}) {
   return {
     status: 200,
     body: {
@@ -71,6 +87,10 @@ export function buildConcurOAuthCheckSuccessResponse({ hasGeolocation, expiresIn
         hasGeolocation: Boolean(hasGeolocation),
         expiresInPresent: Boolean(expiresInPresent),
         refreshTokenRotated: Boolean(rotated),
+        scopePresent: Boolean(scopePresent),
+        hasQuickExpenseWriteScope: Boolean(hasQuickExpenseWriteScope),
+        hasUserReadScope: Boolean(hasUserReadScope),
+        hasIdentityUserIdsReadScope: Boolean(hasIdentityUserIdsReadScope),
       },
       error: null,
     },

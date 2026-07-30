@@ -7,16 +7,29 @@ import {
 } from "../supabase/functions/check-concur-oauth/buildConcurOAuthCheckResponse.js";
 
 describe("buildConcurOAuthCheckSuccessResponse", () => {
-  it("connected:true・hasGeolocation・expiresInPresent・refreshTokenRotatedを返す（200）", () => {
+  it("connected:true・hasGeolocation・expiresInPresent・refreshTokenRotated・scope系真偽値を返す（200）", () => {
     const response = buildConcurOAuthCheckSuccessResponse({
       hasGeolocation: true,
       expiresInPresent: true,
       rotated: false,
+      scopePresent: true,
+      hasQuickExpenseWriteScope: true,
+      hasUserReadScope: true,
+      hasIdentityUserIdsReadScope: true,
     });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
-      result: { connected: true, hasGeolocation: true, expiresInPresent: true, refreshTokenRotated: false },
+      result: {
+        connected: true,
+        hasGeolocation: true,
+        expiresInPresent: true,
+        refreshTokenRotated: false,
+        scopePresent: true,
+        hasQuickExpenseWriteScope: true,
+        hasUserReadScope: true,
+        hasIdentityUserIdsReadScope: true,
+      },
       error: null,
     });
   });
@@ -39,21 +52,32 @@ describe("buildConcurOAuthCheckSuccessResponse", () => {
       hasGeolocation: false,
       expiresInPresent: false,
       refreshTokenRotated: false,
+      scopePresent: false,
+      hasQuickExpenseWriteScope: false,
+      hasUserReadScope: false,
+      hasIdentityUserIdsReadScope: false,
     });
   });
 
-  it("戻り値に実際のトークン値・geolocationの実URLを一切含めない", () => {
-    // このビルダーはtokens自体を受け取らない設計のため、呼び出し元が
-    // 真偽値だけを渡す限り、戻り値にトークン値が混入する余地が無いことを
-    // 明示的に確認する。
+  it("戻り値に実際のトークン値・geolocationの実URL・scope文字列を一切含めない", () => {
+    // このビルダーはtokens・scope文字列自体を受け取らない設計のため、
+    // 呼び出し元が真偽値だけを渡す限り、戻り値にトークン値・scope生値が
+    // 混入する余地が無いことを明示的に確認する。
     const response = buildConcurOAuthCheckSuccessResponse({
       hasGeolocation: true,
       expiresInPresent: true,
       rotated: true,
+      scopePresent: true,
+      hasQuickExpenseWriteScope: true,
+      hasUserReadScope: true,
+      hasIdentityUserIdsReadScope: true,
     });
 
     const serialized = JSON.stringify(response);
     expect(serialized).not.toMatch(/access_token|refresh_token|geolocation.*:.*http/i);
+    expect(serialized).not.toContain("quickexpense.writeonly");
+    expect(serialized).not.toContain("user.read");
+    expect(serialized).not.toContain("identity.user.ids.read");
   });
 });
 

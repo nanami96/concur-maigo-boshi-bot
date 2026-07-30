@@ -35,6 +35,50 @@ describe("createConcurQuickExpense（成功系）", () => {
   });
 });
 
+describe("createConcurQuickExpense（concur-correlationidヘッダー）", () => {
+  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  it("correlationId未指定の場合、実際のfetch呼び出しヘッダーへ自動生成したUUIDが設定される", async () => {
+    let capturedInit;
+    const fetchImpl = async (_url, init) => {
+      capturedInit = init;
+      return { status: 201, json: async () => ({ quickExpenseIdUri: DUMMY_QUICK_EXPENSE_ID_URI }) };
+    };
+
+    await createConcurQuickExpense(buildValidInput({ fetchImpl }));
+
+    expect(capturedInit.headers["concur-correlationid"]).toMatch(UUID_PATTERN);
+  });
+
+  it("correlationIdを明示的に指定した場合、そのままfetch呼び出しヘッダーへ渡される", async () => {
+    let capturedInit;
+    const dummyCorrelationId = "11111111-2222-3333-4444-555555555555";
+    const fetchImpl = async (_url, init) => {
+      capturedInit = init;
+      return { status: 201, json: async () => ({ quickExpenseIdUri: DUMMY_QUICK_EXPENSE_ID_URI }) };
+    };
+
+    await createConcurQuickExpense(buildValidInput({ fetchImpl, correlationId: dummyCorrelationId }));
+
+    expect(capturedInit.headers["concur-correlationid"]).toBe(dummyCorrelationId);
+  });
+
+  it("concur-correlationidの値にuserID・Access Token・経費内容が一切含まれない", async () => {
+    let capturedInit;
+    const fetchImpl = async (_url, init) => {
+      capturedInit = init;
+      return { status: 201, json: async () => ({ quickExpenseIdUri: DUMMY_QUICK_EXPENSE_ID_URI }) };
+    };
+
+    await createConcurQuickExpense(buildValidInput({ fetchImpl, vendorName: "Should Not Leak Vendor" }));
+
+    const correlationId = capturedInit.headers["concur-correlationid"];
+    expect(correlationId).not.toContain(DUMMY_ACCESS_TOKEN);
+    expect(correlationId).not.toContain(DUMMY_USER_ID);
+    expect(correlationId).not.toContain("Should Not Leak Vendor");
+  });
+});
+
 describe("createConcurQuickExpense（入力検証・userId必須の確認）", () => {
   it("userIdが無い場合、Identity APIやfetchを一切呼ばずconcur_quick_expense_invalid_requestを返す", async () => {
     let fetchCalled = false;

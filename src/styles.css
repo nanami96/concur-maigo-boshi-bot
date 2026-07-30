@@ -3429,6 +3429,12 @@ textarea.resultFieldInput {
   margin: 0;
 }
 
+.settingsWarningText {
+  color: #8a5a00;
+  font-size: 0.85rem;
+  margin: 4px 0 0;
+}
+
 .settingsNextStepHint {
   display: flex;
   align-items: center;

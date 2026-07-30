@@ -7,9 +7,11 @@ import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@s
 // 形・同じセッション確認パターンを踏襲する。
 //
 // 【重要・表示可能な情報の範囲】check-concur-oauthは疎通確認の結果として
-// { connected, hasGeolocation, expiresInPresent, refreshTokenRotated } という
-// 真偽値だけを返す設計で、Access Token・Refresh Token本体・Secrets・OAuthサーバーの
-// 生レスポンスは一切含まれない（supabase/functions/check-concur-oauth/
+// { connected, hasGeolocation, expiresInPresent, refreshTokenRotated,
+// scopePresent, hasQuickExpenseWriteScope, hasUserReadScope,
+// hasIdentityUserIdsReadScope } という真偽値だけを返す設計で、Access Token・
+// Refresh Token本体・Secrets・OAuthサーバーの生レスポンス・scopeの生値・
+// 他のscope名は一切含まれない（supabase/functions/check-concur-oauth/
 // buildConcurOAuthCheckResponse.js参照）。呼び出し元（UserManagementPanel.jsx）は
 // エラー時に固定エラーコードだけを表示しレスポンス本文は一切表示しない方針のため、
 // この関数が返すerrorは{ type }（固定コードのみ）とし、message等は保持しない
@@ -98,7 +100,17 @@ async function ensureValidSession() {
  * （Edge Function側もbodyを一切読み取らない設計。index.ts冒頭コメント参照）。
  *
  * @returns {Promise<{
- *   result: { connected: boolean, hasGeolocation?: boolean, expiresInPresent?: boolean, refreshTokenRotated?: boolean, status?: string } | null,
+ *   result: {
+ *     connected: boolean,
+ *     hasGeolocation?: boolean,
+ *     expiresInPresent?: boolean,
+ *     refreshTokenRotated?: boolean,
+ *     scopePresent?: boolean,
+ *     hasQuickExpenseWriteScope?: boolean,
+ *     hasUserReadScope?: boolean,
+ *     hasIdentityUserIdsReadScope?: boolean,
+ *     status?: string,
+ *   } | null,
  *   error: { type: string } | null
  * }>}
  */

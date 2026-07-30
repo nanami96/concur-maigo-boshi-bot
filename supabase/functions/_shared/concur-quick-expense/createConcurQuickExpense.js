@@ -58,12 +58,13 @@ function isNonEmptyString(value) {
  * @param {object|null} [input.location]
  * @param {typeof fetch} [input.fetchImpl] テスト用の差し替え。既定はグローバルfetch。
  * @param {number} [input.timeoutMs] fetchのタイムアウト（ミリ秒）。
+ * @param {string} [input.correlationId] concur-correlationidヘッダーの値。省略時はリクエストごとに新しいUUIDを生成する（buildConcurQuickExpenseRequest.js参照）。
  * @returns {Promise<
  *   | { ok: true, quickExpenseIdUri: string }
  *   | { ok: false, error: { code: string, message: string } }
  * >}
  */
-export async function createConcurQuickExpense({ geolocation, accessToken, fetchImpl, timeoutMs, ...quickExpenseInput }) {
+export async function createConcurQuickExpense({ geolocation, accessToken, fetchImpl, timeoutMs, correlationId, ...quickExpenseInput }) {
   const inputValidation = validateConcurQuickExpenseRequest(quickExpenseInput);
   if (!inputValidation.ok) {
     return failure("concur_quick_expense_invalid_request");
@@ -74,7 +75,14 @@ export async function createConcurQuickExpense({ geolocation, accessToken, fetch
     return failure("concur_quick_expense_geolocation_missing");
   }
 
-  const request = buildConcurQuickExpenseRequest({ geolocation, accessToken, userId, contextType, quickExpenseBody });
+  const request = buildConcurQuickExpenseRequest({
+    geolocation,
+    accessToken,
+    userId,
+    contextType,
+    quickExpenseBody,
+    ...(correlationId ? { correlationId } : {}),
+  });
 
   const fetchResult = await fetchConcurQuickExpenseResponse({
     request,

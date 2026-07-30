@@ -28,6 +28,11 @@
 //        concur_oauth_completion_failedを返す
 //      - 例外が発生すれば（Vault更新自体が失敗）concur_oauth_storage_failed
 //        を返す
+//   8. 保存成功後、evaluateConcurRequiredScopes.jsでAccess Tokenのscopeに
+//      quickexpense.writeonly／user.read／identity.user.ids.readが実際に
+//      含まれているかを真偽値だけで判定し、成功レスポンスへ含める
+//      （Quick Expense API・Identity APIへの実通信前チェック。scope全文・
+//      他のスコープ名は一切含めない）。
 //
 // request bodyは一切読み取らない・使わない（認証情報・token URL・Refresh
 // Tokenは全てSecrets/Vault由来であり、フロントから送られた値を信用する
@@ -56,6 +61,7 @@ import {
   buildConcurOAuthCheckErrorResponse,
 } from "./buildConcurOAuthCheckResponse.js";
 import { refreshConcurAccessToken } from "../_shared/concur-oauth/refreshConcurAccessToken.js";
+import { evaluateConcurRequiredScopes } from "../_shared/concur-oauth/evaluateConcurRequiredScopes.js";
 
 function errorBody(code, message) {
   return { result: null, error: { code, message } };
@@ -190,9 +196,12 @@ export async function handleConcurOAuthCheckRequest({
     return respondWithLocalCode("concur_oauth_completion_failed");
   }
 
+  const scopeCheck = evaluateConcurRequiredScopes(oauthResult.tokens?.scope);
+
   return buildConcurOAuthCheckSuccessResponse({
     hasGeolocation: oauthResult.logSummary?.hasGeolocation,
     expiresInPresent: oauthResult.logSummary?.expiresInPresent,
     rotated: Boolean(newRefreshToken),
+    ...scopeCheck,
   });
 }

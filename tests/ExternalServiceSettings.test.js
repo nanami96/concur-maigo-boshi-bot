@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   formatConcurOAuthCheckResult,
+  shouldShowConcurScopeWarning,
   shouldShowExternalServiceSettings,
   shouldSkipConcurOAuthCheck,
   formatConcurUserIdentityLookupResult,
@@ -56,12 +57,15 @@ describe("shouldSkipConcurOAuthCheck（二重クリック防止）", () => {
 });
 
 describe("formatConcurOAuthCheckResult（結果整形）", () => {
-  it("connected:trueで4項目すべて含む正常応答をそのままBoolean化する", () => {
+  it("connected:trueで7項目すべて含む正常応答をそのままBoolean化する", () => {
     const formatted = formatConcurOAuthCheckResult({
       connected: true,
       hasGeolocation: true,
       expiresInPresent: false,
       refreshTokenRotated: true,
+      hasQuickExpenseWriteScope: true,
+      hasUserReadScope: false,
+      hasIdentityUserIdsReadScope: true,
     });
 
     expect(formatted).toEqual({
@@ -69,10 +73,13 @@ describe("formatConcurOAuthCheckResult（結果整形）", () => {
       hasGeolocation: true,
       expiresInPresent: false,
       refreshTokenRotated: true,
+      hasQuickExpenseWriteScope: true,
+      hasUserReadScope: false,
+      hasIdentityUserIdsReadScope: true,
     });
   });
 
-  it("安全ゲート無効時の{connected:false, status:'disabled'}（他3項目が無い）はfalse相当に丸める", () => {
+  it("安全ゲート無効時の{connected:false, status:'disabled'}（他項目が無い）はfalse相当に丸める", () => {
     const formatted = formatConcurOAuthCheckResult({ connected: false, status: "disabled" });
 
     expect(formatted).toEqual({
@@ -80,6 +87,9 @@ describe("formatConcurOAuthCheckResult（結果整形）", () => {
       hasGeolocation: false,
       expiresInPresent: false,
       refreshTokenRotated: false,
+      hasQuickExpenseWriteScope: false,
+      hasUserReadScope: false,
+      hasIdentityUserIdsReadScope: false,
     });
   });
 
@@ -89,6 +99,9 @@ describe("formatConcurOAuthCheckResult（結果整形）", () => {
       hasGeolocation: false,
       expiresInPresent: false,
       refreshTokenRotated: false,
+      hasQuickExpenseWriteScope: false,
+      hasUserReadScope: false,
+      hasIdentityUserIdsReadScope: false,
     });
   });
 
@@ -98,22 +111,104 @@ describe("formatConcurOAuthCheckResult（結果整形）", () => {
       hasGeolocation: false,
       expiresInPresent: false,
       refreshTokenRotated: false,
+      hasQuickExpenseWriteScope: false,
+      hasUserReadScope: false,
+      hasIdentityUserIdsReadScope: false,
     });
   });
 
-  it("戻り値のキーはconnected/hasGeolocation/expiresInPresent/refreshTokenRotatedの4つだけ（Token・Secret等が紛れ込んでも除外される）", () => {
+  it("戻り値のキーは7つだけ（Token・Secret・scope生値等が紛れ込んでも除外される）", () => {
     const formatted = formatConcurOAuthCheckResult({
       connected: true,
       hasGeolocation: true,
       expiresInPresent: true,
       refreshTokenRotated: true,
+      hasQuickExpenseWriteScope: true,
+      hasUserReadScope: true,
+      hasIdentityUserIdsReadScope: true,
       accessToken: "should-not-appear",
       refreshToken: "should-not-appear",
+      scope: "should-not-appear",
     });
 
     expect(Object.keys(formatted).sort()).toEqual(
-      ["connected", "expiresInPresent", "hasGeolocation", "refreshTokenRotated"].sort(),
+      [
+        "connected",
+        "expiresInPresent",
+        "hasGeolocation",
+        "refreshTokenRotated",
+        "hasQuickExpenseWriteScope",
+        "hasUserReadScope",
+        "hasIdentityUserIdsReadScope",
+      ].sort(),
     );
+  });
+});
+
+describe("shouldShowConcurScopeWarning（必要scope不足時の注意表示）", () => {
+  it("未接続の場合は常にfalse（権限不足を云々する状況ではない）", () => {
+    expect(
+      shouldShowConcurScopeWarning({
+        connected: false,
+        hasQuickExpenseWriteScope: false,
+        hasUserReadScope: false,
+        hasIdentityUserIdsReadScope: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("接続済みかつ3scopeすべてありの場合はfalse", () => {
+    expect(
+      shouldShowConcurScopeWarning({
+        connected: true,
+        hasQuickExpenseWriteScope: true,
+        hasUserReadScope: true,
+        hasIdentityUserIdsReadScope: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("接続済みだが1つでも不足していればtrue", () => {
+    expect(
+      shouldShowConcurScopeWarning({
+        connected: true,
+        hasQuickExpenseWriteScope: false,
+        hasUserReadScope: true,
+        hasIdentityUserIdsReadScope: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowConcurScopeWarning({
+        connected: true,
+        hasQuickExpenseWriteScope: true,
+        hasUserReadScope: false,
+        hasIdentityUserIdsReadScope: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowConcurScopeWarning({
+        connected: true,
+        hasQuickExpenseWriteScope: true,
+        hasUserReadScope: true,
+        hasIdentityUserIdsReadScope: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("接続済みで3scopeすべて不足していてもtrue", () => {
+    expect(
+      shouldShowConcurScopeWarning({
+        connected: true,
+        hasQuickExpenseWriteScope: false,
+        hasUserReadScope: false,
+        hasIdentityUserIdsReadScope: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("null/undefinedを渡しても例外にならずfalse", () => {
+    expect(shouldShowConcurScopeWarning(null)).toBe(false);
+    expect(shouldShowConcurScopeWarning(undefined)).toBe(false);
   });
 });
 
@@ -186,10 +281,27 @@ describe("ExternalServiceSettings.jsx: 表示文言・エラー表示の静的�
     expect(source).not.toMatch(/<span>[^<]*[（(]hasGeolocation[）)][^<]*<\/span>/);
     expect(source).not.toMatch(/<span>[^<]*[（(]expiresInPresent[）)][^<]*<\/span>/);
     expect(source).not.toMatch(/<span>[^<]*[（(]refreshTokenRotated[）)][^<]*<\/span>/);
+    expect(source).not.toMatch(/<span>[^<]*[（(]hasQuickExpenseWriteScope[）)][^<]*<\/span>/);
+    expect(source).not.toMatch(/<span>[^<]*[（(]hasUserReadScope[）)][^<]*<\/span>/);
+    expect(source).not.toMatch(/<span>[^<]*[（(]hasIdentityUserIdsReadScope[）)][^<]*<\/span>/);
     expect(source).toMatch(/<span>接続状態<\/span>/);
     expect(source).toMatch(/<span>位置情報<\/span>/);
     expect(source).toMatch(/<span>有効期限情報<\/span>/);
     expect(source).toMatch(/<span>Refresh Token更新<\/span>/);
+    expect(source).toMatch(/<span>Quick Expense作成権限<\/span>/);
+    expect(source).toMatch(/<span>利用者情報参照権限<\/span>/);
+    expect(source).toMatch(/<span>Identity利用者ID参照権限<\/span>/);
+  });
+
+  it("scope全文・実際のscope名（quickexpense.writeonly等）を表示するコードが無い", () => {
+    expect(source).not.toMatch(/quickexpense\.writeonly/);
+    expect(source).not.toMatch(/identity\.user\.ids\.read/);
+    expect(source).not.toMatch(/["'`]user\.read["'`]/);
+  });
+
+  it("接続済みでも必要scope不足時だけ、固定の注意表示を出す（shouldShowConcurScopeWarning経由）", () => {
+    expect(source).toMatch(/shouldShowConcurScopeWarning\(formatted\)/);
+    expect(source).toMatch(/接続は成功していますが、API利用に必要な権限が不足しています。/);
   });
 
   it("エラー表示はerrorType（固定コード）だけで、error.message・生レスポンスを参照していない", () => {

@@ -205,7 +205,16 @@ describe("handleConcurOAuthCheckRequest（Token取得〜成功）", () => {
 
     expect(status).toBe(200);
     expect(body).toEqual({
-      result: { connected: true, hasGeolocation: true, expiresInPresent: true, refreshTokenRotated: false },
+      result: {
+        connected: true,
+        hasGeolocation: true,
+        expiresInPresent: true,
+        refreshTokenRotated: false,
+        scopePresent: false,
+        hasQuickExpenseWriteScope: false,
+        hasUserReadScope: false,
+        hasIdentityUserIdsReadScope: false,
+      },
       error: null,
     });
     expect(refreshAccessToken).toHaveBeenCalledWith(
@@ -258,6 +267,133 @@ describe("handleConcurOAuthCheckRequest（Token取得〜成功）", () => {
     });
 
     expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: "dummy-company-id" });
+  });
+});
+
+describe("handleConcurOAuthCheckRequest（Quick Expense／Identity実通信前チェック：必要scope）", () => {
+  it("必要な3scopeすべてを含む場合、3つともtrueを返す", async () => {
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(
+      successfulOAuthResult({
+        tokens: { accessToken: "dummy-access-token", scope: "quickexpense.writeonly user.read identity.user.ids.read" },
+      }),
+    );
+
+    const { body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    expect(body.result.scopePresent).toBe(true);
+    expect(body.result.hasQuickExpenseWriteScope).toBe(true);
+    expect(body.result.hasUserReadScope).toBe(true);
+    expect(body.result.hasIdentityUserIdsReadScope).toBe(true);
+  });
+
+  it("1つだけ含む場合、該当するものだけtrueを返す", async () => {
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(
+      successfulOAuthResult({ tokens: { accessToken: "dummy-access-token", scope: "expense.report.read user.read" } }),
+    );
+
+    const { body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    expect(body.result.scopePresent).toBe(true);
+    expect(body.result.hasQuickExpenseWriteScope).toBe(false);
+    expect(body.result.hasUserReadScope).toBe(true);
+    expect(body.result.hasIdentityUserIdsReadScope).toBe(false);
+  });
+
+  it("scope自体がtoken応答に無い場合、scopePresent:falseかつ3つともfalseを返す", async () => {
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(successfulOAuthResult({ tokens: { accessToken: "dummy-access-token" } }));
+
+    const { body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    expect(body.result.scopePresent).toBe(false);
+    expect(body.result.hasQuickExpenseWriteScope).toBe(false);
+    expect(body.result.hasUserReadScope).toBe(false);
+    expect(body.result.hasIdentityUserIdsReadScope).toBe(false);
+  });
+
+  it("scopeの生値・他のscope名がレスポンスへ一切含まれない", async () => {
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(
+      successfulOAuthResult({
+        tokens: {
+          accessToken: "dummy-access-token",
+          scope: "quickexpense.writeonly user.read identity.user.ids.read company.secret.scope",
+        },
+      }),
+    );
+
+    const { body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain("company.secret.scope");
+    expect(serialized).not.toContain("quickexpense.writeonly user.read");
+    expect(Object.keys(body.result).sort()).toEqual(
+      [
+        "connected",
+        "hasGeolocation",
+        "expiresInPresent",
+        "refreshTokenRotated",
+        "scopePresent",
+        "hasQuickExpenseWriteScope",
+        "hasUserReadScope",
+        "hasIdentityUserIdsReadScope",
+      ].sort(),
+    );
+  });
+
+  it("Access Token・Refresh Tokenの値がレスポンスへ一切含まれない", async () => {
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(
+      successfulOAuthResult({
+        tokens: { accessToken: "DUMMY_ACCESS_TOKEN_SHOULD_NOT_LEAK", scope: "quickexpense.writeonly" },
+      }),
+    );
+
+    const { body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    expect(JSON.stringify(body)).not.toContain("DUMMY_ACCESS_TOKEN_SHOULD_NOT_LEAK");
   });
 });
 

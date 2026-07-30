@@ -16,7 +16,22 @@ export function formatConcurOAuthCheckResult(result) {
     hasGeolocation: Boolean(result?.hasGeolocation),
     expiresInPresent: Boolean(result?.expiresInPresent),
     refreshTokenRotated: Boolean(result?.refreshTokenRotated),
+    hasQuickExpenseWriteScope: Boolean(result?.hasQuickExpenseWriteScope),
+    hasUserReadScope: Boolean(result?.hasUserReadScope),
+    hasIdentityUserIdsReadScope: Boolean(result?.hasIdentityUserIdsReadScope),
   };
+}
+
+// 接続には成功しているが、Quick Expense作成・利用者情報参照・Identity
+// 利用者ID参照のいずれかの権限（scope）が不足している場合にtrueを返す
+// 純粋関数。未接続の場合は「権限が足りているか」を云々する状況ではないため、
+// connected:trueの場合だけ判定する（formatConcurOAuthCheckResult()の
+// 戻り値を渡すこと）。
+export function shouldShowConcurScopeWarning(formatted) {
+  if (!formatted?.connected) {
+    return false;
+  }
+  return !(formatted.hasQuickExpenseWriteScope && formatted.hasUserReadScope && formatted.hasIdentityUserIdsReadScope);
 }
 
 // このセクション（外部サービス連携）を表示してよいかどうかの判定。
@@ -146,41 +161,63 @@ export default function ExternalServiceSettings({ isPlatformAdmin = false }) {
           {concurCheckState.status === "checking" ? "確認中…" : "Concur接続を確認する"}
         </button>
 
-        {concurCheckState.status === "result" && concurCheckState.result && (
-          <ul className="concurOAuthCheckResultList">
-            {(() => {
-              const formatted = formatConcurOAuthCheckResult(concurCheckState.result);
-              return (
-                <>
-                  <li>
-                    <span>接続状態</span>
-                    <span className={formatted.connected ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
-                      {formatted.connected ? "接続済み" : "未接続"}
-                    </span>
-                  </li>
-                  <li>
-                    <span>位置情報</span>
-                    <span className={formatted.hasGeolocation ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
-                      {formatted.hasGeolocation ? "あり" : "なし"}
-                    </span>
-                  </li>
-                  <li>
-                    <span>有効期限情報</span>
-                    <span className={formatted.expiresInPresent ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
-                      {formatted.expiresInPresent ? "あり" : "なし"}
-                    </span>
-                  </li>
-                  <li>
-                    <span>Refresh Token更新</span>
-                    <span className={formatted.refreshTokenRotated ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
-                      {formatted.refreshTokenRotated ? "あり" : "なし"}
-                    </span>
-                  </li>
-                </>
-              );
-            })()}
-          </ul>
-        )}
+        {concurCheckState.status === "result" && concurCheckState.result && (() => {
+          const formatted = formatConcurOAuthCheckResult(concurCheckState.result);
+          return (
+            <>
+              <ul className="concurOAuthCheckResultList">
+                <li>
+                  <span>接続状態</span>
+                  <span className={formatted.connected ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
+                    {formatted.connected ? "接続済み" : "未接続"}
+                  </span>
+                </li>
+                <li>
+                  <span>位置情報</span>
+                  <span className={formatted.hasGeolocation ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
+                    {formatted.hasGeolocation ? "あり" : "なし"}
+                  </span>
+                </li>
+                <li>
+                  <span>有効期限情報</span>
+                  <span className={formatted.expiresInPresent ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
+                    {formatted.expiresInPresent ? "あり" : "なし"}
+                  </span>
+                </li>
+                <li>
+                  <span>Refresh Token更新</span>
+                  <span className={formatted.refreshTokenRotated ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
+                    {formatted.refreshTokenRotated ? "あり" : "なし"}
+                  </span>
+                </li>
+                <li>
+                  <span>Quick Expense作成権限</span>
+                  <span className={formatted.hasQuickExpenseWriteScope ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
+                    {formatted.hasQuickExpenseWriteScope ? "あり" : "なし"}
+                  </span>
+                </li>
+                <li>
+                  <span>利用者情報参照権限</span>
+                  <span className={formatted.hasUserReadScope ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
+                    {formatted.hasUserReadScope ? "あり" : "なし"}
+                  </span>
+                </li>
+                <li>
+                  <span>Identity利用者ID参照権限</span>
+                  <span className={formatted.hasIdentityUserIdsReadScope ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
+                    {formatted.hasIdentityUserIdsReadScope ? "あり" : "なし"}
+                  </span>
+                </li>
+              </ul>
+
+              {shouldShowConcurScopeWarning(formatted) && (
+                <p className="settingsWarningText">
+                  接続は成功していますが、API利用に必要な権限が不足しています。
+                </p>
+              )}
+            </>
+          );
+        })()}
 
         {concurCheckState.status === "error" && (
           <p className="settingsErrorText">
