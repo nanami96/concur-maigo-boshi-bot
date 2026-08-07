@@ -48,10 +48,18 @@ export default function ConcurRegistrationPanel({
   expenseTypeName,
   policyName,
 }) {
+  // ConcurログインID（このEdge Function内部でConcur Identity v4によりuserIDを
+  // 解決するための入力値。userID自体はフロントから受け取らない・表示しない。
+  // supabase/functions/create-concur-quick-expense/handleQuickExpenseRequest.js
+  // 参照）。恒久的な対応付けDBがまだ無いため、送信のたびに利用者が入力する
+  // 暫定的な項目（保存はしない）。
+  const [concurLoginId, setConcurLoginId] = useState("");
+
   const { result: registrationData, error } = buildConcurRegistrationData({
     company,
     result,
     receiptData,
+    concurLoginId,
   });
 
   // phase: idle | submitting | success | error
@@ -158,12 +166,26 @@ export default function ConcurRegistrationPanel({
           )}
         </dl>
 
+        <div className="concurRegistrationConcurLoginIdField">
+          <label className="concurRegistrationFieldLabel" htmlFor="concurRegistrationConcurLoginId">
+            ConcurログインID
+          </label>
+          <input
+            id="concurRegistrationConcurLoginId"
+            type="text"
+            value={concurLoginId}
+            onChange={(event) => setConcurLoginId(event.target.value)}
+            disabled={phase === "submitting" || phase === "success"}
+            placeholder="例：taro.yamada@example.com"
+          />
+        </div>
+
         <div className="concurRegistrationActions">
           <button
             type="button"
             className="concurRegistrationSubmitButton"
             onClick={handleRegister}
-            disabled={phase === "submitting" || phase === "success"}
+            disabled={phase === "submitting" || phase === "success" || !isConcurLoginIdValid(concurLoginId)}
           >
             {phase === "submitting" ? "登録中…" : "Concurに登録"}
           </button>
@@ -192,6 +214,14 @@ export default function ConcurRegistrationPanel({
 // （既存のtests/配下は全て純粋関数のユニットテストのみで構成されている、
 // tests/ocrReceiptRepository.test.js等参照）、あえてexportしてvitestから
 // 直接テストできるようにしている。新しいテスト基盤の追加は今回行わない。
+
+// concurLoginId入力欄の必須チェック（trim後に空でないこと）。禁止文字・
+// 長さ上限等の詳細な検証はEdge Function側（validateQuickExpenseRequest.js）が
+// 権威を持つため、ここではボタンの活性/非活性だけを判定する軽いチェックに
+// 留める（フロント側にConcur側の禁止文字ルールを複製しない）。
+export function isConcurLoginIdValid(concurLoginId) {
+  return typeof concurLoginId === "string" && concurLoginId.trim() !== "";
+}
 
 // "YYYY-MM-DD" → "2026年7月29日"のような自然な日本語表示にする。
 // buildConcurRegistrationData()が成功している時点でtransactionDateは

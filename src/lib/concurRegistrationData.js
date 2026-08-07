@@ -114,6 +114,15 @@ function resolvePolicyId(result) {
  * @param {string|null} [input.memo]
  *   利用者の自由入力コメント。現状UIに入力欄が無いため、指定が無ければ
  *   常にnull（ダミー文字列は生成しない）。
+ * @param {string|null} [input.concurLoginId]
+ *   Concur Identity APIでuserIDを解決するためのConcurログインID。
+ *   ConcurRegistrationPanel.jsxが用意する入力欄の値をそのまま渡す想定。
+ *   このファイル自体は値の形式検証を行わない（禁止文字・長さ上限等の
+ *   検証は、既存のIdentity検索と同じ基準をEdge Function側
+ *   （supabase/functions/create-concur-quick-expense/validateQuickExpenseRequest.js）が
+ *   担う。フロント側でバリデーションロジックを重複させないため）。
+ *   未指定の場合、戻り値にconcurLoginIdキー自体を含めない
+ *   （既存のtoEqualによる完全一致テストへ影響を与えないため）。
  *
  * @returns {{
  *   result: {
@@ -126,6 +135,7 @@ function resolvePolicyId(result) {
  *     vendorName: string|null,
  *     receiptRequired: boolean|null,
  *     memo: string|null,
+ *     concurLoginId?: string,
  *   } | null,
  *   error: { type: string, message: string } | null,
  * }}
@@ -136,6 +146,7 @@ export function buildConcurRegistrationData({
   receiptData,
   receiptFile,
   memo,
+  concurLoginId,
 } = {}) {
   const companyId = resolveCompanyCode(company);
   if (!companyId) {
@@ -187,6 +198,7 @@ export function buildConcurRegistrationData({
       vendorName: validatedExpenseData.vendorName,
       receiptRequired: validatedExpenseData.receiptRequired,
       memo: typeof memo === "string" ? memo : null,
+      ...(typeof concurLoginId === "string" ? { concurLoginId } : {}),
     },
     error: null,
   };

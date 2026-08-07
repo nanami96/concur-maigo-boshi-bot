@@ -1,10 +1,16 @@
 // Concur「Quick Expense」作成の入口となるSupabase Edge Function。
 //
-// 現時点ではConcur APIへの実通信を一切行わない。実際に必要になるのは
-// createQuickExpenseStub.js（handleQuickExpenseRequest.jsが呼び出す）の
-// 中身だけであり、このファイル・入力検証（validateQuickExpenseRequest.js）・
-// 処理の流れ（handleQuickExpenseRequest.js）・認証
-// （resolveQuickExpenseAuthorization.js）は変更不要な設計にしている。
+// 【重要・安全ゲートによる一括停止（CONCUR_QUICK_EXPENSE_ENABLED）】
+// Vaultリース取得〜OAuth Refresh Token Grant〜Identity v4検索〜Quick Expense
+// API本体という一連の実通信は、Secret CONCUR_QUICK_EXPENSE_ENABLEDが厳密に
+// 文字列"true"である場合だけ実行される。この判断・DI（createQuickExpenseStub.js
+// とcreateQuickExpenseViaConcur.jsのどちらを使うか）はすべて
+// handleQuickExpenseRequest.js側（isConcurQuickExpenseEnabled.js）で完結して
+// おり、このファイル（index.ts）はCONCUR_QUICK_EXPENSE_ENABLEDの値を
+// buildConcurEnv()経由でそのまま転記するだけで、判断ロジックを一切持たない
+// （Secretが未設定の限り、このFunctionは今までどおりcreateQuickExpenseStub.js
+// による固定のダミー応答のみを返し、Concur・OAuth・Identityのいずれにも
+// 実通信しない）。
 //
 // 認証について：
 //   ocr-receipt/index.tsと同じ「Authorizationヘッダー確認 → auth.getUser() →
@@ -90,14 +96,91 @@ function resolveProjectApiKey() {
   return Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY");
 }
 
+// Concur OAuth（_shared/concur-oauth/resolveConcurOAuthConfig.js）が読む
+// Secret名の集合。supabase/functions/lookup-concur-user/index.tsの
+// buildConcurEnv()と同様の実装。CONCUR_QUICK_EXPENSE_ENABLEDはこの
+// Function専用の安全ゲート（isConcurQuickExpenseEnabled.js参照）で、値の
+// 転記だけをここで行う。実際に「有効かどうか」を判断するロジックは
+// handleQuickExpenseRequest.js側だけに置き、このファイル（index.ts）は
+// 判断ロジックを一切持たない（ファイル冒頭コメント参照）。
+function buildConcurEnv() {
+  return {
+    CONCUR_CLIENT_ID: Deno.env.get("CONCUR_CLIENT_ID"),
+    CONCUR_CLIENT_SECRET: Deno.env.get("CONCUR_CLIENT_SECRET"),
+    CONCUR_TOKEN_URL: Deno.env.get("CONCUR_TOKEN_URL"),
+    CONCUR_SCOPE: Deno.env.get("CONCUR_SCOPE"),
+    CONCUR_QUICK_EXPENSE_ENABLED: Deno.env.get("CONCUR_QUICK_EXPENSE_ENABLED"),
+  };
+}
+
+// service_role専用クライアント（呼び出し元のAuthorizationヘッダーは一切
+// 使わない・上書きしない）。get_concur_refresh_token_for_edge /
+// complete_concur_oauth_refresh というVault関連の2 RPCだけに使う。
+// supabase/functions/lookup-concur-user/index.tsのbuildServiceRoleClient()と
+// 同じ実装（この2 RPCはSQL側でservice_role以外へのEXECUTE権限を持たない）。
+function buildServiceRoleClient(createClient) {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+}
+
+// get_concur_refresh_token_for_edge / complete_concur_oauth_refresh
+// （supabase/schema.sql Phase 12、check-concur-oauth・lookup-concur-userと
+// 共有する既存RPC。新しいRPC・migrationは追加していない）を、
+// handleQuickExpenseRequest.jsが期待するDeno非依存のインターフェースへ
+// 変換するアダプタ。supabase/functions/lookup-concur-user/index.tsの
+// buildVaultAdapters()と同じ実装。
+function buildVaultAdapters(serviceClient, log) {
+  return {
+    getRefreshTokenForEdge: async ({ companyId }) => {
+      const { data, error } = await serviceClient.rpc("get_concur_refresh_token_for_edge", {
+        p_company_id: companyId ?? null,
+      });
+
+      if (error) {
+        log(`Vault Token取得エラー (code=${error.code ?? "?"})`);
+        throw error;
+      }
+
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) {
+        return null;
+      }
+
+      return {
+        connectionId: row.connection_id,
+        leaseId: row.lease_id,
+        refreshToken: row.refresh_token,
+      };
+    },
+    completeOAuthRefresh: async ({ connectionId, leaseId, success, newRefreshToken, errorCode }) => {
+      const { data, error } = await serviceClient.rpc("complete_concur_oauth_refresh", {
+        p_connection_id: connectionId,
+        p_lease_id: leaseId,
+        p_success: success,
+        p_new_refresh_token: newRefreshToken ?? null,
+        p_error_code: errorCode ?? null,
+      });
+
+      if (error) {
+        log(`Vault Token完了処理エラー (code=${error.code ?? "?"})`);
+        throw error;
+      }
+
+      return data === true;
+    },
+  };
+}
+
 // handleQuickExpenseRequest.js（Deno非依存の純粋関数）へ渡す、Deno/Supabase
 // 固有のI/O実装をまとめて用意する。ocr-receipt/index.tsのresolveAuthorization()
 // と同じ役割（呼び出し元のAuthorizationヘッダーをそのまま上書きしたSupabase
 // クライアントを作り、auth.getUser()・company_membersへのSELECTをRLS
 // （company_members_select_own）任せで行う。service_roleは使わない）。
-async function buildAuthAdapters(authHeader, log) {
-  const { createClient } = await import("npm:@supabase/supabase-js@2");
-
+function buildAuthAdapters(createClient, authHeader, log) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const projectApiKey = resolveProjectApiKey();
 
@@ -169,8 +252,11 @@ Deno.serve(async (req) => {
   log(`認証情報 (${describeAuthHeaderForLogging(authHeader)})`);
 
   let authAdapters;
+  let vaultAdapters;
   try {
-    authAdapters = await buildAuthAdapters(authHeader, log);
+    const { createClient } = await import("npm:@supabase/supabase-js@2");
+    authAdapters = buildAuthAdapters(createClient, authHeader, log);
+    vaultAdapters = buildVaultAdapters(buildServiceRoleClient(createClient), log);
   } catch (caughtError) {
     // Supabaseクライアントの生成自体が失敗するのは通常あり得ないが、
     // 万一の場合も例外の詳細はログへ出さない。
@@ -188,6 +274,10 @@ Deno.serve(async (req) => {
     parseBody: () => req.json(),
     fetchUser: authAdapters.fetchUser,
     fetchCompanyMembership: authAdapters.fetchCompanyMembership,
+    env: buildConcurEnv(),
+    companyId: null, // 現時点では単一の既定接続のみ（check-concur-oauth・lookup-concur-userと同じ前提）。
+    getRefreshTokenForEdge: vaultAdapters.getRefreshTokenForEdge,
+    completeOAuthRefresh: vaultAdapters.completeOAuthRefresh,
   });
 
   log(`終了 (status=${status}, errorCode=${body?.error?.code ?? "none"})`);

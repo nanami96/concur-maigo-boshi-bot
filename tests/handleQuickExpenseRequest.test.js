@@ -33,6 +33,7 @@ function buildValidBody(overrides = {}) {
     amount: 1000,
     currencyCode: "JPY",
     receiptRequired: true,
+    concurLoginId: "taro.yamada@example.com",
     ...overrides,
   };
 }
@@ -41,15 +42,70 @@ function parseBodyFor(value) {
   return async () => value;
 }
 
+// Vaultリース取得〜OAuth token更新〜Identity検索まで、すべて正常に完了する
+// 場合のデフォルトモック（supabase/functions/lookup-concur-user/
+// handleLookupConcurUserRequest.test.jsの構成と同じ考え方）。
+const DUMMY_ACCESS_TOKEN = "DUMMY_ACCESS_TOKEN_SHOULD_NOT_LEAK";
+const DUMMY_REFRESH_TOKEN = "DUMMY_REFRESH_TOKEN_SHOULD_NOT_LEAK";
+const DUMMY_GEOLOCATION = "https://us.api.concursolutions.test";
+const DUMMY_CONCUR_USER_ID = "3df11695-e8bb-40ff-8e98-c85913ab2789";
+
+function defaultGetRefreshTokenForEdge() {
+  return async () => ({ connectionId: "conn-1", leaseId: "lease-1", refreshToken: DUMMY_REFRESH_TOKEN });
+}
+
+function defaultCompleteOAuthRefresh() {
+  return async () => true;
+}
+
+function defaultRefreshAccessToken() {
+  return async () => ({
+    ok: true,
+    rotated: false,
+    tokens: {
+      accessToken: DUMMY_ACCESS_TOKEN,
+      refreshToken: DUMMY_REFRESH_TOKEN,
+      tokenType: "Bearer",
+      expiresIn: 3600,
+      scope: "quickexpense.writeonly user.read identity.user.ids.read",
+      geolocation: DUMMY_GEOLOCATION,
+    },
+    logSummary: { ok: true },
+  });
+}
+
+function defaultLookupUser() {
+  return async () => ({ ok: true, userId: DUMMY_CONCUR_USER_ID });
+}
+
 // 有効な認証状態（ログイン中ユーザー・company-aへの所属）を組み立てる
-// デフォルトの認証系入力。個々のテストで上書きする。
+// デフォルトの認証系入力。既定では安全ゲート（CONCUR_QUICK_EXPENSE_ENABLED）
+// はOFF（env: {}）のままにし、既存の（この機能追加前からの）テスト群が
+// 引き続きcreateQuickExpenseStubの挙動を検証できるようにする
+// （ゲートがOFFの限り、createQuickExpenseを明示的に渡さない呼び出しは
+// 常にcreateQuickExpenseStubへ解決される）。Vault/OAuth/Identityパイプラインを
+// 検証するテストはbuildGateOnAuthedInput()を使う。
 function buildAuthedInput(overrides = {}) {
   return {
     authHeader: "Bearer valid.jwt",
     fetchUser: async () => VALID_USER,
     fetchCompanyMembership: async () => VALID_MEMBERSHIP,
+    env: {},
     ...overrides,
   };
+}
+
+// 安全ゲート（CONCUR_QUICK_EXPENSE_ENABLED）をONにし、Vault/OAuth/Identity
+// パイプラインが正常に完了するデフォルトモックまで揃えたテスト入力。
+function buildGateOnAuthedInput(overrides = {}) {
+  return buildAuthedInput({
+    env: { CONCUR_QUICK_EXPENSE_ENABLED: "true" },
+    getRefreshTokenForEdge: defaultGetRefreshTokenForEdge(),
+    completeOAuthRefresh: defaultCompleteOAuthRefresh(),
+    refreshAccessToken: defaultRefreshAccessToken(),
+    lookupUser: defaultLookupUser(),
+    ...overrides,
+  });
 }
 
 describe("handleQuickExpenseRequest", () => {
@@ -707,6 +763,477 @@ describe("handleQuickExpenseRequest", () => {
       expect(status).toBe(403);
       expect(body.error.code).toBe("expense_type_not_found");
       expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+  });
+
+  // ConcurログインID→Identity v4でuserID解決→Quick Expenseクライアントへの
+  // 受け渡し（今回追加分）。supabase/functions/lookup-concur-user/
+  // handleLookupConcurUserRequest.test.jsと同じ観点のテストを、この
+  // Edge Function向けに再構成している。
+  describe("Identity解決とQuick Expense呼び出し（ゲートON時のパイプライン）", () => {
+    it("1. 正常系：Identity検索で解決したuserIDがそのままcreateQuickExpenseへ渡る", async () => {
+      const createQuickExpense = vi.fn().mockResolvedValue({
+        result: { quickExpenseId: "stub_quick_expense_id", status: "stubbed" },
+        error: null,
+      });
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput(),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(200);
+      expect(body.error).toBeNull();
+      expect(createQuickExpense).toHaveBeenCalledTimes(1);
+      const [, context] = createQuickExpense.mock.calls[0];
+      expect(context).toEqual({
+        accessToken: DUMMY_ACCESS_TOKEN,
+        geolocation: DUMMY_GEOLOCATION,
+        userId: DUMMY_CONCUR_USER_ID,
+      });
+    });
+
+    it("2. Identity検索0件（concur_user_not_found）の場合、Quick Expense処理を呼ばない", async () => {
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({
+          lookupUser: async () => ({ ok: false, error: { code: "concur_user_not_found", message: "指定された利用者情報が見つかりませんでした。" } }),
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(404);
+      expect(body.error.code).toBe("concur_user_not_found");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("3. Identity検索複数件（concur_user_ambiguous）の場合、Quick Expense処理を呼ばない", async () => {
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({
+          lookupUser: async () => ({ ok: false, error: { code: "concur_user_ambiguous", message: "指定された条件に一致する利用者が複数見つかりました。より詳細な条件を指定してください。" } }),
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(409);
+      expect(body.error.code).toBe("concur_user_ambiguous");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("4. Identity APIが401/403（concur_identity_rejected）の場合、Quick Expense処理を呼ばない", async () => {
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({
+          lookupUser: async () => ({ ok: false, error: { code: "concur_identity_rejected", message: "Concur利用者情報サーバーへのアクセスが拒否されました。" } }),
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(502);
+      expect(body.error.code).toBe("concur_identity_rejected");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["concur_identity_timeout", 504],
+      ["concur_identity_network_error", 502],
+      ["concur_identity_service_error", 502],
+      ["concur_identity_rate_limited", 429],
+    ])("5. Identity APIの%sの場合、Quick Expense処理を呼ばない", async (code, expectedStatus) => {
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ lookupUser: async () => ({ ok: false, error: { code, message: "固定メッセージ" } }) }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(expectedStatus);
+      expect(body.error.code).toBe(code);
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("6. OAuth（Refresh Token Grant）失敗の場合、Identity API・Quick Expense処理のいずれも呼ばない", async () => {
+      const createQuickExpense = vi.fn();
+      const lookupUser = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({
+          refreshAccessToken: async () => ({
+            ok: false,
+            error: { code: "concur_oauth_rejected", message: "Concurの認証情報が拒否されました。" },
+            logSummary: { ok: false },
+          }),
+          completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+          lookupUser,
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(502);
+      expect(body.error.code).toBe("concur_oauth_rejected");
+      expect(lookupUser).not.toHaveBeenCalled();
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("6b. OAuth失敗時、リース解放のためcompleteOAuthRefresh({success:false})がベストエフォートで呼ばれる", async () => {
+      const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+
+      await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({
+          refreshAccessToken: async () => ({ ok: false, error: { code: "concur_oauth_timeout", message: "m" }, logSummary: {} }),
+          completeOAuthRefresh,
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+      });
+
+      expect(completeOAuthRefresh).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, errorCode: "concur_oauth_timeout" }),
+      );
+    });
+
+    it("7. Vaultリースが取得できない場合（未接続・ロック中）、concur_oauth_not_connectedを返しOAuth token endpoint・Identity API・Quick Expense処理のいずれも呼ばない", async () => {
+      const refreshAccessToken = vi.fn();
+      const lookupUser = vi.fn();
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ getRefreshTokenForEdge: async () => null, refreshAccessToken, lookupUser }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(503);
+      expect(body.error.code).toBe("concur_oauth_not_connected");
+      expect(refreshAccessToken).not.toHaveBeenCalled();
+      expect(lookupUser).not.toHaveBeenCalled();
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("7b. Vault完了RPCがfalse（lease不一致）の場合、concur_oauth_completion_failedを返しIdentity API・Quick Expense処理を呼ばない", async () => {
+      const lookupUser = vi.fn();
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ completeOAuthRefresh: async () => false, lookupUser }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(500);
+      expect(body.error.code).toBe("concur_oauth_completion_failed");
+      expect(lookupUser).not.toHaveBeenCalled();
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("7c. Vault完了RPCが例外（Vault更新自体が失敗）の場合、concur_oauth_storage_failedを返しIdentity API・Quick Expense処理を呼ばない", async () => {
+      const lookupUser = vi.fn();
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({
+          completeOAuthRefresh: async () => {
+            throw new Error("vault write failed");
+          },
+          lookupUser,
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(500);
+      expect(body.error.code).toBe("concur_oauth_storage_failed");
+      expect(lookupUser).not.toHaveBeenCalled();
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("8. concurLoginIdが空・不正な場合、Vaultリース取得すら行わずvalidation_errorを返す（Quick Expense処理も呼ばない）", async () => {
+      const getRefreshTokenForEdge = vi.fn();
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ getRefreshTokenForEdge }),
+        parseBody: parseBodyFor(buildValidBody({ concurLoginId: "" })),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(400);
+      expect(body.error.code).toBe("validation_error");
+      expect(body.error.details).toContainEqual({ field: "concurLoginId", reason: "required" });
+      expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("9. 解決したuserID（Concur内部UUID）がレスポンスへ一切含まれない", async () => {
+      const { body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput(),
+        parseBody: parseBodyFor(buildValidBody()),
+      });
+
+      expect(JSON.stringify(body)).not.toContain(DUMMY_CONCUR_USER_ID);
+    });
+
+    it("10. Access Token・Refresh Token・ConcurログインIDがレスポンス・ログへ一切含まれない（このモジュール自体はconsole.log/errorを一切呼ばない）", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const { body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput(),
+        parseBody: parseBodyFor(buildValidBody({ concurLoginId: "secret.login.id@example.com" })),
+      });
+
+      const allLoggedText = [...logSpy.mock.calls, ...errorSpy.mock.calls].flat().join(" ");
+      expect(allLoggedText).toBe("");
+      const serializedBody = JSON.stringify(body);
+      expect(serializedBody).not.toContain(DUMMY_ACCESS_TOKEN);
+      expect(serializedBody).not.toContain(DUMMY_REFRESH_TOKEN);
+      expect(serializedBody).not.toContain("secret.login.id@example.com");
+
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
+
+    it("11. Identity検索・OAuth token更新のいずれも、実際の外部HTTP通信（グローバルfetch）を一度も発生させない", async () => {
+      const fetchSpy = vi.fn();
+      vi.stubGlobal("fetch", fetchSpy);
+
+      // getRefreshTokenForEdge・refreshAccessToken・lookupUserはいずれも
+      // buildGateOnAuthedInput()の既定でfetchを使わないモックへ差し替え済み。
+      // ここでは最終呼び出し（Quick Expense本体）も明示的にモックし、この
+      // テストの検証対象（Identity・OAuth部分）以外の要因でfetchが呼ばれない
+      // ようにする（createQuickExpenseViaConcur自体の実fetch検証は別テスト
+      // 「ゲートON＋Identity成功の場合...」で行う）。
+      await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput(),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense: vi.fn().mockResolvedValue({ result: { quickExpenseId: "x", status: "created" }, error: null }),
+      });
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("Vaultリース取得自体が例外を投げた場合はinternal_error（機密情報を含まない）", async () => {
+      const secretLike = "SECRET_VAULT_DETAIL_SHOULD_NOT_LEAK";
+      const lookupUser = vi.fn();
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({
+          getRefreshTokenForEdge: async () => {
+            throw new Error(`boom: ${secretLike}`);
+          },
+          lookupUser,
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(500);
+      expect(body.error.code).toBe("internal_error");
+      expect(JSON.stringify(body)).not.toContain(secretLike);
+      expect(lookupUser).not.toHaveBeenCalled();
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("Identity検索自体が例外を投げた場合もinternal_error（機密情報を含まない）", async () => {
+      const secretLike = "SECRET_IDENTITY_DETAIL_SHOULD_NOT_LEAK";
+      const createQuickExpense = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({
+          lookupUser: async () => {
+            throw new Error(`boom: ${secretLike}`);
+          },
+        }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(500);
+      expect(body.error.code).toBe("internal_error");
+      expect(JSON.stringify(body)).not.toContain(secretLike);
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+  });
+
+  // 安全ゲート（CONCUR_QUICK_EXPENSE_ENABLED）本体の振る舞い。
+  describe("安全ゲート（CONCUR_QUICK_EXPENSE_ENABLED）", () => {
+    it.each([
+      [undefined, "未設定"],
+      ["", "空文字"],
+      ["false", "false"],
+      ["False", "大文字小文字違い（False）"],
+      ["TRUE", "大文字小文字違い（TRUE）"],
+      [true, "真偽値true（文字列でない）"],
+      ["yes", "その他の文字列"],
+    ])(
+      "ゲートOFF（CONCUR_QUICK_EXPENSE_ENABLED=%s・%s）の場合、Vault・OAuth・Identityのいずれも呼ばず既存のスタブ応答を返す",
+      async (value) => {
+        const getRefreshTokenForEdge = vi.fn();
+        const refreshAccessToken = vi.fn();
+        const completeOAuthRefresh = vi.fn();
+        const lookupUser = vi.fn();
+
+        const { status, body } = await handleQuickExpenseRequest({
+          method: "POST",
+          ...buildAuthedInput({
+            env: { CONCUR_QUICK_EXPENSE_ENABLED: value },
+            getRefreshTokenForEdge,
+            refreshAccessToken,
+            completeOAuthRefresh,
+            lookupUser,
+          }),
+          parseBody: parseBodyFor(buildValidBody()),
+        });
+
+        expect(status).toBe(200);
+        expect(body).toEqual({ result: { quickExpenseId: "stub_quick_expense_id", status: "stubbed" }, error: null });
+        expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+        expect(refreshAccessToken).not.toHaveBeenCalled();
+        expect(completeOAuthRefresh).not.toHaveBeenCalled();
+        expect(lookupUser).not.toHaveBeenCalled();
+      },
+    );
+
+    it('ゲートON（CONCUR_QUICK_EXPENSE_ENABLED==="true"）の場合のみVault→OAuth→Identityパイプラインへ進む', async () => {
+      const getRefreshTokenForEdge = defaultGetRefreshTokenForEdge();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ getRefreshTokenForEdge }),
+        parseBody: parseBodyFor(buildValidBody()),
+        // このテストの目的は「パイプライン（Vault→OAuth→Identity）へ進むこと」の
+        // 確認であり、最終呼び出し（Quick Expense本体）の実装検証は別テスト
+        // 「ゲートON＋Identity成功の場合...」の担当のため、ここでは明示的に
+        // 差し替えて実fetchを避ける。
+        createQuickExpense: vi.fn().mockResolvedValue({ result: { quickExpenseId: "x", status: "created" }, error: null }),
+      });
+
+      expect(status).toBe(200);
+      expect(body.error).toBeNull();
+    });
+
+    it("ゲートOFF時も、入力検証・認可・companyId確認・経費タイプ検証は維持される（Vault呼び出し前に判定される）", async () => {
+      const getRefreshTokenForEdge = vi.fn();
+
+      const unauthorized = await handleQuickExpenseRequest({
+        method: "POST",
+        authHeader: null,
+        fetchUser: vi.fn(),
+        fetchCompanyMembership: vi.fn(),
+        env: {},
+        getRefreshTokenForEdge,
+        parseBody: parseBodyFor(buildValidBody()),
+      });
+      expect(unauthorized.status).toBe(401);
+
+      const validationError = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({ getRefreshTokenForEdge }),
+        parseBody: parseBodyFor({}),
+      });
+      expect(validationError.status).toBe(400);
+      expect(validationError.body.error.code).toBe("validation_error");
+
+      const companyMismatch = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({
+          fetchCompanyMembership: async () => ({ company_code: "company-b", role: "user", expenseTypes: [] }),
+          getRefreshTokenForEdge,
+        }),
+        parseBody: parseBodyFor(buildValidBody({ companyId: "company-a" })),
+      });
+      expect(companyMismatch.status).toBe(403);
+      expect(companyMismatch.body.error.code).toBe("forbidden");
+
+      const expenseTypeNotFound = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({ getRefreshTokenForEdge }),
+        parseBody: parseBodyFor(buildValidBody({ expenseTypeId: "does_not_exist" })),
+      });
+      expect(expenseTypeNotFound.status).toBe(403);
+      expect(expenseTypeNotFound.body.error.code).toBe("expense_type_not_found");
+
+      // これらいずれの分岐でも、Vaultリース取得（実通信につながる最初の一歩）
+      // には一切到達していない。
+      expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+    });
+
+    it("ゲートON＋Identity成功の場合、resolveされたcreateQuickExpenseViaConcur相当の実装へ解決したuserIDが渡る（明示DI無し）", async () => {
+      let capturedInit;
+      // createQuickExpenseViaConcur()は_shared/concur-quick-expense/createConcurQuickExpense.jsを
+      // 経由して最終的にfetchImplを呼ぶ設計だが、handleQuickExpenseRequest.jsは
+      // fetchImplを明示的に渡していないため、ここではグローバルfetch自体を
+      // モックへ差し替えて実通信が発生しないことを保証する
+      // （afterEachのvi.unstubAllGlobals()で自動的に復元される）。
+      const fetchSpy = vi.fn(async (_url, init) => {
+        capturedInit = init;
+        return { status: 201, json: async () => ({ quickExpenseIdUri: "https://example-dummy.concursolutions.test/quickexpense/v4/users/x/context/TRAVELER/quickexpenses/dummy-id" }) };
+      });
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput(),
+        parseBody: parseBodyFor(buildValidBody()),
+      });
+
+      expect(status).toBe(200);
+      expect(body.error).toBeNull();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(capturedInit.headers.Authorization).toBe(`Bearer ${DUMMY_ACCESS_TOKEN}`);
+    });
+
+    it("明示的にcreateQuickExpenseを渡した場合、ゲートの状態に関わらずその実装が最優先される（既存テストとの互換性）", async () => {
+      const explicitCreateQuickExpense = vi.fn().mockResolvedValue({ result: { quickExpenseId: "explicit", status: "explicit" }, error: null });
+      const getRefreshTokenForEdge = vi.fn();
+
+      const gateOff = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({ env: {}, getRefreshTokenForEdge }),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense: explicitCreateQuickExpense,
+      });
+      expect(gateOff.status).toBe(200);
+      expect(gateOff.body.result).toEqual({ quickExpenseId: "explicit", status: "explicit" });
+
+      const gateOn = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput(),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense: explicitCreateQuickExpense,
+      });
+      expect(gateOn.status).toBe(200);
+      expect(gateOn.body.result).toEqual({ quickExpenseId: "explicit", status: "explicit" });
+
+      // ゲートOFFの場合、明示DIがあってもVault/OAuth/Identityパイプラインは動かない。
+      expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+      expect(explicitCreateQuickExpense).toHaveBeenCalledTimes(2);
     });
   });
 });

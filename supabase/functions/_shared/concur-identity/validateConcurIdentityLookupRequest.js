@@ -33,21 +33,20 @@ const MAX_USER_NAME_LENGTH = 320;
 // eslint-disable-next-line no-useless-escape -- 文字クラス内の記号を明示的に列挙するため
 const FORBIDDEN_USER_NAME_CHARACTERS = /[%[\]#!*&()~'{^}\\/?><,;:"+=|]/;
 
-/**
- * @param {unknown} body リクエスト本文をJSON.parseした値。
- * @returns {{ ok: true, userName: string } | { ok: false }}
- */
-export function validateConcurIdentityLookupRequest(body) {
-  if (!body || typeof body !== "object") {
+// userName（ConcurログインID）1件分の値検証だけを切り出した部分。
+// lookup-concur-user（本ファイルのvalidateConcurIdentityLookupRequest()）と、
+// create-concur-quick-expense（ConcurログインIDをIdentity検索へ渡す前の検証）の
+// 両方から同じ判定基準を再利用するために公開する（値の意味・禁止文字は
+// Concur全体で共通のため、Edge Functionごとに別の基準を作らない）。
+//
+// @param {unknown} value
+// @returns {{ ok: true, userName: string } | { ok: false }}
+export function validateConcurUserNameValue(value) {
+  if (typeof value !== "string") {
     return { ok: false };
   }
 
-  const { userName } = body;
-  if (typeof userName !== "string") {
-    return { ok: false };
-  }
-
-  const trimmed = userName.trim();
+  const trimmed = value.trim();
   if (trimmed === "") {
     return { ok: false };
   }
@@ -61,4 +60,16 @@ export function validateConcurIdentityLookupRequest(body) {
   }
 
   return { ok: true, userName: trimmed };
+}
+
+/**
+ * @param {unknown} body リクエスト本文をJSON.parseした値。
+ * @returns {{ ok: true, userName: string } | { ok: false }}
+ */
+export function validateConcurIdentityLookupRequest(body) {
+  if (!body || typeof body !== "object") {
+    return { ok: false };
+  }
+
+  return validateConcurUserNameValue(body.userName);
 }

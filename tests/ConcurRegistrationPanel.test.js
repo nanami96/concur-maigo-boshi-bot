@@ -5,6 +5,7 @@ import {
   formatReceiptRequired,
   resolveVendorNameDisplay,
   resolveExpenseTypeNameDisplay,
+  isConcurLoginIdValid,
 } from "../src/ConcurRegistrationPanel.jsx";
 import { buildConcurRegistrationData } from "../src/lib/concurRegistrationData.js";
 import { shouldRenderConcurRegistrationCard } from "../src/concurRegistrationSubmission.js";
@@ -71,6 +72,23 @@ describe("resolveVendorNameDisplay（null系）", () => {
   it("vendorNameがnullでも未入力を返す（崩れない）", () => {
     expect(resolveVendorNameDisplay(null)).toBe("未入力");
     expect(resolveVendorNameDisplay(undefined)).toBe("未入力");
+  });
+});
+
+describe("isConcurLoginIdValid", () => {
+  it("trim後に空でない文字列はtrue", () => {
+    expect(isConcurLoginIdValid("taro@example.com")).toBe(true);
+    expect(isConcurLoginIdValid("  taro@example.com  ")).toBe(true);
+  });
+
+  it("空文字・空白のみ・未入力（初期状態）はfalse", () => {
+    expect(isConcurLoginIdValid("")).toBe(false);
+    expect(isConcurLoginIdValid("   ")).toBe(false);
+  });
+
+  it("文字列以外（null・undefined）はfalse", () => {
+    expect(isConcurLoginIdValid(null)).toBe(false);
+    expect(isConcurLoginIdValid(undefined)).toBe(false);
   });
 });
 

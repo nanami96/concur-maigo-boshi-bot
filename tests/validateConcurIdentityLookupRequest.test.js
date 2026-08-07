@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { validateConcurIdentityLookupRequest } from "../supabase/functions/_shared/concur-identity/validateConcurIdentityLookupRequest.js";
+import {
+  validateConcurIdentityLookupRequest,
+  validateConcurUserNameValue,
+} from "../supabase/functions/_shared/concur-identity/validateConcurIdentityLookupRequest.js";
 
 describe("validateConcurIdentityLookupRequest", () => {
   it("正常なuserNameは成功し、trim済みの値を返す", () => {
@@ -56,5 +59,18 @@ describe("validateConcurIdentityLookupRequest", () => {
     const secretLikeInput = "SHOULD_NOT_BE_REFLECTED@example.com   ";
     const result = validateConcurIdentityLookupRequest({ userName: `${secretLikeInput}%` });
     expect(JSON.stringify(result)).not.toContain("SHOULD_NOT_BE_REFLECTED");
+  });
+});
+
+// validateConcurUserNameValue()は、create-concur-quick-expense（ConcurログインID）
+// からも同じ判定基準を再利用するために公開した部分。
+// validateConcurIdentityLookupRequest()自身の挙動は上のテストで検証済みのため、
+// ここでは「値1件を直接渡す」という呼び出し方自体が正しく動くことだけを確認する。
+describe("validateConcurUserNameValue（他Edge Functionからの再利用のために公開した部分）", () => {
+  it("validateConcurIdentityLookupRequest({userName})と同じ結果を返す", () => {
+    expect(validateConcurUserNameValue("  user@example.com  ")).toEqual({ ok: true, userName: "user@example.com" });
+    expect(validateConcurUserNameValue("")).toEqual({ ok: false });
+    expect(validateConcurUserNameValue(undefined)).toEqual({ ok: false });
+    expect(validateConcurUserNameValue("bad%name")).toEqual({ ok: false });
   });
 });

@@ -102,6 +102,29 @@ describe("buildConcurRegistrationData（正常系）", () => {
     expect(result).not.toHaveProperty("receiptFile");
   });
 
+  it("concurLoginIdを指定した場合はそのまま含まれる", () => {
+    const { result, error } = buildConcurRegistrationData({
+      company: buildCompany(),
+      result: buildResult(),
+      receiptData: buildReceiptData(),
+      concurLoginId: "taro.yamada@example.com",
+    });
+
+    expect(error).toBeNull();
+    expect(result.concurLoginId).toBe("taro.yamada@example.com");
+  });
+
+  it("concurLoginId未指定の場合は結果にキー自体を含めない（既存のtoEqual完全一致テストに影響しない）", () => {
+    const { result, error } = buildConcurRegistrationData({
+      company: buildCompany(),
+      result: buildResult(),
+      receiptData: buildReceiptData(),
+    });
+
+    expect(error).toBeNull();
+    expect(result).not.toHaveProperty("concurLoginId");
+  });
+
   it("経費タイプIDが変わればそのまま異なるexpenseTypeIdになる（Mapping層を経由しない）", () => {
     const taxiResult = buildConcurRegistrationData({
       company: buildCompany(),

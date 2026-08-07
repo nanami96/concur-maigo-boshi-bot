@@ -47,6 +47,18 @@
 //   形式はdetails配列を持つ（{ code: "validation_error", message, details }）。
 //   detailsが配列であることを活かし、こちらは見つかった問題をすべて集めて
 //   一度に返す（フォームの複数項目を一度に直せるようにするため）。
+//
+// concurLoginId（新規項目）について：
+//   Concur Identity API（GET /profile/identity/v4/Users）でuserIDを解決する
+//   ためのConcurログインID。フィールド名・検証基準は
+//   supabase/functions/lookup-concur-user/（既存のIdentity検索Edge Function）が
+//   使う userName と完全に同じ意味の値のため、Concur側の禁止文字・長さ上限の
+//   判定は_shared/concur-identity/validateConcurIdentityLookupRequest.jsの
+//   validateConcurUserNameValue()をそのまま再利用する（同じ基準を2箇所に
+//   別々実装しない）。userID自体（Concur内部のUUID）はフロントから受け取らない
+//   （このEdge Function内部でIdentity APIへ問い合わせて解決する。
+//   handleQuickExpenseRequest.js参照）。
+import { validateConcurUserNameValue } from "../_shared/concur-identity/validateConcurIdentityLookupRequest.js";
 
 const REQUIRED_STRING_FIELDS = ["companyId", "policyId"];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -94,6 +106,7 @@ function resolveExpenseTypeId(data) {
  *     amount: number,
  *     currencyCode: string,
  *     receiptRequired: boolean,
+ *     concurLoginId: string,
  *     vendorName: string|null,
  *     memo: string|null,
  *   } | null,
@@ -147,6 +160,14 @@ export function validateQuickExpenseRequest(body) {
     details.push({ field: "memo", reason: "invalid_type" });
   }
 
+  const concurLoginIdCheck = validateConcurUserNameValue(data.concurLoginId);
+  if (!concurLoginIdCheck.ok) {
+    details.push({
+      field: "concurLoginId",
+      reason: isBlankString(data.concurLoginId) ? "required" : "invalid_format",
+    });
+  }
+
   if (details.length > 0) {
     return {
       result: null,
@@ -165,6 +186,7 @@ export function validateQuickExpenseRequest(body) {
       receiptRequired: data.receiptRequired,
       vendorName: typeof data.vendorName === "string" ? data.vendorName : null,
       memo: typeof data.memo === "string" ? data.memo : null,
+      concurLoginId: concurLoginIdCheck.ok ? concurLoginIdCheck.userName : null,
     },
     error: null,
   };

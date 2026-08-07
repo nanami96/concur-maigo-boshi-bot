@@ -10,6 +10,7 @@ function buildValidBody(overrides = {}) {
     amount: 1000,
     currencyCode: "JPY",
     receiptRequired: true,
+    concurLoginId: "taro.yamada@example.com",
     ...overrides,
   };
 }
@@ -29,6 +30,7 @@ describe("validateQuickExpenseRequest", () => {
       receiptRequired: true,
       vendorName: null,
       memo: null,
+      concurLoginId: "taro.yamada@example.com",
     });
   });
 
@@ -126,6 +128,7 @@ describe("validateQuickExpenseRequest", () => {
     expect(fields).toContain("amount");
     expect(fields).toContain("currencyCode");
     expect(fields).toContain("receiptRequired");
+    expect(fields).toContain("concurLoginId");
   });
 
   it("本文がnull・配列・文字列など想定外の形でも例外にならない", () => {
@@ -141,6 +144,59 @@ describe("validateQuickExpenseRequest", () => {
 
     expect(error.message).not.toContain(secretLike);
     expect(JSON.stringify(error.details)).not.toContain(secretLike);
+  });
+
+  describe("concurLoginId（Concur Identity APIでuserIDを解決するためのConcurログインID）", () => {
+    it("concurLoginIdが無い場合はrequired", () => {
+      const body = buildValidBody();
+      delete body.concurLoginId;
+
+      const { error } = validateQuickExpenseRequest(body);
+      expect(error.details).toContainEqual({ field: "concurLoginId", reason: "required" });
+    });
+
+    it("concurLoginIdが空文字・空白のみの場合もrequired", () => {
+      expect(validateQuickExpenseRequest(buildValidBody({ concurLoginId: "" })).error.details).toContainEqual({
+        field: "concurLoginId",
+        reason: "required",
+      });
+      expect(validateQuickExpenseRequest(buildValidBody({ concurLoginId: "   " })).error.details).toContainEqual({
+        field: "concurLoginId",
+        reason: "required",
+      });
+    });
+
+    it("concurLoginIdが文字列でない場合はrequired扱い", () => {
+      const { error } = validateQuickExpenseRequest(buildValidBody({ concurLoginId: 12345 }));
+      expect(error.details).toContainEqual({ field: "concurLoginId", reason: "required" });
+    });
+
+    it.each(["a%b", "a[b", "a]b", "a#b", "a!b", "a*b", "a&b", "a(b", "a)b", "a~b", "a'b", "a{b", "a^b", "a}b", "a\\b", "a/b", "a?b", "a>b", "a<b", "a,b", "a;b", "a:b", 'a"b', "a+b", "a=b", "a|b"])(
+      "concurLoginIdに禁止文字(%s)が含まれる場合はinvalid_format",
+      (invalidValue) => {
+        const { error } = validateQuickExpenseRequest(buildValidBody({ concurLoginId: invalidValue }));
+        expect(error.details).toContainEqual({ field: "concurLoginId", reason: "invalid_format" });
+      },
+    );
+
+    it("concurLoginIdが321文字を超える場合はinvalid_format", () => {
+      const tooLong = `${"a".repeat(310)}@example.com`; // 321文字超
+      const { error } = validateQuickExpenseRequest(buildValidBody({ concurLoginId: tooLong }));
+      expect(error.details).toContainEqual({ field: "concurLoginId", reason: "invalid_format" });
+    });
+
+    it("前後の空白はtrimされて結果に含まれる", () => {
+      const { result, error } = validateQuickExpenseRequest(buildValidBody({ concurLoginId: "  taro@example.com  " }));
+      expect(error).toBeNull();
+      expect(result.concurLoginId).toBe("taro@example.com");
+    });
+
+    it("concurLoginIdの値がエラーメッセージ・details・非該当時の結果へ漏れない", () => {
+      const secretLike = "SECRET_LOGIN_ID_SHOULD_NOT_LEAK";
+      const { error } = validateQuickExpenseRequest(buildValidBody({ concurLoginId: `${secretLike}%` }));
+
+      expect(JSON.stringify(error)).not.toContain(secretLike);
+    });
   });
 
   describe("後方互換（旧request body、botExpenseTypeId/concurExpenseTypeId）", () => {
