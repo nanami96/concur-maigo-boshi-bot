@@ -214,7 +214,7 @@ export function generateReviewComments(config) {
   if (invalidRuleExpenseTypeRefs.length > 0) {
     improvementCandidates.push(
       createImprovement(
-        `Rule が存在しない経費タイプIDを参照しています: ${invalidRuleExpenseTypeRefs.join(", ")}`,
+        `Rule が存在しない経費タイプコードを参照しています: ${invalidRuleExpenseTypeRefs.join(", ")}`,
         "high",
       ),
     );

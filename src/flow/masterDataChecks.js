@@ -51,7 +51,7 @@ export function checkMasterData({ company, policies, expenseTypes, flow }) {
         issue(
           "error",
           `expense-id-dup-${expenseType.id}`,
-          `経費タイプID「${expenseType.id}」が重複しています。`,
+          `経費タイプコード「${expenseType.id}」が重複しています。`,
           "expenseTypes",
         ),
       );

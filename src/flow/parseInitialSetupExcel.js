@@ -19,16 +19,20 @@ const REQUIRED_SHEETS = ["01_基本設定", "02_ポリシー", "03_経費タイ�
 const SHEET_COLUMNS = {
   "01_基本設定": ["会社ID", "会社名"],
   "02_ポリシー": ["ポリシーID", "ポリシー名", "使用有無"],
-  // 経費タイプID＝Concur EXP_KEY（正式リファクタリング）。値は文字列として
+  // 経費タイプコード＝Concur EXP_KEY（正式リファクタリング。Excel列名は
+  // 「経費タイプID」から「経費タイプコード」へ変更済み。値は文字列として
   // そのまま読み取る（先頭ゼロを保持するため、Number()・parseInt()は使わない）。
-  "03_経費タイプ": ["経費タイプID", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
+  // 内部データ（expenseTypes[].id・flow候補のexpenseTypeIdキー・Concur Quick
+  // Expense APIのexpenseTypeIdフィールド）はExcel列名の変更に合わせて
+  // renameしていない（既存の内部キー・外部API仕様は維持する方針）。
+  "03_経費タイプ": ["経費タイプコード", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
   "04_質問": ["質問キー", "質問文", "質問形式", "質問の表示順"],
   "05_選択肢": [
     "質問キー",
     "ボタンに表示する文字",
     "次のアクション",
     "次に質問する質問キー",
-    "経費タイプID",
+    "経費タイプコード",
     "案内メッセージ",
     "注意事項",
   ],
@@ -160,25 +164,25 @@ function parseExpenseTypes(workbook, policies, errors, warnings) {
 
   rows.forEach((row, index) => {
     const line = index + 2;
-    const id = text(row["経費タイプID"]);
+    const id = text(row["経費タイプコード"]);
     const policyId = text(row["ポリシーID"]);
     const name = text(row["経費タイプ名"]);
     const receiptRaw = text(row["領収書要否"]);
     const enabledRaw = text(row["使用有無"]);
 
     if (!id) {
-      errors.push(issue("error", `expense-id-required-${line}`, `03_経費タイプ ${line}行目: 経費タイプIDが入力されていません。`));
+      errors.push(issue("error", `expense-id-required-${line}`, `03_経費タイプ ${line}行目: 経費タイプコードが入力されていません。`));
       return;
     }
     if (seen.has(id)) {
-      errors.push(issue("error", `expense-id-dup-${id}`, `03_経費タイプ: 経費タイプID「${id}」が重複しています。`));
+      errors.push(issue("error", `expense-id-dup-${id}`, `03_経費タイプ: 経費タイプコード「${id}」が重複しています。`));
       return;
     }
     seen.add(id);
 
     if (!name) {
       errors.push(
-        issue("error", `expense-name-required-${id}`, `03_経費タイプ（経費タイプID「${id}」）: 経費タイプ名が入力されていません。`),
+        issue("error", `expense-name-required-${id}`, `03_経費タイプ（経費タイプコード「${id}」）: 経費タイプ名が入力されていません。`),
       );
     }
     if (!policyId || !policyIds.has(policyId)) {
@@ -342,7 +346,7 @@ function parseOptionsAndBuildFlow(workbook, questions, expenseTypes, errors, war
     const label = text(row["ボタンに表示する文字"]);
     const action = text(row["次のアクション"]);
     const nextQuestionKey = text(row["次に質問する質問キー"]);
-    const expenseTypeId = text(row["経費タイプID"]);
+    const expenseTypeId = text(row["経費タイプコード"]);
     const message = text(row["案内メッセージ"]);
     const warningMessage = text(row["注意事項"]);
 
@@ -383,7 +387,7 @@ function parseOptionsAndBuildFlow(workbook, questions, expenseTypes, errors, war
           issue(
             "error",
             `option-exclusive-question-${line}`,
-            `質問「${questionLabel}」の選択肢「${label}」: 次のアクションが「次の質問」の場合、経費タイプID・案内メッセージは入力できません。`,
+            `質問「${questionLabel}」の選択肢「${label}」: 次のアクションが「次の質問」の場合、経費タイプコード・案内メッセージは入力できません。`,
           ),
         );
         return;
@@ -414,7 +418,7 @@ function parseOptionsAndBuildFlow(workbook, questions, expenseTypes, errors, war
           issue(
             "error",
             `option-expense-missing-${line}`,
-            `質問「${questionLabel}」の選択肢「${label}」: 経費タイプID「${expenseTypeId}」が存在しません。`,
+            `質問「${questionLabel}」の選択肢「${label}」: 経費タイプコード「${expenseTypeId}」が存在しません。`,
           ),
         );
         return;
@@ -487,7 +491,7 @@ function parseOptionsAndBuildFlow(workbook, questions, expenseTypes, errors, war
           issue(
             "error",
             `group-duplicate-expense-${groupKey}-${row.expenseTypeId}`,
-            `質問「${questionLabel}」の選択肢「${group.label}」の候補内で経費タイプID「${row.expenseTypeId}」が重複しています。`,
+            `質問「${questionLabel}」の選択肢「${group.label}」の候補内で経費タイプコード「${row.expenseTypeId}」が重複しています。`,
           ),
         );
         hasDuplicate = true;

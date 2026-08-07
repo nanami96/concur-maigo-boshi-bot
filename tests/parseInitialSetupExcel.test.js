@@ -26,7 +26,7 @@ const POLICY_SHEET = [
 ];
 
 const EXPENSE_SHEET = [
-  ["経費タイプID", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
+  ["経費タイプコード", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
   ["taxi", "normal_expense", "タクシー", "必要", "Y"],
   ["train_local", "normal_expense", "電車", "不要", "Y"],
   ["postage", "normal_expense", "郵送費", "", "Y"],
@@ -43,7 +43,7 @@ const QUESTION_SHEET = [
 ];
 
 const OPTION_SHEET = [
-  ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプID", "案内メッセージ", "注意事項"],
+  ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプコード", "案内メッセージ", "注意事項"],
   ["q1", "交通費", "次の質問", "q2", "", "", ""],
   ["q1", "郵送関連", "結果", "", "postage", "「郵送費」を選択してください。", ""],
   ["q1", "郵送関連", "結果", "", "shipping_fee", "「配送費」を選択してください。", ""],
@@ -176,6 +176,48 @@ describe("parseInitialSetupExcel 異常系", () => {
     expect(result.errors.some((e) => e.id === "missing-column-02_ポリシー-使用有無")).toBe(true);
   });
 
+  it("03_経費タイプに「経費タイプコード」列が無い場合、新名称を使った必須列エラーになる", () => {
+    const workbook = buildWorkbook(
+      buildValidSheets({
+        "03_経費タイプ": [
+          ["ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
+          ["normal_expense", "タクシー", "必要", "Y"],
+        ],
+      }),
+    );
+    const result = parseInitialSetupExcel(workbook);
+    expect(result.errors.some((e) => e.id === "missing-column-03_経費タイプ-経費タイプコード")).toBe(true);
+    expect(result.errors.some((e) => e.message === "03_経費タイプシートに必須列「経費タイプコード」が見つかりません。")).toBe(
+      true,
+    );
+  });
+
+  it("05_選択肢に「経費タイプコード」列が無い場合、新名称を使った必須列エラーになる", () => {
+    const workbook = buildWorkbook(
+      buildValidSheets({
+        "05_選択肢": [
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "案内メッセージ", "注意事項"],
+          ["q1", "タクシー", "結果", "", "案内", ""],
+        ],
+      }),
+    );
+    const result = parseInitialSetupExcel(workbook);
+    expect(result.errors.some((e) => e.id === "missing-column-05_選択肢-経費タイプコード")).toBe(true);
+  });
+
+  it("旧列名「経費タイプID」のままのExcelは経費タイプコード列が無いものとして扱われる（後方互換なし・最新仕様のみサポートする既存方針を踏襲）", () => {
+    const workbook = buildWorkbook(
+      buildValidSheets({
+        "03_経費タイプ": [
+          ["経費タイプID", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
+          ["taxi", "normal_expense", "タクシー", "必要", "Y"],
+        ],
+      }),
+    );
+    const result = parseInitialSetupExcel(workbook);
+    expect(result.errors.some((e) => e.id === "missing-column-03_経費タイプ-経費タイプコード")).toBe(true);
+  });
+
   it("質問キーの重複を検出する", () => {
     const workbook = buildWorkbook(
       buildValidSheets({
@@ -190,11 +232,11 @@ describe("parseInitialSetupExcel 異常系", () => {
     expect(result.errors.some((e) => e.id === "question-key-dup-q1")).toBe(true);
   });
 
-  it("経費タイプIDの重複を検出する", () => {
+  it("経費タイプコードの重複を検出する", () => {
     const workbook = buildWorkbook(
       buildValidSheets({
         "03_経費タイプ": [
-          ["経費タイプID", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
+          ["経費タイプコード", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
           ["taxi", "normal_expense", "タクシー", "必要", "Y"],
           ["taxi", "normal_expense", "タクシー2", "必要", "Y"],
         ],
@@ -208,7 +250,7 @@ describe("parseInitialSetupExcel 異常系", () => {
     const workbook = buildWorkbook(
       buildValidSheets({
         "05_選択肢": [
-          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプID", "案内メッセージ", "注意事項"],
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプコード", "案内メッセージ", "注意事項"],
           ["q1", "交通費", "次の質問", "q999", "", "", ""],
         ],
       }),
@@ -221,7 +263,7 @@ describe("parseInitialSetupExcel 異常系", () => {
     const workbook = buildWorkbook(
       buildValidSheets({
         "05_選択肢": [
-          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプID", "案内メッセージ", "注意事項"],
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプコード", "案内メッセージ", "注意事項"],
           ["q1", "タクシー", "結果", "", "does_not_exist", "案内", ""],
         ],
       }),
@@ -239,7 +281,7 @@ describe("parseInitialSetupExcel 異常系", () => {
           ["q2", "質問2", "single_select", 20],
         ],
         "05_選択肢": [
-          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプID", "案内メッセージ", "注意事項"],
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプコード", "案内メッセージ", "注意事項"],
           ["q1", "進む", "次の質問", "q2", "", "", ""],
           ["q2", "戻る", "次の質問", "q1", "", "", ""],
         ],
@@ -259,7 +301,7 @@ describe("parseInitialSetupExcel 異常系", () => {
           ["q2", "質問2", "single_select", 20],
         ],
         "05_選択肢": [
-          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプID", "案内メッセージ", "注意事項"],
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプコード", "案内メッセージ", "注意事項"],
           ["q1", "タクシー", "結果", "", "taxi", "案内", ""],
           ["q2", "電車", "結果", "", "train_local", "案内", ""],
         ],
@@ -274,7 +316,7 @@ describe("parseInitialSetupExcel 異常系", () => {
     const workbook = buildWorkbook(
       buildValidSheets({
         "05_選択肢": [
-          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプID", "案内メッセージ", "注意事項"],
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプコード", "案内メッセージ", "注意事項"],
           ["q1", "タクシー", "次の質問へ進む", "q2", "", "", ""],
         ],
       }),
@@ -283,11 +325,11 @@ describe("parseInitialSetupExcel 異常系", () => {
     expect(result.errors.some((e) => e.id.startsWith("option-action-invalid"))).toBe(true);
   });
 
-  it("排他制約違反（次の質問なのに経費タイプIDが入力されている）を検出する", () => {
+  it("排他制約違反（次の質問なのに経費タイプコードが入力されている）を検出する", () => {
     const workbook = buildWorkbook(
       buildValidSheets({
         "05_選択肢": [
-          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプID", "案内メッセージ", "注意事項"],
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプコード", "案内メッセージ", "注意事項"],
           ["q1", "交通費", "次の質問", "q2", "taxi", "", ""],
         ],
       }),
@@ -300,7 +342,7 @@ describe("parseInitialSetupExcel 異常系", () => {
     const workbook = buildWorkbook(
       buildValidSheets({
         "05_選択肢": [
-          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプID", "案内メッセージ", "注意事項"],
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプコード", "案内メッセージ", "注意事項"],
           ["q1", "タクシー", "結果", "", "taxi", "", ""],
         ],
       }),
@@ -313,7 +355,7 @@ describe("parseInitialSetupExcel 異常系", () => {
     const workbook = buildWorkbook(
       buildValidSheets({
         "05_選択肢": [
-          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプID", "案内メッセージ", "注意事項"],
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプコード", "案内メッセージ", "注意事項"],
           ["q1", "郵送関連", "結果", "", "postage", "案内", ""],
           ["q1", "郵送関連", "次の質問", "q2", "", "", ""],
         ],
@@ -323,11 +365,11 @@ describe("parseInitialSetupExcel 異常系", () => {
     expect(result.errors.some((e) => e.id.startsWith("group-mixed-action"))).toBe(true);
   });
 
-  it("複数候補グループ内で経費タイプIDが重複している場合を検出する", () => {
+  it("複数候補グループ内で経費タイプコードが重複している場合を検出する", () => {
     const workbook = buildWorkbook(
       buildValidSheets({
         "05_選択肢": [
-          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプID", "案内メッセージ", "注意事項"],
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプコード", "案内メッセージ", "注意事項"],
           ["q1", "郵送関連", "結果", "", "postage", "案内1", ""],
           ["q1", "郵送関連", "結果", "", "postage", "案内2", ""],
         ],
@@ -341,7 +383,7 @@ describe("parseInitialSetupExcel 異常系", () => {
     const workbook = buildWorkbook(
       buildValidSheets({
         "03_経費タイプ": [
-          ["経費タイプID", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
+          ["経費タイプコード", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
           ["taxi", "does_not_exist", "タクシー", "必要", "Y"],
         ],
       }),
@@ -377,7 +419,7 @@ describe("parseInitialSetupExcel: sample-company実データテンプレート�
     expect(result.warnings.some((w) => w.id.startsWith("question-unreachable"))).toBe(false);
   });
 
-  it("07_Concurマッピングシートは廃止済み（経費タイプID＝Concur EXP_KEYという設計により不要）", () => {
+  it("07_Concurマッピングシートは廃止済み（経費タイプコード＝Concur EXP_KEYという設計により不要）", () => {
     const templatePath = path.resolve(
       __dirname,
       "../excel/templates/initial-setup-template.xlsx",
@@ -449,16 +491,16 @@ describe("parseInitialSetupExcel: sample-company実データテンプレート�
   });
 });
 
-describe("parseInitialSetupExcel: 経費タイプID＝Concur EXP_KEY", () => {
-  it("経費タイプIDは前後空白を除去した文字列として読み取られ、数値化されない（先頭ゼロ保持の確認）", () => {
+describe("parseInitialSetupExcel: 経費タイプコード＝Concur EXP_KEY", () => {
+  it("経費タイプコードは前後空白を除去した文字列として読み取られ、数値化されない（先頭ゼロ保持の確認）", () => {
     const workbook = buildWorkbook(
       buildValidSheets({
         "03_経費タイプ": [
-          ["経費タイプID", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
+          ["経費タイプコード", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
           ["  01515  ", "normal_expense", "国内近距離バス", "不要", "Y"],
         ],
         "05_選択肢": [
-          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプID", "案内メッセージ", "注意事項"],
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプコード", "案内メッセージ", "注意事項"],
           ["q1", "バス", "結果", "", "01515", "「国内近距離バス」を選択してください。", ""],
           ["q2", "ダミー", "結果", "", "01515", "「国内近距離バス」を選択してください。", ""],
         ],
@@ -469,5 +511,48 @@ describe("parseInitialSetupExcel: 経費タイプID＝Concur EXP_KEY", () => {
     expect(result.expenseTypes).toHaveLength(1);
     expect(result.expenseTypes[0].id).toBe("01515");
     expect(typeof result.expenseTypes[0].id).toBe("string");
+  });
+
+  it("実際のConcur Expense Type一覧の値（例：01063）も先頭ゼロを保持した文字列として読み取られ、05_選択肢から正しく参照できる", () => {
+    const workbook = buildWorkbook(
+      buildValidSheets({
+        "04_質問": [["質問キー", "質問文", "質問形式", "質問の表示順"], ["q1", "何の経費ですか？", "single_select", 10]],
+        "03_経費タイプ": [
+          ["経費タイプコード", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
+          ["01063", "normal_expense", "タクシー", "必要", "Y"],
+        ],
+        "05_選択肢": [
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプコード", "案内メッセージ", "注意事項"],
+          ["q1", "タクシー", "結果", "", "01063", "「タクシー」を選択してください。", ""],
+        ],
+      }),
+    );
+    const result = parseInitialSetupExcel(workbook);
+
+    expect(result.errors).toEqual([]);
+    expect(result.expenseTypes[0].id).toBe("01063");
+    expect(typeof result.expenseTypes[0].id).toBe("string");
+    const taxiOption = Object.values(result.flow.options).find((option) => option.label === "タクシー");
+    expect(taxiOption.next.candidates[0].expenseTypeId).toBe("01063");
+  });
+
+  it("英字を含む経費タイプコード（例：CSHRN）も使用できる", () => {
+    const workbook = buildWorkbook(
+      buildValidSheets({
+        "04_質問": [["質問キー", "質問文", "質問形式", "質問の表示順"], ["q1", "何の経費ですか？", "single_select", 10]],
+        "03_経費タイプ": [
+          ["経費タイプコード", "ポリシーID", "経費タイプ名", "領収書要否", "使用有無"],
+          ["CSHRN", "normal_expense", "現金経費", "必要", "Y"],
+        ],
+        "05_選択肢": [
+          ["質問キー", "ボタンに表示する文字", "次のアクション", "次に質問する質問キー", "経費タイプコード", "案内メッセージ", "注意事項"],
+          ["q1", "現金", "結果", "", "CSHRN", "「現金経費」を選択してください。", ""],
+        ],
+      }),
+    );
+    const result = parseInitialSetupExcel(workbook);
+
+    expect(result.errors).toEqual([]);
+    expect(result.expenseTypes[0].id).toBe("CSHRN");
   });
 });
