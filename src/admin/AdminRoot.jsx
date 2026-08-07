@@ -49,6 +49,7 @@ const SETTINGS_TABS = [
   { id: "company", label: "基本設定" },
   { id: "policies", label: "ポリシー" },
   { id: "expenseTypes", label: "経費タイプ" },
+  { id: "integrations", label: "連携" },
 ];
 
 const FLOW_TABS = [
@@ -59,8 +60,11 @@ const FLOW_TABS = [
 ];
 
 // 管理画面ワークスペース本体。company/policies/expenseTypes/flow を
-// useWorkspaceEditor 1つで一元管理し、「設定」（基本設定・ポリシー・経費タイプ）と
+// useWorkspaceEditor 1つで一元管理し、「設定」（基本設定・ポリシー・経費タイプ・連携）と
 // 「質問フロー」（編集・ツリー・プレビュー・設定チェック）の2階層タブで切り替える。
+// 「連携」タブはExternalServiceSettings（外部サービス連携の状態確認・接続操作）を
+// 表示するだけで、独自の状態・保存処理は持たない（既存のisPlatformAdmin判定・
+// 保存/取得ロジックはExternalServiceSettings.jsx側のまま変更していない）。
 // baseData は毎レンダー editor の現在値から組み立てるため、経費タイプ名の変更等が
 // 質問フロー編集・プレビュー・ツリー・設定チェックへ即座に反映される。
 function AdminWorkspace({
@@ -278,9 +282,10 @@ function AdminWorkspace({
             )}
             {settingsTab === "policies" && <PolicySettings editor={editor} />}
             {settingsTab === "expenseTypes" && <ExpenseTypeSettings editor={editor} />}
+            {settingsTab === "integrations" && (
+              <ExternalServiceSettings isPlatformAdmin={Boolean(isPlatformAdmin)} />
+            )}
           </div>
-
-          <ExternalServiceSettings isPlatformAdmin={Boolean(isPlatformAdmin)} />
         </>
       )}
 

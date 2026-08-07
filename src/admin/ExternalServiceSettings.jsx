@@ -2,7 +2,7 @@ import { useState } from "react";
 import { checkConcurOAuthConnection } from "../data/concurOAuthCheckRepository";
 import { lookupConcurUserIdentity } from "../data/concurIdentityLookupRepository";
 
-// 「設定」画面の末尾に表示する、外部サービス連携の状態確認セクション。
+// 「設定」画面の「連携」タブに表示する、外部サービス連携の状態確認セクション。
 // 現時点ではConcurの接続確認だけを持つが、見出しは将来の他サービス追加を
 // 見込んだ名称にしている（今回はConcur以外のカードを追加しない）。
 //
