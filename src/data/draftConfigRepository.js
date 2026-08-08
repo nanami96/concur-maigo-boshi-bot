@@ -59,9 +59,17 @@ export function resolveInitialWorkspaceState({ draftRow, staticConfig }) {
 // ログイン中の管理者が所属する会社の一覧を取得する（管理画面の会社セレクタ用）。
 //
 // 専用RPCは新設せず、companiesへの通常SELECTをそのまま使う。既存のRLS
-// （companies_select_member: company_membersに自分が所属する会社のみ）が
-// 既に「自分の所属会社しか見えない」を保証しているため、これで十分安全に
-// スコープされる（他の管理者の所属会社の存在・名前は一切見えない）。
+// （companies_select_admin: is_platform_admin() OR company_membersに
+// role='admin'として自分が所属する会社のみ。supabase/schema.sql参照）が
+// 既に「adminとして所属する会社しか見えない」を保証しているため、これで
+// 十分安全にスコープされる（role='user'として所属しているだけの会社・他の
+// 管理者の所属会社の存在・名前は一切見えない）。
+//
+// 【複数社所属対応】company_membersのunique(user_id)制約は撤廃済みのため
+// （Phase 7-1参照）、1人のadminが複数社でadminを兼務している場合、この関数は
+// 2件以上の行を返しうる（AdminRoot.jsxの会社セレクタがそのまま複数選択肢を
+// 表示する）。role='user'としてのみ所属している会社は、上記RLSの条件に
+// 合致しないため、この一覧には含まれない。
 export async function fetchMyCompanies() {
   if (!isSupabaseConfigured) {
     return { companies: [], error: null };

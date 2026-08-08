@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
-import { resolveAuthGateView } from "./authGateStatus";
+import { resolveAuthGateView, resolveAdminRoleStatus } from "./authGateStatus";
 import { hasPendingAuthCallback, exchangeAuthCallback, resolvePendingAuthSession } from "./authCallback";
 import AuthEntryScreens from "./AuthEntryScreens";
 import { fetchMyRole, fetchIsPlatformAdmin } from "../data/membershipRepository";
@@ -47,10 +47,27 @@ function redirectToAdminAfterSignIn() {
 // どの会社にも所属していない）ユーザーでも、platform_admins（全社を横断管理する
 // サービス運営者）であれば管理画面へアクセスできるようにする。
 //
-// 権限判定の優先順位は「role==='admin' か is_platform_admin() のどちらか一方でも
-// 真ならAdminRootを表示」というOR条件のみで、優先順位という概念自体を持たない
-// （どちらの経路で許可されたかをAuthGate自身が区別する必要は無い。会社セレクタの
-// 表示等、platform_adminとしての振る舞いの違いはAdminRoot側の責務）。
+// 【複数社所属対応・Commit 6で変更】company_membersのunique(user_id)制約は
+// 撤廃済みのため、1人のAuthユーザーが複数社に所属し、会社ごとに異なるrole
+// （例：A社admin・B社user）を持つことが正式な仕様になった。このため
+// AuthGateの権限判定はfetchMyRole()の引数無し呼び出し（「どこか1社でも
+// role='admin'の行を持っているか」という粗い存在確認。詳細はmembershipRepository.js
+// 参照）に変更した。「どの会社を実際に管理できるか」（role='user'としてしか
+// 所属していない会社は除外する等）は、AuthGateではなくAdminRoot側の会社一覧
+// （companies_select_admin RLSによりadmin所属会社だけに絞り込み済み）が担う
+// ——AuthGateが会社選択より前に動く関係上、「現在選択中会社」という概念自体を
+// まだ持てないため、AuthGateは「管理画面へ入る余地があるか」という粗いゲート、
+// AdminRoot以降が「具体的にどの会社を管理できるか」という詳細な認可、という
+// 役割分担にしている（AuthGate単体を「会社ごとの認可」の境界とはしない。
+// 最終防御は既存どおりRLS/RPC側のcompany_id単位の検証）。
+//
+// 権限判定の優先順位は「fetchMyRole()（=どこかの会社でrole==='admin'）か
+// is_platform_admin() のどちらか一方でも真ならAdminRootを表示」というOR条件
+// のみ。roleStatusは"platform_admin"/"company_admin"を区別して保持するが、
+// これは主に表示・診断目的であり、AdminRoot側の実際の権限制御
+// （会社セレクタの表示・全社管理機能の可否）はAdminRoot自身が独立して
+// is_platform_admin()を再取得して判断する（従来通り、AuthGateの判定結果を
+// propsで渡さない設計を維持）。
 // 両方偽の場合のみ「管理者権限がありません」を表示し、AdminRootをレンダリングしない
 // （UIで隠すだけでなく、AdminRoot配下のあらゆるSupabase操作は既存RLS・RPCの
 // role='admin' or is_platform_admin()条件がDB側の最終防御になっている。
@@ -59,7 +76,8 @@ function redirectToAdminAfterSignIn() {
 // 利用者向けBot画面（AppAuthGate/App.jsx）はこのコンポーネントを経由しない。
 export default function AuthGate({ children }) {
   const [authStatus, setAuthStatus] = useState("loading");
-  const [roleStatus, setRoleStatus] = useState("checking"); // checking | admin | forbidden | error
+  // checking | platform_admin | company_admin | forbidden | error
+  const [roleStatus, setRoleStatus] = useState("checking");
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -128,12 +146,11 @@ export default function AuthGate({ children }) {
         if (cancelled) {
           return;
         }
-        if (roleError || platformError) {
+        const nextRoleStatus = resolveAdminRoleStatus({ role, roleError, isPlatformAdmin, platformError });
+        if (nextRoleStatus === "error") {
           console.error("権限の確認に失敗しました", roleError || platformError);
-          setRoleStatus("error");
-          return;
         }
-        setRoleStatus(isPlatformAdmin || role === "admin" ? "admin" : "forbidden");
+        setRoleStatus(nextRoleStatus);
       },
     );
 

@@ -145,6 +145,26 @@ describe("fetchMyCompanies", () => {
     expect(fromMock).toHaveBeenCalledWith("companies");
   });
 
+  it("【複数社所属対応・Commit 6】1人のadminが複数社でadminを兼務している場合、全件を返す（RLSでadmin所属会社だけに絞り込み済み）", async () => {
+    fromMock.mockReturnValue(
+      makeChain({
+        data: [
+          { company_code: "company-a", company_name: "A株式会社" },
+          { company_code: "company-c", company_name: "C株式会社" },
+        ],
+        error: null,
+      }),
+    );
+    const result = await fetchMyCompanies();
+    expect(result).toEqual({
+      companies: [
+        { id: "company-a", label: "A株式会社" },
+        { id: "company-c", label: "C株式会社" },
+      ],
+      error: null,
+    });
+  });
+
   it("所属会社が0件でもエラーではなく空配列を返す", async () => {
     fromMock.mockReturnValue(makeChain({ data: [], error: null }));
     const result = await fetchMyCompanies();

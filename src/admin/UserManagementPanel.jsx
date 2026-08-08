@@ -26,12 +26,16 @@ function formatTimestamp(iso) {
 
 // 管理画面の「ユーザー管理」タブ。
 //
-// 通常admin（companyDbId未指定）: 自社（呼び出し元がadminとして所属する会社）の
-// ユーザーだけを表示する。一覧取得(list_my_company_members)・role変更
-// (update_company_member_role)のどちらも、対象を自社に限定し最後のadmin降格を
-// 拒否する検証をRPC側（DB側）で行っており、ここでのクライアント側チェックは
-// あくまでUXのための早期フィードバックに過ぎない
-// （最終的なセキュリティ境界はRPC/RLS側にある）。
+// 通常admin: AdminRoot/CompanyEditorが解決した「今管理対象として選んでいる
+// 会社」のcompanyDbIdを使い、fetchMyCompanyMembers(companyDbId)
+// （list_my_company_members(p_company_id)）で対象会社のメンバー一覧を取得する
+// （Commit 6より前は常にcompanyDbId: nullで無引数呼び出しに任せていたが、
+// admin所属会社がちょうど1件の利用者しか正しく動かなかった。admin所属会社が
+// 2件以上ある利用者でも、選択中の会社へ正しくスコープされるようにした）。
+// 一覧取得(list_my_company_members)・role変更(update_company_member_role)の
+// どちらも、対象会社のadminであることの検証・最後のadmin降格の拒否をRPC側
+// （DB側）で行っており、ここでのクライアント側チェックはあくまでUXのための
+// 早期フィードバックに過ぎない（最終的なセキュリティ境界はRPC/RLS側にある）。
 //
 // platform_admin（companyDbId指定あり）: AdminRoot/CompanyEditorが解決した
 // 「今管理対象として選んでいる会社」のuuidを受け取り、list_platform_company_members
@@ -80,7 +84,7 @@ export default function UserManagementPanel({
     setState({ status: "loading", members: [] });
     const { members, error } = usingPlatformFetch
       ? await fetchPlatformCompanyMembers(companyDbId)
-      : await fetchMyCompanyMembers();
+      : await fetchMyCompanyMembers(companyDbId);
 
     if (error) {
       // 利用者へは定型メッセージだけを見せ、実際のエラー内容はコンソールに残す

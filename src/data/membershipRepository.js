@@ -80,25 +80,56 @@ export function classifyMembershipRpcError(error) {
   return "unknown";
 }
 
-// ログイン中ユーザーの所属会社でのroleだけを取得する（#adminへのアクセス制御用）。
-// company_membersへの通常SELECTを、フィルタ条件無しでそのまま投げる。
-// 既存のcompany_members_select_own RLSポリシー（user_id = auth.uid()の行のみ
-// 見える）により、これだけで安全に「自分の行だけ」に絞り込まれる
-// （fetchMyCompanies・getCompanyDbIdと同じ、既存RLSを再利用する方針）。
-// 未所属の場合はrole: nullを返す（エラーではない）。
-export async function fetchMyRole() {
+// ログイン中ユーザーのroleを取得する（#adminへのアクセス制御用）。
+// company_membersへの通常SELECTを、既存のcompany_members_select_own RLS
+// ポリシー（user_id = auth.uid()の行のみ見える）を再利用して安全に
+// 「自分の行だけ」に絞り込む（fetchMyCompanies・getCompanyDbIdと同じ方針）。
+//
+// 【複数社所属対応・Commit 6で変更】company_membersのunique(user_id)制約は
+// 既に撤廃済みのため（supabase/schema.sql Phase 7-1参照）、companyIdを指定
+// せずに.maybeSingle()を使うと、2社以上でrole='admin'の行を持つ利用者に対して
+// 「複数行が返った」というPostgRESTのエラーになってしまう（AuthGate.jsxが
+// これを踏んで管理画面アクセス判定自体が壊れるバグがあった）。
+//
+//   ・companyId（companies.id、uuid）を指定した場合：
+//       unique(company_id, user_id)により、特定の会社+ユーザーの組み合わせは
+//       高々1行しか無いことが保証されるため、.maybeSingle()が安全に使える
+//       （get_my_public_config(p_company_code)と同じ理由）。その会社での
+//       roleをそのまま返す（未所属ならrole: null）。
+//   ・companyIdを省略した場合：
+//       「どこか1社でもrole='admin'の行を持っているか」という存在確認だけを
+//       行う（AuthGate.jsxの粗い入室可否判定用）。.maybeSingle()は使わず、
+//       複数行が返っても例外にならない形（配列の有無判定）にする。
+//       実際にどの会社を管理できるか（admin所属会社の一覧）は、
+//       AdminRoot.jsx側の会社一覧（RLSでadmin所属会社だけに絞り込み済み。
+//       src/data/draftConfigRepository.js の fetchMyCompanies() 参照）が担う。
+export async function fetchMyRole(companyId) {
   if (!isSupabaseConfigured) {
     return { role: null, error: null };
   }
 
   try {
-    const { data, error } = await supabase.from("company_members").select("role").maybeSingle();
+    if (companyId) {
+      const { data, error } = await supabase
+        .from("company_members")
+        .select("role")
+        .eq("company_id", companyId)
+        .maybeSingle();
+
+      if (error) {
+        return { role: null, error: { type: "unknown", message: error.message } };
+      }
+
+      return { role: data?.role ?? null, error: null };
+    }
+
+    const { data, error } = await supabase.from("company_members").select("role").eq("role", "admin").limit(1);
 
     if (error) {
       return { role: null, error: { type: "unknown", message: error.message } };
     }
 
-    return { role: data?.role ?? null, error: null };
+    return { role: Array.isArray(data) && data.length > 0 ? "admin" : null, error: null };
   } catch (caughtError) {
     return { role: null, error: { type: "network", message: caughtError.message } };
   }
@@ -222,13 +253,22 @@ export async function redeemInviteCode(code) {
 
 // 自社（呼び出し元がadminの場合のみ）のメンバー一覧をメール付きで取得する。
 // admin以外・未所属の場合は空配列（エラーではない。list_my_company_members()参照）。
-export async function fetchMyCompanyMembers() {
+//
+// 【複数社所属対応・Commit 6で変更】companyId（companies.id、uuid）を指定できる
+// ようにした。省略時はlist_my_company_members()自体の後方互換動作（admin所属
+// 会社がちょうど1件ならその会社を自動解決、2件以上ある場合は0件を返す）に従う。
+// 呼び出し元（UserManagementPanel.jsx）が「現在管理対象としている会社」の
+// companyDbIdを把握している場合は、必ずそれを渡すことで、admin所属会社が
+// 2件以上ある利用者でも正しく対象会社へスコープされる。
+export async function fetchMyCompanyMembers(companyId) {
   if (!isSupabaseConfigured) {
     return { members: [], error: null };
   }
 
   try {
-    const { data, error } = await supabase.rpc("list_my_company_members");
+    const { data, error } = companyId
+      ? await supabase.rpc("list_my_company_members", { p_company_id: companyId })
+      : await supabase.rpc("list_my_company_members");
 
     if (error) {
       return { members: [], error: { type: "unknown", message: error.message } };

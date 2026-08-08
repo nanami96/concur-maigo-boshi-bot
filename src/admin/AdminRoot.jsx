@@ -345,8 +345,18 @@ function AdminWorkspace({
 
       {section === "users" && (
         <div className="adminTabPanel adminTabPanelStandalone">
+          {/* 【複数社所属対応・Commit 6で変更】以前はcompanyDbIdをplatform_admin
+              の場合だけ渡していた（通常adminは常にnull＝list_my_company_members()の
+              無引数呼び出しに任せる設計）。admin所属会社が2件以上ある通常adminも
+              現れうるため、常に「今選択中の会社」のcompanyDbIdを渡すように変更した。
+              UserManagementPanel.jsx側は、isPlatformAdmin=falseの場合は
+              fetchMyCompanyMembers(companyDbId)（list_my_company_members(p_company_id)。
+              admin所属会社がちょうど1件の利用者には従来と同じ結果になる後方互換の
+              設計）を使う。招待コード再発行セクションの表示条件
+              （usingPlatformFetch = isPlatformAdmin && companyDbId）自体は変更していない
+              （regenerate_invite_code() RPC自体がplatform_admin専用のため）。 */}
           <UserManagementPanel
-            companyDbId={isPlatformAdmin ? companyDbId : null}
+            companyDbId={companyDbId}
             isPlatformAdmin={Boolean(isPlatformAdmin)}
             shouldScrollToInviteCode={pendingInviteCodeScroll}
             onScrolledToInviteCode={() => setPendingInviteCodeScroll(false)}
@@ -859,16 +869,19 @@ export default function AdminRoot() {
   const myCompanies = myCompaniesState.companies;
   const hasNoCompanies = myCompaniesState.status === "ready" && myCompanies.length === 0;
 
-  // Phase 7（1ユーザー1社をDBのunique制約で保証）以降、実際のSupabase運用では
-  // 1人のadminが複数社へ所属することは無くなった。そのため、会社セレクタ・
-  // 「＋新しい会社を作成」は実運用のadminにとって選ぶ余地・使いどころの無いUIになる
-  // （fetchMyCompaniesは常に0〜1件しか返らない）。
-  // ローカル開発（Supabase未設定）では、configSource.local.jsの静的一覧を使った
-  // 複数会社の切り替え・新規セットアップの検証が引き続き必要なため、
-  // isSupabaseConfiguredの時だけ非表示にする（ローカル開発の挙動は変更しない）。
-  // platform_adminは会社数に関わらず常にセレクタ・新規作成ボタンの両方を表示する
-  // （全社を横断管理する権限があるため）。通常adminは従来通り、実運用では
-  // 常に0〜1件しか返らないfetchMyCompaniesの結果に応じて自動的に隠れる。
+  // 【複数社所属対応・Commit 6で更新】以前はPhase 7の「1ユーザー1社」DB制約を
+  // 前提に「実運用のadminはfetchMyCompaniesが常に0〜1件しか返さない」と
+  // コメントしていたが、その制約（company_members_user_id_key）は既に撤廃済み
+  // （supabase/schema.sql Phase 7-1参照）。通常adminも複数社でadminを兼務できる
+  // ため、fetchMyCompanies()（draftConfigRepository.js）が実際に2件以上を
+  // 返すことがある。ローカル開発（Supabase未設定）では、configSource.local.jsの
+  // 静的一覧を使った複数会社の切り替え・新規セットアップの検証が引き続き
+  // 必要なため、isSupabaseConfiguredの時だけ非表示にする（ローカル開発の
+  // 挙動は変更しない）。platform_adminは会社数に関わらず常にセレクタ・
+  // 新規作成ボタンの両方を表示する（全社を横断管理する権限があるため）。
+  // 通常adminはfetchMyCompanies()（RLSでadmin所属会社だけに絞り込み済み。
+  // role='user'として所属しているだけの会社はここに含まれない）の結果が
+  // 2件以上の場合だけ表示される。
   const showCompanySelector = !isSupabaseConfigured || isPlatformAdmin || myCompanies.length > 1;
   const showCreateNewCompany = !isSupabaseConfigured || isPlatformAdmin;
 

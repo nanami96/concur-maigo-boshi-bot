@@ -24,6 +24,23 @@ function makeSelectChain(result) {
   };
 }
 
+// fetchMyRole()専用のチェーンmock。company_idで絞り込む経路（.eq("company_id",
+// ...).maybeSingle()）と、role='admin'の存在確認だけを行う経路
+// （.eq("role", "admin").limit(1)）の両方を、実際に呼ばれた.eq()の引数で
+// 判定して使い分ける（実装（membershipRepository.js）の分岐と1対1で対応させる）。
+function makeRoleChain({ maybeSingleResult, limitResult } = {}) {
+  return {
+    select: vi.fn(() => ({
+      eq: vi.fn((column) => {
+        if (column === "company_id") {
+          return { maybeSingle: vi.fn(() => Promise.resolve(maybeSingleResult)) };
+        }
+        return { limit: vi.fn(() => Promise.resolve(limitResult)) };
+      }),
+    })),
+  };
+}
+
 const {
   classifyMembershipRpcError,
   fetchMyMembership,
@@ -335,6 +352,34 @@ describe("fetchMyCompanyMembers", () => {
     const result = await fetchMyCompanyMembers();
     expect(result).toEqual({ members: [], error: null });
   });
+
+  it("companyId省略時は引数無しでlist_my_company_members()を呼ぶ（既存1社adminとの後方互換）", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
+    await fetchMyCompanyMembers();
+    expect(rpcMock).toHaveBeenCalledWith("list_my_company_members");
+  });
+
+  it("【複数社所属対応・Commit 6】companyIdを指定した場合、p_company_idとしてRPCへ渡す", async () => {
+    rpcMock.mockResolvedValue({
+      data: [
+        {
+          member_id: "m1",
+          user_id: "u1",
+          email: "admin@example.com",
+          role: "admin",
+          created_at: "2026-07-01T00:00:00Z",
+        },
+      ],
+      error: null,
+    });
+
+    const result = await fetchMyCompanyMembers("company-a-uuid");
+
+    expect(rpcMock).toHaveBeenCalledWith("list_my_company_members", { p_company_id: "company-a-uuid" });
+    expect(result.members).toEqual([
+      { memberId: "m1", userId: "u1", email: "admin@example.com", role: "admin", createdAt: "2026-07-01T00:00:00Z" },
+    ]);
+  });
 });
 
 describe("updateMemberRole", () => {
@@ -453,17 +498,56 @@ describe("fetchMyRole", () => {
     expect(result).toEqual({ role: null, error: null });
   });
 
-  it("所属している場合、自分のroleを返す（既存RLSがuser_id=auth.uid()に絞り込む）", async () => {
-    fromMock.mockReturnValue(makeSelectChain({ data: { role: "admin" }, error: null }));
-    const result = await fetchMyRole();
-    expect(result).toEqual({ role: "admin", error: null });
-    expect(fromMock).toHaveBeenCalledWith("company_members");
+  describe("companyId省略時（AuthGate.jsxの粗い入室可否判定用：どこか1社でもadminか）", () => {
+    it("どこか1社でrole='admin'の行があれば、role:'admin'を返す", async () => {
+      fromMock.mockReturnValue(makeRoleChain({ limitResult: { data: [{ role: "admin" }], error: null } }));
+      const result = await fetchMyRole();
+      expect(result).toEqual({ role: "admin", error: null });
+      expect(fromMock).toHaveBeenCalledWith("company_members");
+    });
+
+    it("【複数社所属対応】2社以上でrole='admin'の行があっても、.maybeSingle()の複数行エラーにならない", async () => {
+      fromMock.mockReturnValue(
+        makeRoleChain({ limitResult: { data: [{ role: "admin" }, { role: "admin" }], error: null } }),
+      );
+      const result = await fetchMyRole();
+      expect(result).toEqual({ role: "admin", error: null });
+    });
+
+    it("role='admin'の行が無ければ、role:nullを返す（未所属・一般ユーザーのみの所属いずれも含む）", async () => {
+      fromMock.mockReturnValue(makeRoleChain({ limitResult: { data: [], error: null } }));
+      const result = await fetchMyRole();
+      expect(result).toEqual({ role: null, error: null });
+    });
+
+    it("取得エラー時はerrorを返す", async () => {
+      fromMock.mockReturnValue(makeRoleChain({ limitResult: { data: null, error: { message: "boom" } } }));
+      const result = await fetchMyRole();
+      expect(result.role).toBeNull();
+      expect(result.error).toEqual({ type: "unknown", message: "boom" });
+    });
   });
 
-  it("未所属の場合、role:nullを返す（エラーではない）", async () => {
-    fromMock.mockReturnValue(makeSelectChain({ data: null, error: null }));
-    const result = await fetchMyRole();
-    expect(result).toEqual({ role: null, error: null });
+  describe("companyId指定時（Commit 6：会社を明示してroleを取得する）", () => {
+    it("指定した会社での自分のroleを返す（unique(company_id, user_id)によりmaybeSingle()が安全）", async () => {
+      fromMock.mockReturnValue(makeRoleChain({ maybeSingleResult: { data: { role: "admin" }, error: null } }));
+      const result = await fetchMyRole("company-a-uuid");
+      expect(result).toEqual({ role: "admin", error: null });
+      expect(fromMock).toHaveBeenCalledWith("company_members");
+    });
+
+    it("指定した会社に所属していない場合、role:nullを返す（他社でadminでも漏れない）", async () => {
+      fromMock.mockReturnValue(makeRoleChain({ maybeSingleResult: { data: null, error: null } }));
+      const result = await fetchMyRole("company-b-uuid");
+      expect(result).toEqual({ role: null, error: null });
+    });
+
+    it("取得エラー時はerrorを返す", async () => {
+      fromMock.mockReturnValue(makeRoleChain({ maybeSingleResult: { data: null, error: { message: "boom" } } }));
+      const result = await fetchMyRole("company-a-uuid");
+      expect(result.role).toBeNull();
+      expect(result.error).toEqual({ type: "unknown", message: "boom" });
+    });
   });
 });
 
