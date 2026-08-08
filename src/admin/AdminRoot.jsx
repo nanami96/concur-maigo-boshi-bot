@@ -52,6 +52,21 @@ const SETTINGS_TABS = [
   { id: "integrations", label: "連携" },
 ];
 
+// 「設定」タブのうち、現在の権限で実際に表示してよいタブだけを返す純粋関数
+// （バグ修正で追加）。「連携」タブの中身（ExternalServiceSettings）は元々
+// platform_admin専用（isPlatformAdmin===falseならreturn null）だったが、
+// タブ自体はcompany_adminにも表示されていたため、選択すると中身が空白になる
+// という見た目上の不整合があった。ExternalServiceSettings自身のガードは
+// 変更せず維持したまま、AdminRoot側でも「連携」タブそのものをcompany_adminへ
+// 表示しないようにする（二重防御）。ExternalServiceSettingsをcompany_adminへ
+// 公開する変更ではない。
+export function resolveVisibleSettingsTabs(isPlatformAdmin) {
+  if (isPlatformAdmin) {
+    return SETTINGS_TABS;
+  }
+  return SETTINGS_TABS.filter((tab) => tab.id !== "integrations");
+}
+
 const FLOW_TABS = [
   { id: "editor", label: "質問フロー編集" },
   { id: "tree", label: "全体をツリーで見る" },
@@ -87,6 +102,17 @@ function AdminWorkspace({
   const [settingsTab, setSettingsTab] = useState(initialSettingsTab || "company");
   const [flowTab, setFlowTab] = useState("editor");
   const [previewStartQuestionId, setPreviewStartQuestionId] = useState(null);
+
+  const visibleSettingsTabs = resolveVisibleSettingsTabs(isPlatformAdmin);
+
+  // 通常はログイン中にisPlatformAdminが動的に変わることは無いが、万一
+  // settingsTabが表示不能なタブ（"integrations"）を指したままisPlatformAdminが
+  // falseになった場合に備えた最小限のガード。安全な既定タブ（"company"）へ戻す。
+  useEffect(() => {
+    if (!isPlatformAdmin && settingsTab === "integrations") {
+      setSettingsTab("company");
+    }
+  }, [isPlatformAdmin, settingsTab]);
 
   // 招待コード再発行ショートカット：jumpToInviteCodeTokenが（前回処理済みの
   // 値から）変化したら「ユーザー管理」タブへ切り替え、UserManagementPanel側へ
@@ -265,7 +291,7 @@ function AdminWorkspace({
         <>
           <ExcelImportSection editor={editor} persistence={persistence} companyId={companyCode} />
           <nav className="adminTabs" aria-label="設定の切り替え">
-            {SETTINGS_TABS.map((tab) => (
+            {visibleSettingsTabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
