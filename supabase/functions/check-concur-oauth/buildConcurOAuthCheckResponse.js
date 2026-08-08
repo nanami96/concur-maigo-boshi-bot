@@ -73,6 +73,7 @@ export function classifyConcurOAuthCheckHttpStatus(code) {
  *   hasQuickExpenseWriteScope?: boolean,
  *   hasUserReadScope?: boolean,
  *   hasIdentityUserIdsReadScope?: boolean,
+ *   hasReceiptsWriteScope?: boolean,
  * }} input
  * @returns {{ status: number, body: { result: object, error: null } }}
  */
@@ -84,6 +85,7 @@ export function buildConcurOAuthCheckSuccessResponse({
   hasQuickExpenseWriteScope,
   hasUserReadScope,
   hasIdentityUserIdsReadScope,
+  hasReceiptsWriteScope,
 }) {
   return {
     status: 200,
@@ -97,6 +99,7 @@ export function buildConcurOAuthCheckSuccessResponse({
         hasQuickExpenseWriteScope: Boolean(hasQuickExpenseWriteScope),
         hasUserReadScope: Boolean(hasUserReadScope),
         hasIdentityUserIdsReadScope: Boolean(hasIdentityUserIdsReadScope),
+        hasReceiptsWriteScope: Boolean(hasReceiptsWriteScope),
       },
       error: null,
     },

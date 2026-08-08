@@ -16,6 +16,7 @@ describe("buildConcurOAuthCheckSuccessResponse", () => {
       hasQuickExpenseWriteScope: true,
       hasUserReadScope: true,
       hasIdentityUserIdsReadScope: true,
+      hasReceiptsWriteScope: true,
     });
 
     expect(response.status).toBe(200);
@@ -29,9 +30,26 @@ describe("buildConcurOAuthCheckSuccessResponse", () => {
         hasQuickExpenseWriteScope: true,
         hasUserReadScope: true,
         hasIdentityUserIdsReadScope: true,
+        hasReceiptsWriteScope: true,
       },
       error: null,
     });
+  });
+
+  it("【Phase 14】hasReceiptsWriteScope:falseでも他のscopeがtrueなら独立して返す", () => {
+    const response = buildConcurOAuthCheckSuccessResponse({
+      hasGeolocation: true,
+      expiresInPresent: true,
+      rotated: false,
+      scopePresent: true,
+      hasQuickExpenseWriteScope: true,
+      hasUserReadScope: true,
+      hasIdentityUserIdsReadScope: true,
+      hasReceiptsWriteScope: false,
+    });
+
+    expect(response.body.result.hasReceiptsWriteScope).toBe(false);
+    expect(response.body.result.hasQuickExpenseWriteScope).toBe(true);
   });
 
   it("rotated:trueの場合はrefreshTokenRotated:trueを返す（Vault保存成功後に呼ばれる想定）", () => {
@@ -56,6 +74,7 @@ describe("buildConcurOAuthCheckSuccessResponse", () => {
       hasQuickExpenseWriteScope: false,
       hasUserReadScope: false,
       hasIdentityUserIdsReadScope: false,
+      hasReceiptsWriteScope: false,
     });
   });
 
@@ -71,6 +90,7 @@ describe("buildConcurOAuthCheckSuccessResponse", () => {
       hasQuickExpenseWriteScope: true,
       hasUserReadScope: true,
       hasIdentityUserIdsReadScope: true,
+      hasReceiptsWriteScope: true,
     });
 
     const serialized = JSON.stringify(response);
@@ -78,6 +98,7 @@ describe("buildConcurOAuthCheckSuccessResponse", () => {
     expect(serialized).not.toContain("quickexpense.writeonly");
     expect(serialized).not.toContain("user.read");
     expect(serialized).not.toContain("identity.user.ids.read");
+    expect(serialized).not.toContain("receipts.writeonly");
   });
 });
 

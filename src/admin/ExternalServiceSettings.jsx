@@ -19,8 +19,35 @@ export function formatConcurOAuthCheckResult(result) {
     hasQuickExpenseWriteScope: Boolean(result?.hasQuickExpenseWriteScope),
     hasUserReadScope: Boolean(result?.hasUserReadScope),
     hasIdentityUserIdsReadScope: Boolean(result?.hasIdentityUserIdsReadScope),
+    // 【Phase 14で追加】画像付きQuick Expense作成に必要な追加スコープ
+    // （領収書画像送信権限）の有無。scopePresentも合わせて保持する理由は
+    // resolveConcurReceiptScopeStatus()のコメント参照（「確認できていない」
+    // ことと「確認した結果、権限が無い」ことを区別して表示するため）。
+    scopePresent: Boolean(result?.scopePresent),
+    hasReceiptsWriteScope: Boolean(result?.hasReceiptsWriteScope),
   };
 }
+
+// 【Phase 14で追加】「領収書画像送信権限」表示の3値状態を解決する純粋関数。
+// evaluateConcurRequiredScopes.js（Edge Function側）の設計上、scope情報自体が
+// token応答に無い場合（scopePresent:false）はhasReceiptsWriteScopeも安全側で
+// 常にfalseになる。これをそのまま「なし」と表示すると、「確認した結果、
+// 権限が無い」のか「まだ確認できていない」のかが利用者に区別できず、
+// 実際には権限があるかもしれないのに「なし」と誤解を与えるおそれがある
+// （指示：推測で「なし」と断定しない）。そのため、確認できていない場合は
+// 専用の"unknown"状態を返す。
+export function resolveConcurReceiptScopeStatus(formatted) {
+  if (!formatted?.scopePresent) {
+    return "unknown";
+  }
+  return formatted.hasReceiptsWriteScope ? "available" : "unavailable";
+}
+
+const RECEIPT_SCOPE_BADGE = {
+  available: { className: "settingsStatusBadge active", label: "あり" },
+  unavailable: { className: "settingsStatusBadge inactive", label: "なし" },
+  unknown: { className: "settingsStatusBadge unknown", label: "確認できません" },
+};
 
 // 接続には成功しているが、Quick Expense作成・利用者情報参照・Identity
 // 利用者ID参照のいずれかの権限（scope）が不足している場合にtrueを返す
@@ -169,6 +196,7 @@ export default function ExternalServiceSettings({ isPlatformAdmin = false, compa
 
         {concurCheckState.status === "result" && concurCheckState.result && (() => {
           const formatted = formatConcurOAuthCheckResult(concurCheckState.result);
+          const receiptScopeBadge = RECEIPT_SCOPE_BADGE[resolveConcurReceiptScopeStatus(formatted)];
           return (
             <>
               <ul className="concurOAuthCheckResultList">
@@ -213,6 +241,10 @@ export default function ExternalServiceSettings({ isPlatformAdmin = false, compa
                   <span className={formatted.hasIdentityUserIdsReadScope ? "settingsStatusBadge active" : "settingsStatusBadge inactive"}>
                     {formatted.hasIdentityUserIdsReadScope ? "あり" : "なし"}
                   </span>
+                </li>
+                <li>
+                  <span>領収書画像送信権限</span>
+                  <span className={receiptScopeBadge.className}>{receiptScopeBadge.label}</span>
                 </li>
               </ul>
 

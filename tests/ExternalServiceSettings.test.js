@@ -8,6 +8,7 @@ import {
   shouldSkipConcurOAuthCheck,
   formatConcurUserIdentityLookupResult,
   shouldDisableConcurUserIdentityLookup,
+  resolveConcurReceiptScopeStatus,
 } from "../src/admin/ExternalServiceSettings.jsx";
 
 // このプロジェクトにはReact Testing Library等のDOM描画テスト基盤が無く
@@ -57,7 +58,7 @@ describe("shouldSkipConcurOAuthCheck（二重クリック防止）", () => {
 });
 
 describe("formatConcurOAuthCheckResult（結果整形）", () => {
-  it("connected:trueで7項目すべて含む正常応答をそのままBoolean化する", () => {
+  it("connected:trueで9項目すべて含む正常応答をそのままBoolean化する", () => {
     const formatted = formatConcurOAuthCheckResult({
       connected: true,
       hasGeolocation: true,
@@ -66,6 +67,8 @@ describe("formatConcurOAuthCheckResult（結果整形）", () => {
       hasQuickExpenseWriteScope: true,
       hasUserReadScope: false,
       hasIdentityUserIdsReadScope: true,
+      scopePresent: true,
+      hasReceiptsWriteScope: true,
     });
 
     expect(formatted).toEqual({
@@ -76,6 +79,8 @@ describe("formatConcurOAuthCheckResult（結果整形）", () => {
       hasQuickExpenseWriteScope: true,
       hasUserReadScope: false,
       hasIdentityUserIdsReadScope: true,
+      scopePresent: true,
+      hasReceiptsWriteScope: true,
     });
   });
 
@@ -90,6 +95,8 @@ describe("formatConcurOAuthCheckResult（結果整形）", () => {
       hasQuickExpenseWriteScope: false,
       hasUserReadScope: false,
       hasIdentityUserIdsReadScope: false,
+      scopePresent: false,
+      hasReceiptsWriteScope: false,
     });
   });
 
@@ -102,6 +109,8 @@ describe("formatConcurOAuthCheckResult（結果整形）", () => {
       hasQuickExpenseWriteScope: false,
       hasUserReadScope: false,
       hasIdentityUserIdsReadScope: false,
+      scopePresent: false,
+      hasReceiptsWriteScope: false,
     });
   });
 
@@ -114,10 +123,12 @@ describe("formatConcurOAuthCheckResult（結果整形）", () => {
       hasQuickExpenseWriteScope: false,
       hasUserReadScope: false,
       hasIdentityUserIdsReadScope: false,
+      scopePresent: false,
+      hasReceiptsWriteScope: false,
     });
   });
 
-  it("戻り値のキーは7つだけ（Token・Secret・scope生値等が紛れ込んでも除外される）", () => {
+  it("戻り値のキーは9つだけ（Token・Secret・scope生値等が紛れ込んでも除外される）", () => {
     const formatted = formatConcurOAuthCheckResult({
       connected: true,
       hasGeolocation: true,
@@ -126,6 +137,8 @@ describe("formatConcurOAuthCheckResult（結果整形）", () => {
       hasQuickExpenseWriteScope: true,
       hasUserReadScope: true,
       hasIdentityUserIdsReadScope: true,
+      scopePresent: true,
+      hasReceiptsWriteScope: true,
       accessToken: "should-not-appear",
       refreshToken: "should-not-appear",
       scope: "should-not-appear",
@@ -140,8 +153,30 @@ describe("formatConcurOAuthCheckResult（結果整形）", () => {
         "hasQuickExpenseWriteScope",
         "hasUserReadScope",
         "hasIdentityUserIdsReadScope",
+        "scopePresent",
+        "hasReceiptsWriteScope",
       ].sort(),
     );
+  });
+});
+
+describe("resolveConcurReceiptScopeStatus（Phase 14：領収書画像送信権限の3値表示）", () => {
+  it("scopePresent:true・hasReceiptsWriteScope:trueは'available'", () => {
+    expect(resolveConcurReceiptScopeStatus({ scopePresent: true, hasReceiptsWriteScope: true })).toBe("available");
+  });
+
+  it("scopePresent:true・hasReceiptsWriteScope:falseは'unavailable'（確認した結果、無いと確定）", () => {
+    expect(resolveConcurReceiptScopeStatus({ scopePresent: true, hasReceiptsWriteScope: false })).toBe("unavailable");
+  });
+
+  it("scopePresent:falseの場合はhasReceiptsWriteScopeの値に関わらず'unknown'（推測で「なし」と断定しない）", () => {
+    expect(resolveConcurReceiptScopeStatus({ scopePresent: false, hasReceiptsWriteScope: false })).toBe("unknown");
+    expect(resolveConcurReceiptScopeStatus({ scopePresent: false, hasReceiptsWriteScope: true })).toBe("unknown");
+  });
+
+  it("null/undefinedを渡しても例外にならず'unknown'", () => {
+    expect(resolveConcurReceiptScopeStatus(null)).toBe("unknown");
+    expect(resolveConcurReceiptScopeStatus(undefined)).toBe("unknown");
   });
 });
 
@@ -209,6 +244,18 @@ describe("shouldShowConcurScopeWarning（必要scope不足時の注意表示）"
   it("null/undefinedを渡しても例外にならずfalse", () => {
     expect(shouldShowConcurScopeWarning(null)).toBe(false);
     expect(shouldShowConcurScopeWarning(undefined)).toBe(false);
+  });
+
+  it("【Phase 14】hasReceiptsWriteScope:falseは既存の3scope判定に影響しない（画像送信は今回まだ必須機能ではないため）", () => {
+    expect(
+      shouldShowConcurScopeWarning({
+        connected: true,
+        hasQuickExpenseWriteScope: true,
+        hasUserReadScope: true,
+        hasIdentityUserIdsReadScope: true,
+        hasReceiptsWriteScope: false,
+      }),
+    ).toBe(false);
   });
 });
 
@@ -284,6 +331,7 @@ describe("ExternalServiceSettings.jsx: 表示文言・エラー表示の静的�
     expect(source).not.toMatch(/<span>[^<]*[（(]hasQuickExpenseWriteScope[）)][^<]*<\/span>/);
     expect(source).not.toMatch(/<span>[^<]*[（(]hasUserReadScope[）)][^<]*<\/span>/);
     expect(source).not.toMatch(/<span>[^<]*[（(]hasIdentityUserIdsReadScope[）)][^<]*<\/span>/);
+    expect(source).not.toMatch(/<span>[^<]*[（(]hasReceiptsWriteScope[）)][^<]*<\/span>/);
     expect(source).toMatch(/<span>接続状態<\/span>/);
     expect(source).toMatch(/<span>位置情報<\/span>/);
     expect(source).toMatch(/<span>有効期限情報<\/span>/);
@@ -291,12 +339,19 @@ describe("ExternalServiceSettings.jsx: 表示文言・エラー表示の静的�
     expect(source).toMatch(/<span>Quick Expense作成権限<\/span>/);
     expect(source).toMatch(/<span>利用者情報参照権限<\/span>/);
     expect(source).toMatch(/<span>Identity利用者ID参照権限<\/span>/);
+    expect(source).toMatch(/<span>領収書画像送信権限<\/span>/);
   });
 
   it("scope全文・実際のscope名（quickexpense.writeonly等）を表示するコードが無い", () => {
     expect(source).not.toMatch(/quickexpense\.writeonly/);
     expect(source).not.toMatch(/identity\.user\.ids\.read/);
     expect(source).not.toMatch(/["'`]user\.read["'`]/);
+    expect(source).not.toMatch(/receipts\.writeonly/);
+  });
+
+  it("【Phase 14】領収書画像送信権限は「あり」「なし」に加えて「確認できません」の3値を表示できる（scope情報自体が確認できない場合に推測で「なし」と断定しない）", () => {
+    expect(source).toMatch(/確認できません/);
+    expect(source).toMatch(/resolveConcurReceiptScopeStatus\(formatted\)/);
   });
 
   it("接続済みでも必要scope不足時だけ、固定の注意表示を出す（shouldShowConcurScopeWarning経由）", () => {

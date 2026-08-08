@@ -11,6 +11,12 @@
 // - identity.user.ids.read … Identity v4公式ドキュメント
 //   （api-reference/profile/v4.identity.md）のスコープ表："Read user ID
 //   data."（本プロジェクトのlookup-concur-userが実際に使用中のスコープ）
+// - receipts.writeonly … Quick Expense v4公式ドキュメント（同上ページ）の
+//   Scope Usageテーブルで、画像付きQuick Expense作成
+//   （POST .../quickexpenses/image）の必須スコープとして記載
+//   （Phase 14公式API調査で確認。このスコープ自体はまだどのEdge Function
+//   からも実際のConcur通信で使われていない＝今回は「確認できるようにする」
+//   だけで、画像送信本体の実装はまだ行わない）。
 //
 // 【判定方法】
 // scope文字列を半角空白等（連続する空白文字全般。タブ・改行を含む）で分割し、
@@ -35,6 +41,7 @@ const REQUIRED_SCOPE_NAMES = {
   hasQuickExpenseWriteScope: "quickexpense.writeonly",
   hasUserReadScope: "user.read",
   hasIdentityUserIdsReadScope: "identity.user.ids.read",
+  hasReceiptsWriteScope: "receipts.writeonly",
 };
 
 /**
@@ -44,6 +51,7 @@ const REQUIRED_SCOPE_NAMES = {
  *   hasQuickExpenseWriteScope: boolean,
  *   hasUserReadScope: boolean,
  *   hasIdentityUserIdsReadScope: boolean,
+ *   hasReceiptsWriteScope: boolean,
  * }}
  */
 export function evaluateConcurRequiredScopes(scope) {

@@ -3676,6 +3676,14 @@ textarea.resultFieldInput {
   color: #6b7280;
 }
 
+/* 【Phase 14で追加】scope情報自体が確認できない場合の表示（「なし」と
+   断定せず区別するため）。inactiveとは異なる色にして、一見して
+   「不足している」と「まだ確認できていない」を混同しないようにする。 */
+.settingsStatusBadge.unknown {
+  background: #fef3e2;
+  color: #92640a;
+}
+
 .settingsCardDetail {
   display: flex;
   flex-direction: column;
@@ -4189,6 +4197,11 @@ textarea.resultFieldInput {
   .settingsStatusBadge.inactive {
     background: #2a2f38;
     color: #9fb0c8;
+  }
+
+  .settingsStatusBadge.unknown {
+    background: #3a2f1a;
+    color: #e0ab55;
   }
 
   .importDropZone {

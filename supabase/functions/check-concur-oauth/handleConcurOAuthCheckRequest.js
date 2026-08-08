@@ -45,10 +45,14 @@
 //      - 例外が発生すれば（Vault更新自体が失敗）concur_oauth_storage_failed
 //        を返す
 //  10. 保存成功後、evaluateConcurRequiredScopes.jsでAccess Tokenのscopeに
-//      quickexpense.writeonly／user.read／identity.user.ids.readが実際に
-//      含まれているかを真偽値だけで判定し、成功レスポンスへ含める
-//      （Quick Expense API・Identity APIへの実通信前チェック。scope全文・
-//      他のスコープ名は一切含めない）。
+//      quickexpense.writeonly／user.read／identity.user.ids.read／
+//      【Phase 14で追加】receipts.writeonly（画像付きQuick Expense作成に
+//      必要、公式Scope Usageテーブルで確認済み）が実際に含まれているかを
+//      真偽値だけで判定し、成功レスポンスへ含める（Quick Expense API・
+//      Identity APIへの実通信前チェック。scope全文・他のスコープ名は
+//      一切含めない）。receipts.writeonlyはこの時点ではまだ「確認できる
+//      ようにする」だけで、画像添付Quick Expense自体の実装・実通信は
+//      まだ行わない。
 //
 // request bodyはcompanyCode以外一切読み取らない・使わない（認証情報・
 // token URL・Refresh Tokenは全てSecrets/Vault由来であり、フロントから

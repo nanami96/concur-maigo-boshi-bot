@@ -577,6 +577,7 @@ describe("handleConcurOAuthCheckRequest（Token取得〜成功）", () => {
         hasQuickExpenseWriteScope: false,
         hasUserReadScope: false,
         hasIdentityUserIdsReadScope: false,
+        hasReceiptsWriteScope: false,
       },
       error: null,
     });
@@ -616,7 +617,7 @@ describe("handleConcurOAuthCheckRequest（Token取得〜成功）", () => {
 });
 
 describe("handleConcurOAuthCheckRequest（Quick Expense／Identity実通信前チェック：必要scope）", () => {
-  it("必要な3scopeすべてを含む場合、3つともtrueを返す", async () => {
+  it("必要な3scopeすべてを含む場合、3つともtrueを返す（receipts.writeonlyは含まないためfalse）", async () => {
     const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
     const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
     const refreshAccessToken = vi.fn().mockResolvedValue(
@@ -635,6 +636,35 @@ describe("handleConcurOAuthCheckRequest（Quick Expense／Identity実通信前�
     });
 
     expect(body.result.scopePresent).toBe(true);
+    expect(body.result.hasQuickExpenseWriteScope).toBe(true);
+    expect(body.result.hasUserReadScope).toBe(true);
+    expect(body.result.hasIdentityUserIdsReadScope).toBe(true);
+    expect(body.result.hasReceiptsWriteScope).toBe(false);
+  });
+
+  it("【Phase 14】receipts.writeonlyを含む場合、hasReceiptsWriteScope:trueを返す", async () => {
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(
+      successfulOAuthResult({
+        tokens: {
+          accessToken: "dummy-access-token",
+          scope: "quickexpense.writeonly user.read identity.user.ids.read receipts.writeonly",
+        },
+      }),
+    );
+
+    const { body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    expect(body.result.scopePresent).toBe(true);
+    expect(body.result.hasReceiptsWriteScope).toBe(true);
     expect(body.result.hasQuickExpenseWriteScope).toBe(true);
     expect(body.result.hasUserReadScope).toBe(true);
     expect(body.result.hasIdentityUserIdsReadScope).toBe(true);
@@ -662,7 +692,7 @@ describe("handleConcurOAuthCheckRequest（Quick Expense／Identity実通信前�
     expect(body.result.hasIdentityUserIdsReadScope).toBe(false);
   });
 
-  it("scope自体がtoken応答に無い場合、scopePresent:falseかつ3つともfalseを返す", async () => {
+  it("scope自体がtoken応答に無い場合、scopePresent:falseかつ4つともfalseを返す（receipts.writeonlyも「不足」と断定しない設計を維持）", async () => {
     const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
     const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
     const refreshAccessToken = vi.fn().mockResolvedValue(successfulOAuthResult({ tokens: { accessToken: "dummy-access-token" } }));
@@ -680,6 +710,7 @@ describe("handleConcurOAuthCheckRequest（Quick Expense／Identity実通信前�
     expect(body.result.hasQuickExpenseWriteScope).toBe(false);
     expect(body.result.hasUserReadScope).toBe(false);
     expect(body.result.hasIdentityUserIdsReadScope).toBe(false);
+    expect(body.result.hasReceiptsWriteScope).toBe(false);
   });
 
   it("scopeの生値・他のscope名がレスポンスへ一切含まれない", async () => {
@@ -716,6 +747,7 @@ describe("handleConcurOAuthCheckRequest（Quick Expense／Identity実通信前�
         "hasQuickExpenseWriteScope",
         "hasUserReadScope",
         "hasIdentityUserIdsReadScope",
+        "hasReceiptsWriteScope",
       ].sort(),
     );
   });

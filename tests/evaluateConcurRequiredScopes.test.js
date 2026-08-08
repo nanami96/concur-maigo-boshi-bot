@@ -2,14 +2,17 @@ import { describe, it, expect } from "vitest";
 import { evaluateConcurRequiredScopes } from "../supabase/functions/_shared/concur-oauth/evaluateConcurRequiredScopes.js";
 
 describe("evaluateConcurRequiredScopes（正常系）", () => {
-  it("3scopeすべて含む場合、すべてtrue", () => {
-    const result = evaluateConcurRequiredScopes("quickexpense.writeonly user.read identity.user.ids.read");
+  it("4scopeすべて含む場合、すべてtrue", () => {
+    const result = evaluateConcurRequiredScopes(
+      "quickexpense.writeonly user.read identity.user.ids.read receipts.writeonly",
+    );
 
     expect(result).toEqual({
       scopePresent: true,
       hasQuickExpenseWriteScope: true,
       hasUserReadScope: true,
       hasIdentityUserIdsReadScope: true,
+      hasReceiptsWriteScope: true,
     });
   });
 
@@ -20,6 +23,26 @@ describe("evaluateConcurRequiredScopes（正常系）", () => {
     expect(result.hasQuickExpenseWriteScope).toBe(false);
     expect(result.hasUserReadScope).toBe(true);
     expect(result.hasIdentityUserIdsReadScope).toBe(false);
+    expect(result.hasReceiptsWriteScope).toBe(false);
+  });
+
+  it("【Phase 14】receipts.writeonlyだけ含む場合、hasReceiptsWriteScopeだけtrue", () => {
+    const result = evaluateConcurRequiredScopes("receipts.writeonly");
+
+    expect(result.scopePresent).toBe(true);
+    expect(result.hasReceiptsWriteScope).toBe(true);
+    expect(result.hasQuickExpenseWriteScope).toBe(false);
+    expect(result.hasUserReadScope).toBe(false);
+    expect(result.hasIdentityUserIdsReadScope).toBe(false);
+  });
+
+  it("【Phase 14】quickexpense.writeonlyのみでreceipts.writeonlyが無い場合、hasReceiptsWriteScopeはfalse（既存3scopeには影響しない）", () => {
+    const result = evaluateConcurRequiredScopes("quickexpense.writeonly user.read identity.user.ids.read");
+
+    expect(result.hasQuickExpenseWriteScope).toBe(true);
+    expect(result.hasUserReadScope).toBe(true);
+    expect(result.hasIdentityUserIdsReadScope).toBe(true);
+    expect(result.hasReceiptsWriteScope).toBe(false);
   });
 
   it("先頭・末尾・単独でもtrueと判定する", () => {
@@ -55,16 +78,22 @@ describe("evaluateConcurRequiredScopes（部分一致・大文字小文字違い
   it("似た別のscope名だけの場合はfalse", () => {
     expect(evaluateConcurRequiredScopes("identity.user.read").hasIdentityUserIdsReadScope).toBe(false);
   });
+
+  it("【Phase 14】receipts.writeonlyの前方一致・大文字小文字違いはfalse", () => {
+    expect(evaluateConcurRequiredScopes("receipts.writeonly.extra").hasReceiptsWriteScope).toBe(false);
+    expect(evaluateConcurRequiredScopes("RECEIPTS.WRITEONLY").hasReceiptsWriteScope).toBe(false);
+  });
 });
 
 describe("evaluateConcurRequiredScopes（scope未返却・異常系）", () => {
-  it("scopeがundefinedの場合はscopePresent:falseかつ3つともfalse", () => {
+  it("scopeがundefinedの場合はscopePresent:falseかつ4つともfalse", () => {
     const result = evaluateConcurRequiredScopes(undefined);
     expect(result).toEqual({
       scopePresent: false,
       hasQuickExpenseWriteScope: false,
       hasUserReadScope: false,
       hasIdentityUserIdsReadScope: false,
+      hasReceiptsWriteScope: false,
     });
   });
 
@@ -84,13 +113,19 @@ describe("evaluateConcurRequiredScopes（scope未返却・異常系）", () => {
 });
 
 describe("evaluateConcurRequiredScopes（非露出の確認）", () => {
-  it("戻り値にscopeの生値・他のscope名が一切含まれない（真偽値4つのみ）", () => {
+  it("戻り値にscopeの生値・他のscope名が一切含まれない（真偽値5つのみ）", () => {
     const result = evaluateConcurRequiredScopes(
-      "quickexpense.writeonly user.read identity.user.ids.read company.secret.scope",
+      "quickexpense.writeonly user.read identity.user.ids.read receipts.writeonly company.secret.scope",
     );
 
     expect(Object.keys(result).sort()).toEqual(
-      ["scopePresent", "hasQuickExpenseWriteScope", "hasUserReadScope", "hasIdentityUserIdsReadScope"].sort(),
+      [
+        "scopePresent",
+        "hasQuickExpenseWriteScope",
+        "hasUserReadScope",
+        "hasIdentityUserIdsReadScope",
+        "hasReceiptsWriteScope",
+      ].sort(),
     );
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("company.secret.scope");

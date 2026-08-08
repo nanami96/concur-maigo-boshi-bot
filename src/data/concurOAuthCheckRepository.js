@@ -9,10 +9,12 @@ import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@s
 // 【重要・表示可能な情報の範囲】check-concur-oauthは疎通確認の結果として
 // { connected, hasGeolocation, expiresInPresent, refreshTokenRotated,
 // scopePresent, hasQuickExpenseWriteScope, hasUserReadScope,
-// hasIdentityUserIdsReadScope } という真偽値だけを返す設計で、Access Token・
-// Refresh Token本体・Secrets・OAuthサーバーの生レスポンス・scopeの生値・
-// 他のscope名は一切含まれない（supabase/functions/check-concur-oauth/
-// buildConcurOAuthCheckResponse.js参照）。呼び出し元（UserManagementPanel.jsx）は
+// hasIdentityUserIdsReadScope, hasReceiptsWriteScope（Phase 14で追加。
+// 画像付きQuick Expense作成に必要なreceipts.writeonlyスコープの有無） }
+// という真偽値だけを返す設計で、Access Token・Refresh Token本体・Secrets・
+// OAuthサーバーの生レスポンス・scopeの生値・他のscope名は一切含まれない
+// （supabase/functions/check-concur-oauth/buildConcurOAuthCheckResponse.js
+// 参照）。呼び出し元（UserManagementPanel.jsx）は
 // エラー時に固定エラーコードだけを表示しレスポンス本文は一切表示しない方針のため、
 // この関数が返すerrorは{ type }（固定コードのみ）とし、message等は保持しない
 // （既存のOCR/Quick Expense向けRepositoryが保持するmessageとは意図的に異なる）。
@@ -117,6 +119,7 @@ async function ensureValidSession() {
  *     hasQuickExpenseWriteScope?: boolean,
  *     hasUserReadScope?: boolean,
  *     hasIdentityUserIdsReadScope?: boolean,
+ *     hasReceiptsWriteScope?: boolean,
  *     status?: string,
  *   } | null,
  *   error: { type: string } | null
