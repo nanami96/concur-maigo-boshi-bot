@@ -20,6 +20,7 @@
 // 終えるまで2回目の呼び出しの本体は実行されない（run-to-completionの
 // 区間内）ことが保証され、確実に2回目をブロックできる。
 import { createQuickExpense as defaultCreateQuickExpense } from "./data/concurApi";
+import { linkConcurUser as defaultLinkConcurUser } from "./data/concurUserLinkRepository";
 
 export function computeRegistrationSignature(registrationData) {
   return registrationData ? JSON.stringify(registrationData) : null;
@@ -74,14 +75,68 @@ export async function submitConcurRegistration({
 }
 
 /**
+ * 【Phase 13で追加】ConcurログインIDがまだ紐付けられていない場合にのみ、
+ * linkConcurUser()（Identity APIで実在確認したうえでuser_id×company_id単位で
+ * 保存する）を呼び出す。既に紐付け済みの場合（needsLink:false）は何もせず
+ * 常に成功として扱う。
+ *
+ * @param {object} input
+ * @param {boolean} input.needsLink
+ * @param {string} input.companyCode
+ * @param {string} input.concurLoginId
+ * @param {typeof defaultLinkConcurUser} [input.linkConcurUser] テスト用の差し替え。
+ * @returns {Promise<{ ok: boolean, errorType: string|null }>}
+ */
+export async function ensureConcurUserLinked({
+  needsLink,
+  companyCode,
+  concurLoginId,
+  linkConcurUser = defaultLinkConcurUser,
+}) {
+  if (!needsLink) {
+    return { ok: true, errorType: null };
+  }
+
+  try {
+    const { result, error } = await linkConcurUser(companyCode, concurLoginId);
+
+    if (error) {
+      return { ok: false, errorType: error?.type ?? null };
+    }
+
+    if (!result?.linked) {
+      // 安全ゲートOFF（disabled）等、エラーではないがlinked:trueにならない場合も
+      // 未紐付けのままQuick Expenseへは進ませない（fail-closed）。
+      return { ok: false, errorType: null };
+    }
+
+    return { ok: true, errorType: null };
+  } catch {
+    return { ok: false, errorType: null };
+  }
+}
+
+/**
  * ボタン押下時の処理本体。呼び出しガード（二重送信防止・成功後の再送信禁止）
  * を含む、handleRegister()相当のロジック全体。
+ *
+ * 【Phase 13で変更】needsLink:trueの場合、createQuickExpense()を呼ぶ前に
+ * まずensureConcurUserLinked()でConcurログインIDの紐付けを完了させる。
+ * 紐付けに失敗した場合はcreateQuickExpense()自体を呼ばない（二重登録・
+ * 未検証ログインIDでのQuick Expense作成を防ぐため）。submittingRef（同期的な
+ * 二重送信防止フラグ）は紐付け〜Quick Expense作成の一連の処理全体を通して
+ * trueのままにする。
  *
  * @param {object} input
  * @param {{ current: boolean }} input.submittingRef 呼び出し元のuseRef。
  * @param {string} input.phase 呼び出し時点のReact phase state。
  * @param {(phase: string) => void} input.onPhaseChange setPhase相当。
  * @param {(errorType: string|null) => void} input.onErrorTypeChange setErrorType相当。
+ * @param {boolean} [input.needsLink] trueの場合、Quick Expense作成前に紐付けを行う。
+ * @param {string} [input.companyCode] 紐付け対象の会社（needsLink:trueの場合に使用）。
+ * @param {string} [input.concurLoginId] 紐付けるConcurログインID（needsLink:trueの場合に使用）。
+ * @param {typeof defaultLinkConcurUser} [input.linkConcurUser] テスト用の差し替え。
+ * @param {() => void} [input.onLinked] 紐付け成功時に呼ばれるコールバック（hasLink状態の更新用）。
  * @returns {Promise<{ skipped: boolean, phase?: string, errorType?: string|null }>}
  */
 export async function runConcurRegistrationSubmit({
@@ -94,6 +149,11 @@ export async function runConcurRegistrationSubmit({
   onUnexpectedError = () => {},
   onPhaseChange,
   onErrorTypeChange,
+  needsLink = false,
+  companyCode,
+  concurLoginId,
+  linkConcurUser = defaultLinkConcurUser,
+  onLinked = () => {},
 }) {
   if (shouldBlockConcurRegistrationSubmit({ submitting: submittingRef.current, phase })) {
     return { skipped: true };
@@ -102,6 +162,23 @@ export async function runConcurRegistrationSubmit({
   submittingRef.current = true;
   onPhaseChange("submitting");
   onErrorTypeChange(null);
+
+  // needsLink:falseの場合はensureConcurUserLinked()自体を呼ばない（awaitの
+  // 有無で余計なマイクロタスクの遅延を挟まないため）。既存の二重送信防止
+  // テスト（submittingRef.currentの同期的な代入直後にcreateQuickExpense()が
+  // 呼ばれることを前提にしたテスト）の挙動をneedsLink:false時は完全に維持する。
+  if (needsLink) {
+    const linkOutcome = await ensureConcurUserLinked({ needsLink, companyCode, concurLoginId, linkConcurUser });
+
+    if (!linkOutcome.ok) {
+      submittingRef.current = false;
+      onPhaseChange("error");
+      onErrorTypeChange(linkOutcome.errorType);
+      return { skipped: false, phase: "error", errorType: linkOutcome.errorType };
+    }
+
+    onLinked();
+  }
 
   const outcome = await submitConcurRegistration({
     registrationData,

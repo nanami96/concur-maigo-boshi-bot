@@ -231,6 +231,25 @@ function buildVaultAdapters(serviceClient, log) {
 
       return data === true;
     },
+    // 【Phase 13で追加】get_concur_user_link_for_edge(p_user_id, p_company_id)は
+    // service_roleのみEXECUTE可（supabase/schema.sql参照）。link-concur-user
+    // Edge Functionが事前にIdentity APIで実在確認・保存したConcurログインIDを
+    // 取得する。戻り値は該当行が無ければNULL（未紐付け）。Concur内部の
+    // User ID（UUID）はこのRPC・concur_user_links自体が持たないため、
+    // ここでも一切扱わない。
+    getConcurUserLink: async ({ userId, companyId }) => {
+      const { data, error } = await serviceClient.rpc("get_concur_user_link_for_edge", {
+        p_user_id: userId,
+        p_company_id: companyId,
+      });
+
+      if (error) {
+        log(`Concurログイン紐付け取得エラー (code=${error.code ?? "?"})`);
+        throw error;
+      }
+
+      return typeof data === "string" && data.trim() !== "" ? data : null;
+    },
   };
 }
 
@@ -346,6 +365,7 @@ Deno.serve(async (req) => {
     resolveOAuthCompanyId: vaultAdapters.resolveOAuthCompanyId,
     getRefreshTokenForEdge: vaultAdapters.getRefreshTokenForEdge,
     completeOAuthRefresh: vaultAdapters.completeOAuthRefresh,
+    getConcurUserLink: vaultAdapters.getConcurUserLink,
   });
 
   log(`終了 (status=${status}, errorCode=${body?.error?.code ?? "none"})`);

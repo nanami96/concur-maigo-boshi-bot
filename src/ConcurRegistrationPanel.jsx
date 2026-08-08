@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { buildConcurRegistrationData } from "./lib/concurRegistrationData";
 import { resolveConcurRegistrationErrorMessage } from "./concurRegistrationErrorMessages";
 import { scrollElementIntoViewNaturally } from "./lib/scrollIntoViewNaturally";
+import { getConcurUserLinkStatus } from "./data/concurUserLinkRepository";
 import {
   computeRegistrationSignature,
   runConcurRegistrationSubmit,
@@ -12,6 +13,16 @@ import {
 // 「Concurに登録」ボタンから既存のcreateQuickExpense()
 // （src/data/concurApi.js）を呼び出すコンポーネント（Commit C相当）。
 //
+// 【Phase 13で追加・ConcurログインIDの毎回入力を不要にする】
+// get_my_concur_link_status(text) RPC（src/data/concurUserLinkRepository.js）で
+// 現在の会社（companyCode）に対する紐付け状態（hasLink）を取得し、既に
+// 紐付け済みならログインID入力欄を表示しない（「Concur利用者：確認済み」
+// とだけ表示する）。未紐付けの場合は入力欄を表示し、「Concurに登録」押下時に
+// linkConcurUser()（Identity APIで実在確認したうえでuser_id×company_id単位で
+// 保存する）を先に実行してからcreateQuickExpense()を呼ぶ
+// （src/concurRegistrationSubmission.jsのensureConcurUserLinked()参照）。
+//
+
 // 現時点ではsupabase/functions/create-concur-quick-expenseはConcurへの
 // 実通信を一切行わないスタブ応答（{ quickExpenseId: "stub_quick_expense_id",
 // status: "stubbed" }）しか返さない（createQuickExpenseStub.js参照）。この
@@ -63,9 +74,49 @@ export default function ConcurRegistrationPanel({
   // ConcurログインID（このEdge Function内部でConcur Identity v4によりuserIDを
   // 解決するための入力値。userID自体はフロントから受け取らない・表示しない。
   // supabase/functions/create-concur-quick-expense/handleQuickExpenseRequest.js
-  // 参照）。恒久的な対応付けDBがまだ無いため、送信のたびに利用者が入力する
-  // 暫定的な項目（保存はしない）。
+  // 参照）。
+  //
+  // 【Phase 13で変更】以前は送信のたびに毎回入力する暫定的な項目だったが、
+  // Identity APIで実在確認済みのConcurログインIDをuser_id×company_id単位で
+  // 保存できるようになったため、既に紐付け済みの会社では入力欄自体を表示
+  // しない（hasLink参照）。concurLoginId自体は「未紐付け・紐付け変更中」の
+  // 場合にだけ意味を持つ入力値であり、保存はこのコンポーネントではなく
+  // linkConcurUser()（Identity API確認後、service_role経由でDBへ保存）が行う。
   const [concurLoginId, setConcurLoginId] = useState("");
+
+  // 【Phase 13で追加】ログイン中ユーザー自身の、この会社に対するConcurログイン
+  // ID紐付け状態。null=未確認（読み込み中）、true=紐付け済み、false=未紐付け。
+  // get_my_concur_link_status(text) RPCはhas_link（真偽値）しか返さない
+  // （concurLoginId自体は返らない。src/data/concurUserLinkRepository.js参照）。
+  const [hasLink, setHasLink] = useState(null);
+  // 「Concurアカウントの紐付けを変更」導線で、紐付け済みでも改めて入力欄を
+  // 表示するためのフラグ。
+  const [relinking, setRelinking] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHasLink(null);
+    setRelinking(false);
+
+    if (typeof companyCode !== "string" || companyCode.trim() === "") {
+      return undefined;
+    }
+
+    getConcurUserLinkStatus(companyCode).then(({ result }) => {
+      if (!cancelled) {
+        setHasLink(Boolean(result?.hasLink));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [companyCode]);
+
+  // hasLinkがまだ確認できていない間（null）は、安全側に倒して入力欄を表示する
+  // （fail-open：紐付け済みなのに誤って再入力を求めるだけで、セキュリティ上の
+  // 問題にはならない）。
+  const showConcurLoginIdInput = hasLink !== true || relinking;
 
   const { result: registrationData, error } = buildConcurRegistrationData({
     company,
@@ -125,6 +176,13 @@ export default function ConcurRegistrationPanel({
       phase,
       registrationData,
       isDev: import.meta.env.DEV,
+      needsLink: showConcurLoginIdInput,
+      companyCode,
+      concurLoginId,
+      onLinked: () => {
+        setHasLink(true);
+        setRelinking(false);
+      },
       onStubSuccess: (result) => {
         // 一般利用者へは表示しない、開発環境のコンソールログのみ
         // （ファイル冒頭コメント参照）。
@@ -201,26 +259,44 @@ export default function ConcurRegistrationPanel({
           )}
         </dl>
 
-        <div className="concurRegistrationConcurLoginIdField">
-          <label className="concurRegistrationFieldLabel" htmlFor="concurRegistrationConcurLoginId">
-            ConcurログインID
-          </label>
-          <input
-            id="concurRegistrationConcurLoginId"
-            type="text"
-            value={concurLoginId}
-            onChange={(event) => setConcurLoginId(event.target.value)}
-            disabled={phase === "submitting" || phase === "success"}
-            placeholder="例：taro.yamada@example.com"
-          />
-        </div>
+        {showConcurLoginIdInput ? (
+          <div className="concurRegistrationConcurLoginIdField">
+            <label className="concurRegistrationFieldLabel" htmlFor="concurRegistrationConcurLoginId">
+              ConcurログインID
+            </label>
+            <input
+              id="concurRegistrationConcurLoginId"
+              type="text"
+              value={concurLoginId}
+              onChange={(event) => setConcurLoginId(event.target.value)}
+              disabled={phase === "submitting" || phase === "success"}
+              placeholder="例：taro.yamada@example.com"
+            />
+          </div>
+        ) : (
+          <div className="concurRegistrationConcurLoginIdStatus">
+            <p className="concurRegistrationConcurLoginIdConfirmedText">Concur利用者：確認済み</p>
+            <button
+              type="button"
+              className="concurRegistrationChangeLinkButton"
+              onClick={() => setRelinking(true)}
+              disabled={phase === "submitting"}
+            >
+              Concurアカウントの紐付けを変更
+            </button>
+          </div>
+        )}
 
         <div className="concurRegistrationActions">
           <button
             type="button"
             className="concurRegistrationSubmitButton"
             onClick={handleRegister}
-            disabled={phase === "submitting" || phase === "success" || !isConcurLoginIdValid(concurLoginId)}
+            disabled={
+              phase === "submitting" ||
+              phase === "success" ||
+              (showConcurLoginIdInput && !isConcurLoginIdValid(concurLoginId))
+            }
           >
             {phase === "submitting" ? "登録中…" : "Concurに登録"}
           </button>

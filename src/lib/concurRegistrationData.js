@@ -29,6 +29,19 @@
 // このファイルが新たに追加する検証は、上記が関知しないcompanyId・policyId
 // 自体の有無だけである。
 //
+// concurLoginId（Phase 13で削除）について：
+//   以前はこの関数がconcurLoginId引数を受け取り、戻り値へそのまま含めていた
+//   （create-concur-quick-expenseへ毎回ログインIDを送るため）。Phase 13
+//   （concur_user_links・link-concur-user Edge Function）により、Identity API
+//   で実在確認済みのConcurログインIDをuser_id×company_id単位でサーバー側に
+//   保存できるようになり、Quick Expense作成時はサーバー側（handleQuickExpense
+//   Request.js）が保存済みの値を取得するようになったため、この関数の引数・
+//   戻り値からconcurLoginIdを完全に削除した。ConcurRegistrationPanel.jsxは
+//   紐付け未完了の場合、buildConcurRegistrationData()とは別に
+//   src/data/concurUserLinkRepository.jsのlinkConcurUser()を呼んで紐付けを
+//   完了させてから、この関数の戻り値（concurLoginIdを含まない）をそのまま
+//   createQuickExpense()へ渡す。
+//
 // companyIdについて（重要・混同注意）：
 // 現時点でフロント（BotConversation.jsx等）が実際に取得できるのは、
 // Supabaseの内部UUID（companies.id）ではなく、会社を人が識別するための
@@ -122,16 +135,6 @@ function resolvePolicyId(result) {
  *   既存どおりcompany.company_idへフォールバックする（後方互換）。
  *   Commit 2時点ではまだどのUIからもこの引数は渡していない
  *   （呼び出し側の配線・実際の複数社切替UIはCommit 3以降）。
- * @param {string|null} [input.concurLoginId]
- *   Concur Identity APIでuserIDを解決するためのConcurログインID。
- *   ConcurRegistrationPanel.jsxが用意する入力欄の値をそのまま渡す想定。
- *   このファイル自体は値の形式検証を行わない（禁止文字・長さ上限等の
- *   検証は、既存のIdentity検索と同じ基準をEdge Function側
- *   （supabase/functions/create-concur-quick-expense/validateQuickExpenseRequest.js）が
- *   担う。フロント側でバリデーションロジックを重複させないため）。
- *   未指定の場合、戻り値にconcurLoginIdキー自体を含めない
- *   （既存のtoEqualによる完全一致テストへ影響を与えないため）。
- *
  * @returns {{
  *   result: {
  *     companyId: string,
@@ -143,7 +146,6 @@ function resolvePolicyId(result) {
  *     vendorName: string|null,
  *     receiptRequired: boolean|null,
  *     memo: string|null,
- *     concurLoginId?: string,
  *   } | null,
  *   error: { type: string, message: string } | null,
  * }}
@@ -154,7 +156,6 @@ export function buildConcurRegistrationData({
   receiptData,
   receiptFile,
   memo,
-  concurLoginId,
   companyCode,
 } = {}) {
   const companyId =
@@ -208,7 +209,6 @@ export function buildConcurRegistrationData({
       vendorName: validatedExpenseData.vendorName,
       receiptRequired: validatedExpenseData.receiptRequired,
       memo: typeof memo === "string" ? memo : null,
-      ...(typeof concurLoginId === "string" ? { concurLoginId } : {}),
     },
     error: null,
   };

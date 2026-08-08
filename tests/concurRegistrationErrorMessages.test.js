@@ -37,6 +37,11 @@ describe("classifyConcurRegistrationErrorCategory", () => {
     expect(classifyConcurRegistrationErrorCategory("method_not_allowed")).toBe("function_error");
   });
 
+  it("【Phase 13で追加】concur_user_not_foundはuser_not_foundへ、concur_user_ambiguousはuser_ambiguousへ分類される", () => {
+    expect(classifyConcurRegistrationErrorCategory("concur_user_not_found")).toBe("user_not_found");
+    expect(classifyConcurRegistrationErrorCategory("concur_user_ambiguous")).toBe("user_ambiguous");
+  });
+
   it("unknown（実際の値）・未知の値・null・undefinedはいずれもunknown_errorへ分類される（安全側）", () => {
     expect(classifyConcurRegistrationErrorCategory("unknown")).toBe("unknown_error");
     expect(classifyConcurRegistrationErrorCategory("something_never_defined")).toBe("unknown_error");
@@ -56,12 +61,20 @@ describe("resolveConcurRegistrationErrorMessage", () => {
       "network",
       "internal_error",
       "unknown",
+      "concur_user_not_found",
+      "concur_user_ambiguous",
     ];
     for (const type of types) {
       const message = resolveConcurRegistrationErrorMessage({ type });
       expect(typeof message).toBe("string");
       expect(message.length).toBeGreaterThan(0);
     }
+  });
+
+  it("【Phase 13で追加】concur_user_not_found・concur_user_ambiguousは互いに異なる固定メッセージを持つ", () => {
+    const notFound = resolveConcurRegistrationErrorMessage({ type: "concur_user_not_found" });
+    const ambiguous = resolveConcurRegistrationErrorMessage({ type: "concur_user_ambiguous" });
+    expect(notFound).not.toBe(ambiguous);
   });
 
   it("errorがnull・undefinedでも例外にならず、unknown_error相当のメッセージを返す", () => {

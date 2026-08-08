@@ -137,23 +137,12 @@ describe("buildConcurRegistrationData（正常系）", () => {
     expect(result.companyId).toBe("sample-company");
   });
 
-  it("concurLoginIdを指定した場合はそのまま含まれる", () => {
+  it("【Phase 13で削除】concurLoginIdを渡しても結果に含まれない（サーバー側の保存済みリンクから解決するようになったため）", () => {
     const { result, error } = buildConcurRegistrationData({
       company: buildCompany(),
       result: buildResult(),
       receiptData: buildReceiptData(),
       concurLoginId: "taro.yamada@example.com",
-    });
-
-    expect(error).toBeNull();
-    expect(result.concurLoginId).toBe("taro.yamada@example.com");
-  });
-
-  it("concurLoginId未指定の場合は結果にキー自体を含めない（既存のtoEqual完全一致テストに影響しない）", () => {
-    const { result, error } = buildConcurRegistrationData({
-      company: buildCompany(),
-      result: buildResult(),
-      receiptData: buildReceiptData(),
     });
 
     expect(error).toBeNull();

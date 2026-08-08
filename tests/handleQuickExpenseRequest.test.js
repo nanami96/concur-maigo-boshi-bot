@@ -50,7 +50,6 @@ function buildValidBody(overrides = {}) {
     amount: 1000,
     currencyCode: "JPY",
     receiptRequired: true,
-    concurLoginId: "taro.yamada@example.com",
     ...overrides,
   };
 }
@@ -66,6 +65,15 @@ const DUMMY_ACCESS_TOKEN = "DUMMY_ACCESS_TOKEN_SHOULD_NOT_LEAK";
 const DUMMY_REFRESH_TOKEN = "DUMMY_REFRESH_TOKEN_SHOULD_NOT_LEAK";
 const DUMMY_GEOLOCATION = "https://us.api.concursolutions.test";
 const DUMMY_CONCUR_USER_ID = "3df11695-e8bb-40ff-8e98-c85913ab2789";
+// 【Phase 13で追加】ConcurログインIDはもうクライアントから送られてこない。
+// link-concur-userが事前に保存した値をgetConcurUserLink()経由で取得する想定の
+// テスト専用ダミー値（実際のConcur側の値ではない。secretという名前は
+// レスポンス・ログへ漏れないことを確認するテスト用の目印）。
+const DUMMY_CONCUR_LOGIN_ID = "secret.login.id@example.com";
+
+function defaultGetConcurUserLink() {
+  return vi.fn().mockResolvedValue(DUMMY_CONCUR_LOGIN_ID);
+}
 
 function defaultGetRefreshTokenForEdge() {
   return async () => ({ connectionId: "conn-1", leaseId: "lease-1", refreshToken: DUMMY_REFRESH_TOKEN });
@@ -128,6 +136,7 @@ function buildGateOnAuthedInput(overrides = {}) {
     getRefreshTokenForEdge: defaultGetRefreshTokenForEdge(),
     completeOAuthRefresh: defaultCompleteOAuthRefresh(),
     refreshAccessToken: defaultRefreshAccessToken(),
+    getConcurUserLink: defaultGetConcurUserLink(),
     lookupUser: defaultLookupUser(),
     ...overrides,
   });
@@ -1116,22 +1125,72 @@ describe("handleQuickExpenseRequest", () => {
       expect(createQuickExpense).not.toHaveBeenCalled();
     });
 
-    it("8. concurLoginIdが空・不正な場合、Vaultリース取得すら行わずvalidation_errorを返す（Quick Expense処理も呼ばない）", async () => {
-      const getRefreshTokenForEdge = vi.fn();
+    it("8. 【Phase 13で変更】保存済みのConcurログインID紐付けが無い場合（getConcurUserLinkがnull）、Identity API・Quick Expense処理を呼ばずconcur_user_link_not_foundを返す", async () => {
+      const lookupUser = vi.fn();
       const createQuickExpense = vi.fn();
 
       const { status, body } = await handleQuickExpenseRequest({
         method: "POST",
-        ...buildGateOnAuthedInput({ getRefreshTokenForEdge }),
-        parseBody: parseBodyFor(buildValidBody({ concurLoginId: "" })),
+        ...buildGateOnAuthedInput({ getConcurUserLink: vi.fn().mockResolvedValue(null), lookupUser }),
+        parseBody: parseBodyFor(buildValidBody()),
         createQuickExpense,
       });
 
-      expect(status).toBe(400);
-      expect(body.error.code).toBe("validation_error");
-      expect(body.error.details).toContainEqual({ field: "concurLoginId", reason: "required" });
-      expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+      expect(status).toBe(503);
+      expect(body.error.code).toBe("concur_user_link_not_found");
+      expect(lookupUser).not.toHaveBeenCalled();
       expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("8b. getConcurUserLinkが空文字を返した場合も未紐付けとして扱いfail-closed", async () => {
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ getConcurUserLink: vi.fn().mockResolvedValue("") }),
+        parseBody: parseBodyFor(buildValidBody()),
+      });
+
+      expect(status).toBe(503);
+      expect(body.error.code).toBe("concur_user_link_not_found");
+    });
+
+    it("8c. getConcurUserLink自体が例外を投げた場合はinternal_error", async () => {
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ getConcurUserLink: vi.fn().mockRejectedValue(new Error("db error")) }),
+        parseBody: parseBodyFor(buildValidBody()),
+      });
+
+      expect(status).toBe(500);
+      expect(body.error.code).toBe("internal_error");
+    });
+
+    it("8d. getConcurUserLinkへ、検証済みuserIdとresolveOAuthCompanyIdが解決したcompanyIdが渡る", async () => {
+      const getConcurUserLink = defaultGetConcurUserLink();
+
+      await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ getConcurUserLink }),
+        parseBody: parseBodyFor(buildValidBody()),
+      });
+
+      expect(getConcurUserLink).toHaveBeenCalledWith({ userId: VALID_USER.id, companyId: COMPANY_A_UUID });
+    });
+
+    it("8e. クライアントがconcurLoginIdを本文に送ってきても無視され、getConcurUserLinkが返した値だけがlookupUserへ渡る", async () => {
+      const lookupUser = vi.fn().mockResolvedValue({ ok: true, userId: DUMMY_CONCUR_USER_ID });
+
+      await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ lookupUser }),
+        parseBody: parseBodyFor(buildValidBody({ concurLoginId: "attacker-supplied@example.com" })),
+      });
+
+      expect(lookupUser).toHaveBeenCalledWith(
+        expect.objectContaining({ userName: DUMMY_CONCUR_LOGIN_ID }),
+      );
+      expect(lookupUser).not.toHaveBeenCalledWith(
+        expect.objectContaining({ userName: "attacker-supplied@example.com" }),
+      );
     });
 
     it("9. 解決したuserID（Concur内部UUID）がレスポンスへ一切含まれない", async () => {
@@ -1144,14 +1203,14 @@ describe("handleQuickExpenseRequest", () => {
       expect(JSON.stringify(body)).not.toContain(DUMMY_CONCUR_USER_ID);
     });
 
-    it("10. Access Token・Refresh Token・ConcurログインIDがレスポンス・ログへ一切含まれない（このモジュール自体はconsole.log/errorを一切呼ばない）", async () => {
+    it("10. Access Token・Refresh Token・保存済みConcurログインIDがレスポンス・ログへ一切含まれない（このモジュール自体はconsole.log/errorを一切呼ばない）", async () => {
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       const { body } = await handleQuickExpenseRequest({
         method: "POST",
         ...buildGateOnAuthedInput(),
-        parseBody: parseBodyFor(buildValidBody({ concurLoginId: "secret.login.id@example.com" })),
+        parseBody: parseBodyFor(buildValidBody()),
       });
 
       const allLoggedText = [...logSpy.mock.calls, ...errorSpy.mock.calls].flat().join(" ");
@@ -1159,7 +1218,7 @@ describe("handleQuickExpenseRequest", () => {
       const serializedBody = JSON.stringify(body);
       expect(serializedBody).not.toContain(DUMMY_ACCESS_TOKEN);
       expect(serializedBody).not.toContain(DUMMY_REFRESH_TOKEN);
-      expect(serializedBody).not.toContain("secret.login.id@example.com");
+      expect(serializedBody).not.toContain(DUMMY_CONCUR_LOGIN_ID);
 
       logSpy.mockRestore();
       errorSpy.mockRestore();

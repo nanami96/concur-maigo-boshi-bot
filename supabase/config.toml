@@ -75,3 +75,19 @@ verify_jwt = true
 # 暗黙のデフォルトに依存しない・trueであることを保証するため明示している。
 [functions.lookup-concur-user]
 verify_jwt = true
+
+# link-concur-user：一般利用者（company_membersに所属する本人）が自分自身の
+# ConcurログインIDを、Identity APIで実在確認したうえでuser_id×company_id単位で
+# 保存する（Phase 13）Function。lookup-concur-userとは異なりplatform_admin限定
+# ではないが、is_platform_admin()は使わずresolve_concur_oauth_company_id
+# （company_membersへの実際の所属確認）だけで権限判定する。安全ゲートは
+# 別のSecret（CONCUR_USER_LINK_ENABLED、厳密に"true"の場合のみ有効）で独立に
+# 管理する（このコミット時点では未設定のため、実際には何も通信・保存しない
+# 安全な状態のまま追加している。deployしていない）。
+# 他のEdge Functionと同じ理由でverify_jwtを明示的にtrueとする：関数内部
+# （index.ts・resolveLinkConcurUserAuthorization.js）でもauth.getUser()に
+# よる独立した二重チェックを行っているため、これを無効化しても最終的な
+# 安全性は失われない設計だが、暗黙のデフォルトに依存しない・trueであることを
+# 保証するため明示している。
+[functions.link-concur-user]
+verify_jwt = true

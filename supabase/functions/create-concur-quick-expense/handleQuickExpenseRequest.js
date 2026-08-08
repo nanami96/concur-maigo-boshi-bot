@@ -85,8 +85,16 @@
 //      例外が発生すれば（Vault更新自体が失敗）concur_oauth_storage_failedを
 //      返し、いずれもConcur側最終呼び出し・Identity APIへは進まない。
 //  11. ここまでで「Refresh Tokenの保存成功」が確定した場合にのみ、
-//      lookupConcurUser()（_shared/concur-identity、lookup-concur-userと
-//      同じ共有モジュール）でConcurログインID（concurLoginId）から
+//      【Phase 13で変更】getConcurUserLink({ userId, companyId })
+//      （service_role専用RPC get_concur_user_link_for_edge。supabase/
+//      schema.sql参照）で、link-concur-user Edge Functionが事前にIdentity
+//      APIで実在確認・保存したConcurログインIDを取得する。クライアントは
+//      もうconcurLoginIdを送ってこない（validateQuickExpenseRequest.js
+//      からこのフィールド自体を削除済み）。未紐付け（該当行が無い）の場合は
+//      既定接続的なフォールバックをせずfail-closedでconcur_user_link_
+//      not_foundを返し、Identity APIへは進まない。
+//      取得できた場合にのみ、lookupConcurUser()（_shared/concur-identity、
+//      lookup-concur-userと同じ共有モジュール）でそのConcurログインIDから
 //      userIDを解決する。lookup-concur-user Edge Function自体はHTTP経由で
 //      呼び出さない（認証情報を余計に経由させないため、共有モジュールを
 //      直接呼ぶ）。解決したuserIDはこの関数のローカル変数としてのみ存在し、
@@ -153,6 +161,10 @@
 //   - concur_oauth_not_connected      … 対象接続が無い、またはロック中
 //   - concur_oauth_completion_failed  … 完了RPCがfalse（lease不一致）
 //   - concur_oauth_storage_failed     … 完了RPCが例外（Vault更新自体が失敗）
+//   - concur_user_link_not_found      … 【Phase 13で追加】保存済みのConcur
+//                                        ログインID紐付け（concur_user_links）
+//                                        が無い（link-concur-userで先に
+//                                        紐付けを完了する必要がある）
 //   - concur_identity_geolocation_missing … token応答にgeolocationが無い
 //   - concur_user_not_found           … ConcurログインIDの検索結果0件
 //   - concur_user_ambiguous           … ConcurログインIDの検索結果複数件
@@ -251,6 +263,14 @@ async function safeCompleteFailure(completeOAuthRefresh, connectionId, leaseId, 
  *   廃止した）。常にこの関数の戻り値だけをgetRefreshTokenForEdgeへ渡す。
  * @param {(input: { companyId: string|null }) => Promise<{ connectionId: string, leaseId: string, refreshToken: string } | null>} [input.getRefreshTokenForEdge]
  * @param {(input: { connectionId: string, leaseId: string, success: boolean, newRefreshToken: string|null, errorCode: string|null }) => Promise<boolean>} [input.completeOAuthRefresh]
+ * @param {(input: { userId: string, companyId: string }) => Promise<string|null>} [input.getConcurUserLink]
+ *   【Phase 13で追加】link-concur-user Edge Functionが事前にIdentity APIで
+ *   実在確認・保存したConcurログインIDを取得する、service_role専用RPC
+ *   （get_concur_user_link_for_edge。supabase/schema.sql参照）の呼び出し。
+ *   安全ゲートがtrueの場合だけ呼ばれる。userIdはauthResult.user.id
+ *   （手順2で検証済み）、companyIdはresolveOAuthCompanyIdが解決した
+ *   companies.idを渡す。該当行が無ければnullを返す想定（既定接続への
+ *   フォールバックはしない）。
  * @param {typeof refreshConcurAccessToken} [input.refreshAccessToken]
  * @param {typeof lookupConcurUser} [input.lookupUser]
  * @param {typeof fetch} [input.fetchImpl] テスト用の差し替え（refreshAccessToken・lookupUserへ素通しする）。
@@ -268,6 +288,7 @@ export async function handleQuickExpenseRequest({
   resolveOAuthCompanyId,
   getRefreshTokenForEdge,
   completeOAuthRefresh,
+  getConcurUserLink,
   refreshAccessToken = refreshConcurAccessToken,
   lookupUser = lookupConcurUser,
   fetchImpl,
@@ -418,9 +439,31 @@ export async function handleQuickExpenseRequest({
     // ここまでで「Refresh Tokenの保存成功」が確定した場合にのみ、Identity APIへ進む。
     const { accessToken, geolocation } = oauthResult.tokens;
 
+    // 【Phase 13で変更】ConcurログインIDはもうクライアントから受け取らない
+    // （validateQuickExpenseRequest.jsからconcurLoginIdフィールド自体を削除
+    // 済み）。代わりに、link-concur-user Edge Functionが事前にIdentity APIで
+    // 実在確認・保存したConcurログインIDを、user_id×company_id単位で
+    // getConcurUserLink()（service_role専用RPC get_concur_user_link_for_edge）
+    // から取得する。未紐付け（該当行が無い）の場合は、既定接続的なフォール
+    // バックをせずfail-closedでconcur_user_link_not_foundを返す（Identity API
+    // へは一切進まない）。
+    let linkedConcurLoginId = null;
+    try {
+      linkedConcurLoginId = await getConcurUserLink({ userId: authResult.user.id, companyId: vaultCompanyId });
+    } catch {
+      return { status: 500, body: errorBody("internal_error", "処理中にエラーが発生しました。") };
+    }
+
+    if (typeof linkedConcurLoginId !== "string" || linkedConcurLoginId.trim() === "") {
+      return {
+        status: 503,
+        body: errorBody("concur_user_link_not_found", "Concurアカウントとの紐付けが必要です。"),
+      };
+    }
+
     let lookupResult;
     try {
-      lookupResult = await lookupUser({ geolocation, accessToken, userName: validated.concurLoginId, fetchImpl });
+      lookupResult = await lookupUser({ geolocation, accessToken, userName: linkedConcurLoginId, fetchImpl });
     } catch {
       return { status: 500, body: errorBody("internal_error", "処理中にエラーが発生しました。") };
     }

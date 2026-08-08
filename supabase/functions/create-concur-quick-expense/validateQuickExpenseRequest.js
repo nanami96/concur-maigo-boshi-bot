@@ -41,25 +41,24 @@
 // （Base64化した画像や大きなデータを載せない、レシート添付は別責務という
 // 今回の前提のため）。
 //
+// concurLoginId（Phase 13で削除）について：
+//   以前はクライアントがConcurログインIDを毎回この本文へ含めて送っていたが、
+//   Phase 13（concur_user_links・link-concur-user Edge Function）により、
+//   Identity APIで実在確認済みのConcurログインIDをuser_id×company_id単位で
+//   サーバー側に保存できるようになったため、このリクエストからは
+//   concurLoginIdフィールドを完全に削除した。handleQuickExpenseRequest.jsは
+//   代わりにgetConcurUserLink({ userId, companyId })（service_role専用RPC
+//   get_concur_user_link_for_edge）で保存済みの値を取得する。クライアントが
+//   concurLoginId（またはそれに類する値）をこの本文に含めて送ってきても、
+//   このバリデータは一切読み取らない・使わない（余分なフィールドとして
+//   無視されるだけで、エラーにもならない）。
+//
 // バリデーション方針：
 //   src/lib/concurExpenseData.jsのvalidateConcurExpenseData()は「最初に
 //   見つかった1件のエラーだけを返す」設計だが、このEdge Functionのエラー
 //   形式はdetails配列を持つ（{ code: "validation_error", message, details }）。
 //   detailsが配列であることを活かし、こちらは見つかった問題をすべて集めて
 //   一度に返す（フォームの複数項目を一度に直せるようにするため）。
-//
-// concurLoginId（新規項目）について：
-//   Concur Identity API（GET /profile/identity/v4/Users）でuserIDを解決する
-//   ためのConcurログインID。フィールド名・検証基準は
-//   supabase/functions/lookup-concur-user/（既存のIdentity検索Edge Function）が
-//   使う userName と完全に同じ意味の値のため、Concur側の禁止文字・長さ上限の
-//   判定は_shared/concur-identity/validateConcurIdentityLookupRequest.jsの
-//   validateConcurUserNameValue()をそのまま再利用する（同じ基準を2箇所に
-//   別々実装しない）。userID自体（Concur内部のUUID）はフロントから受け取らない
-//   （このEdge Function内部でIdentity APIへ問い合わせて解決する。
-//   handleQuickExpenseRequest.js参照）。
-import { validateConcurUserNameValue } from "../_shared/concur-identity/validateConcurIdentityLookupRequest.js";
-
 const REQUIRED_STRING_FIELDS = ["companyId", "policyId"];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
@@ -106,7 +105,6 @@ function resolveExpenseTypeId(data) {
  *     amount: number,
  *     currencyCode: string,
  *     receiptRequired: boolean,
- *     concurLoginId: string,
  *     vendorName: string|null,
  *     memo: string|null,
  *   } | null,
@@ -160,14 +158,6 @@ export function validateQuickExpenseRequest(body) {
     details.push({ field: "memo", reason: "invalid_type" });
   }
 
-  const concurLoginIdCheck = validateConcurUserNameValue(data.concurLoginId);
-  if (!concurLoginIdCheck.ok) {
-    details.push({
-      field: "concurLoginId",
-      reason: isBlankString(data.concurLoginId) ? "required" : "invalid_format",
-    });
-  }
-
   if (details.length > 0) {
     return {
       result: null,
@@ -186,7 +176,6 @@ export function validateQuickExpenseRequest(body) {
       receiptRequired: data.receiptRequired,
       vendorName: typeof data.vendorName === "string" ? data.vendorName : null,
       memo: typeof data.memo === "string" ? data.memo : null,
-      concurLoginId: concurLoginIdCheck.ok ? concurLoginIdCheck.userName : null,
     },
     error: null,
   };

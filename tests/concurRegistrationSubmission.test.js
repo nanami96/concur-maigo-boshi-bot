@@ -5,7 +5,11 @@ import {
   shouldBlockConcurRegistrationSubmit,
   submitConcurRegistration,
   runConcurRegistrationSubmit,
+  ensureConcurUserLinked,
 } from "../src/concurRegistrationSubmission.js";
+
+const DUMMY_COMPANY_CODE = "connect-company";
+const DUMMY_CONCUR_LOGIN_ID = "user@example.com";
 
 // createQuickExpense()（src/data/concurApi.js）の値はすべてテスト専用の
 // ダミー値であり、実際のConcur側のコードではない。
@@ -290,5 +294,176 @@ describe("runConcurRegistrationSubmit（ボタン押下ロジック本体・二�
     expect(outcome).toEqual({ skipped: false, phase: "error", errorType: "forbidden" });
     expect(onPhaseChange).toHaveBeenNthCalledWith(2, "error");
     expect(onErrorTypeChange).toHaveBeenNthCalledWith(2, "forbidden");
+  });
+});
+
+describe("ensureConcurUserLinked（Phase 13で追加：ConcurログインID紐付け）", () => {
+  it("needsLink:falseの場合は常に成功として扱い、linkConcurUserを呼ばない", async () => {
+    const linkConcurUser = vi.fn();
+
+    const outcome = await ensureConcurUserLinked({
+      needsLink: false,
+      companyCode: DUMMY_COMPANY_CODE,
+      concurLoginId: DUMMY_CONCUR_LOGIN_ID,
+      linkConcurUser,
+    });
+
+    expect(outcome).toEqual({ ok: true, errorType: null });
+    expect(linkConcurUser).not.toHaveBeenCalled();
+  });
+
+  it("needsLink:trueで紐付け成功（linked:true）の場合はok:true", async () => {
+    const linkConcurUser = vi.fn().mockResolvedValue({ result: { linked: true }, error: null });
+
+    const outcome = await ensureConcurUserLinked({
+      needsLink: true,
+      companyCode: DUMMY_COMPANY_CODE,
+      concurLoginId: DUMMY_CONCUR_LOGIN_ID,
+      linkConcurUser,
+    });
+
+    expect(outcome).toEqual({ ok: true, errorType: null });
+    expect(linkConcurUser).toHaveBeenCalledWith(DUMMY_COMPANY_CODE, DUMMY_CONCUR_LOGIN_ID);
+  });
+
+  it("linkConcurUserがerrorを返した場合、ok:falseとそのerrorTypeを返す", async () => {
+    const linkConcurUser = vi.fn().mockResolvedValue({ result: null, error: { type: "concur_user_not_found" } });
+
+    const outcome = await ensureConcurUserLinked({
+      needsLink: true,
+      companyCode: DUMMY_COMPANY_CODE,
+      concurLoginId: DUMMY_CONCUR_LOGIN_ID,
+      linkConcurUser,
+    });
+
+    expect(outcome).toEqual({ ok: false, errorType: "concur_user_not_found" });
+  });
+
+  it("linkConcurUserがlinked:falseを返した場合（安全ゲートOFF等）、エラーではないがok:falseにする（fail-closed）", async () => {
+    const linkConcurUser = vi.fn().mockResolvedValue({ result: { linked: false, status: "disabled" }, error: null });
+
+    const outcome = await ensureConcurUserLinked({
+      needsLink: true,
+      companyCode: DUMMY_COMPANY_CODE,
+      concurLoginId: DUMMY_CONCUR_LOGIN_ID,
+      linkConcurUser,
+    });
+
+    expect(outcome).toEqual({ ok: false, errorType: null });
+  });
+
+  it("linkConcurUser自体が例外を投げてもphase:errorへ倒れる（固まらない）", async () => {
+    const linkConcurUser = vi.fn().mockRejectedValue(new Error("network down"));
+
+    const outcome = await ensureConcurUserLinked({
+      needsLink: true,
+      companyCode: DUMMY_COMPANY_CODE,
+      concurLoginId: DUMMY_CONCUR_LOGIN_ID,
+      linkConcurUser,
+    });
+
+    expect(outcome).toEqual({ ok: false, errorType: null });
+  });
+});
+
+describe("runConcurRegistrationSubmit（Phase 13で追加：紐付け未完了時のlink-then-create）", () => {
+  it("needsLink:trueかつ紐付け成功時、linkConcurUser→createQuickExpenseの順に1回ずつ呼ばれ、onLinkedが呼ばれる", async () => {
+    const callOrder = [];
+    const linkConcurUser = vi.fn().mockImplementation(async () => {
+      callOrder.push("link");
+      return { result: { linked: true }, error: null };
+    });
+    const createQuickExpense = vi.fn().mockImplementation(async () => {
+      callOrder.push("create");
+      return { result: { quickExpenseId: "stub_quick_expense_id", status: "stubbed" }, error: null };
+    });
+    const onLinked = vi.fn();
+
+    const outcome = await runConcurRegistrationSubmit({
+      submittingRef: { current: false },
+      phase: "idle",
+      registrationData: buildRegistrationData(),
+      createQuickExpense,
+      needsLink: true,
+      companyCode: DUMMY_COMPANY_CODE,
+      concurLoginId: DUMMY_CONCUR_LOGIN_ID,
+      linkConcurUser,
+      onLinked,
+      onPhaseChange: vi.fn(),
+      onErrorTypeChange: vi.fn(),
+    });
+
+    expect(callOrder).toEqual(["link", "create"]);
+    expect(onLinked).toHaveBeenCalledTimes(1);
+    expect(outcome).toEqual({ skipped: false, phase: "success", errorType: null });
+  });
+
+  it("needsLink:trueかつ紐付け失敗時、createQuickExpenseを呼ばずphase:errorになる", async () => {
+    const linkConcurUser = vi.fn().mockResolvedValue({ result: null, error: { type: "concur_user_ambiguous" } });
+    const createQuickExpense = vi.fn();
+    const onLinked = vi.fn();
+    const onPhaseChange = vi.fn();
+    const onErrorTypeChange = vi.fn();
+
+    const outcome = await runConcurRegistrationSubmit({
+      submittingRef: { current: false },
+      phase: "idle",
+      registrationData: buildRegistrationData(),
+      createQuickExpense,
+      needsLink: true,
+      companyCode: DUMMY_COMPANY_CODE,
+      concurLoginId: DUMMY_CONCUR_LOGIN_ID,
+      linkConcurUser,
+      onLinked,
+      onPhaseChange,
+      onErrorTypeChange,
+    });
+
+    expect(createQuickExpense).not.toHaveBeenCalled();
+    expect(onLinked).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ skipped: false, phase: "error", errorType: "concur_user_ambiguous" });
+    expect(onPhaseChange).toHaveBeenLastCalledWith("error");
+  });
+
+  it("needsLink:falseの場合、既存どおりlinkConcurUserを一切呼ばずcreateQuickExpenseだけを呼ぶ（後方互換）", async () => {
+    const linkConcurUser = vi.fn();
+    const createQuickExpense = vi.fn().mockResolvedValue({
+      result: { quickExpenseId: "stub_quick_expense_id", status: "stubbed" },
+      error: null,
+    });
+
+    const outcome = await runConcurRegistrationSubmit({
+      submittingRef: { current: false },
+      phase: "idle",
+      registrationData: buildRegistrationData(),
+      createQuickExpense,
+      needsLink: false,
+      linkConcurUser,
+      onPhaseChange: vi.fn(),
+      onErrorTypeChange: vi.fn(),
+    });
+
+    expect(linkConcurUser).not.toHaveBeenCalled();
+    expect(createQuickExpense).toHaveBeenCalledTimes(1);
+    expect(outcome.phase).toBe("success");
+  });
+
+  it("needsLinkを指定しない既存呼び出しは、これまでどおりcreateQuickExpenseだけを呼ぶ（デフォルト値による後方互換）", async () => {
+    const createQuickExpense = vi.fn().mockResolvedValue({
+      result: { quickExpenseId: "stub_quick_expense_id", status: "stubbed" },
+      error: null,
+    });
+
+    const outcome = await runConcurRegistrationSubmit({
+      submittingRef: { current: false },
+      phase: "idle",
+      registrationData: buildRegistrationData(),
+      createQuickExpense,
+      onPhaseChange: vi.fn(),
+      onErrorTypeChange: vi.fn(),
+    });
+
+    expect(createQuickExpense).toHaveBeenCalledTimes(1);
+    expect(outcome.phase).toBe("success");
   });
 });

@@ -1550,6 +1550,20 @@ begin
 
   delete from company_members where id = p_member_id returning * into v_result;
 
+  -- 【Phase 13で追加】company_membersから削除された(user_id, company_id)の
+  -- 組み合わせに対応するConcurログインID紐付け（concur_user_links）も、
+  -- 同じトランザクション内で削除する。理由：company_membersに所属していない
+  -- ユーザーのConcurログインID紐付けを残しても、resolve_concur_oauth_company_id
+  -- （company_members joinが前提）・get_my_concur_link_status（同じくjoinが前提）
+  -- はいずれも「未所属」として扱い実質参照できなくなるが、孤立した個人情報
+  -- （ConcurログインID）をDBへ残し続けるべきではないため、明示的に削除する。
+  -- v_target.user_id・v_target.company_idは既に削除されたcompany_members行から
+  -- 取得済みの値であり、この関数の権限判定・ロック処理には一切影響しない
+  -- （company_members本体のDELETEが完了した後に行う、独立した後始末のcleanup）。
+  delete from concur_user_links
+  where user_id = v_target.user_id
+    and company_id = v_target.company_id;
+
   return v_result;
 end;
 $$;
@@ -1557,7 +1571,9 @@ $$;
 comment on function remove_company_member(uuid) is
   '呼び出し元がその会社のadmin、またはplatform_adminの場合のみ、対象のcompany_members'
   '行（会社所属）を削除する。auth.users・platform_admins等、company_members以外の'
-  'テーブルは一切変更しない。呼び出し元自身の行、および最後のadminの行は削除できない。';
+  'テーブルは一切変更しない。呼び出し元自身の行、および最後のadminの行は削除できない。'
+  '【Phase 13で追加】削除された(user_id, company_id)に対応するconcur_user_links行'
+  '（ConcurログインID紐付け）も同一トランザクション内で削除する。';
 
 revoke all on function remove_company_member(uuid) from public;
 grant execute on function remove_company_member(uuid) to authenticated;
@@ -2012,7 +2028,251 @@ comment on function resolve_concur_oauth_company_id(uuid, text) is
   '（concur_oauth_connections.company_id）の会社境界解決にのみ使う。';
 
 -- ============================================================================
--- ここまででPhase 9・10・11・12のスキーマも完成です。
+-- 13. Phase 13: Concurログイン ID の user_id × company_id 単位での紐付け保存
+-- ============================================================================
+--
+-- 【重要・このPhaseだけ本番未適用】Phase 12と同じ理由で、このPhase 13は
+-- まだ本番のSupabaseプロジェクトへ適用していません。適用にはsupabase/
+-- migrations/20260808120000_concur_user_links.sqlを使用してください
+-- （このPhaseの内容と同一）。適用前に必ずレビューし、可能であれば一時的な
+-- 検証環境で動作確認してください。
+--
+-- 目的：
+--   これまで「Concurに登録」ボタンを押すたびに利用者へConcurログインIDの
+--   入力を求めていた（ConcurRegistrationPanel.jsx、暫定実装。保存先が
+--   無かったため）。これを解消するため、Identity API
+--   （_shared/concur-identity/lookupConcurUser.js）で実在確認済みの
+--   ConcurログインIDだけを、Supabase user_id × company_id単位でDBへ保存し、
+--   2回目以降のQuick Expense登録では入力を不要にする。
+--
+-- 設計方針（Phase 13検討時の調査・設計フェーズで確定した内容）：
+--   (a) 1ユーザーが複数社に所属できる前提のため、user_idだけでは一意に
+--       できない。必ずuser_id × company_idの組み合わせで保持する
+--       （unique(user_id, company_id)）。
+--   (b) Concur Identity User ID（Concur内部のUUID）は保存しない。
+--       get_concur_refresh_token_for_edge・handleQuickExpenseRequest.js等が
+--       既に持つ「Identity APIで解決したuserIDはDB・Vault・Secrets・
+--       レスポンス・ログのいずれにも出さない」という既存方針をそのまま
+--       維持する。保存するのはIdentity APIで実在確認済みの
+--       ConcurログインID（文字列）だけであり、Quick Expense実行時は
+--       今までどおり毎回Identity APIへ問い合わせてuserIDを解決する
+--       （handleQuickExpenseRequest.js参照）。
+--   (c) 未検証のConcurログインIDをクライアントから直接DBへ書き込ませない。
+--       書き込み経路はservice_role専用RPC（save_concur_user_link）だけであり、
+--       これを呼び出すEdge Function（link-concur-user）がIdentity API側で
+--       found=true・hasUserId=true・multipleMatches=falseを確認した場合
+--       だけ呼び出す。
+--   (d) concur_oauth_connectionsと同じ「RLSポリシーを1件も作らず、grantも
+--       一切与えない」設計を採用する（company_members_select_ownのような
+--       直接のSELECT用RLSポリシーは意図的に作らない）。理由：本テーブルの
+--       生の値（concur_login_id）はConcur側の個人アカウント名に相当する
+--       PIIであり、クライアントに「行の存在有無」以上の情報を一切渡さない
+--       設計にするため。読み取りは全てget_my_concur_link_status()
+--       （has_link真偽値・verified_atのみを返し、concur_login_id自体は
+--       返さない）を経由させる。書き込みはsave_concur_user_link
+--       （service_role専用）、削除はunlink_my_concur_user
+--       （本人のみ、SECURITY DEFINER）を経由させる。
+--   (e) company_admin・platform_adminへは、他ユーザーのconcur_login_id・
+--       所属自体を閲覧できる経路を一切設けない（get_my_concur_link_status・
+--       unlink_my_concur_userはいずれもauth.uid()自身の行だけを対象にする）。
+--       診断目的であっても、真偽値以上の情報を返す関数は用意しない。
+create table if not exists concur_user_links (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  company_id uuid not null references companies (id) on delete cascade,
+  concur_login_id text not null
+    check (char_length(concur_login_id) between 1 and 320),
+  verified_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, company_id)
+);
+
+comment on table concur_user_links is
+  'Supabase user_id × company_id単位でのConcurログインID紐付け。Identity API'
+  '（GET /profile/identity/v4/Users）でfound=true・hasUserId=true・'
+  'multipleMatches=falseを確認できたログインIDだけを保存する（link-concur-user'
+  'Edge Function経由）。Concur内部のUser ID（UUID）は保存しない。';
+comment on column concur_user_links.concur_login_id is
+  'Identity APIで実在確認済みのConcurログインID（例：メールアドレス）のみ。'
+  '未検証の文字列を保存する経路は無い（save_concur_user_linkはservice_role'
+  '専用で、呼び出し元のlink-concur-user Edge Functionが確認済みの値だけを渡す）。';
+comment on column concur_user_links.verified_at is
+  'Identity APIによる実在確認に成功した時刻（link-concur-user側でnow()を設定）。';
+
+create index if not exists idx_concur_user_links_user_id on concur_user_links (user_id);
+
+alter table concur_user_links enable row level security;
+revoke all on concur_user_links from anon, authenticated, public;
+-- 意図的にRLSポリシーを1件も作らない：concur_oauth_connectionsと同じ設計
+-- （本節冒頭コメント(d)参照）。anon/authenticated（一般利用者本人のセッションを
+-- 含む）はこのテーブルへ一切直接アクセスできない。読み取りはget_my_concur_
+-- link_status()・書き込みはsave_concur_user_link()・削除はunlink_my_concur_
+-- user()の3つのSECURITY DEFINER関数経由でのみ行う。
+
+-- RPC: ログイン中ユーザー自身の、指定した会社に対するConcurログインID紐付け
+-- 状態だけを返す（真偽値のみ。concur_login_id自体は返さない）。
+--
+-- 【設計判断・生のConcurログインIDをフロントへ返さない】UX上必要なのは
+-- 「入力欄を表示するかどうか」の判定だけであり、Quick Expense送信時に実際に
+-- 使うconcur_login_idはhandleQuickExpenseRequest.js側がget_concur_user_link_
+-- for_edge()経由でサーバー内部だけで取得する（フロントへ一度も渡さない）。
+-- そのため、このRPCはhas_link・verified_atだけを返す設計にした
+-- （list_my_companies()がcompany UUIDを意図的に返さないのと同じ考え方）。
+--
+-- security definerだがauth.uid()を使う（呼び出し元は必ずauthenticatedの
+-- 通常セッションであり、list_my_companies()・get_my_public_config()と同じ
+-- 信頼モデル）。company_membersとのjoinにより、対象会社へ所属していない
+-- 場合は0行を返す（fail-closed。会社UUID自体はこの関数の外へ一切出さない）。
+create or replace function get_my_concur_link_status(p_company_code text)
+returns table (has_link boolean, verified_at timestamptz)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    (cul.id is not null) as has_link,
+    cul.verified_at
+  from companies c
+  join company_members cm
+    on cm.company_id = c.id
+   and cm.user_id = auth.uid()
+  left join concur_user_links cul
+    on cul.company_id = c.id
+   and cul.user_id = auth.uid()
+  where c.company_code = p_company_code;
+$$;
+
+revoke all on function get_my_concur_link_status(text) from public;
+grant execute on function get_my_concur_link_status(text) to authenticated;
+
+comment on function get_my_concur_link_status(text) is
+  'ログイン中ユーザー(auth.uid())自身の、指定した会社（company_code）に対する'
+  'ConcurログインID紐付けの有無（has_link）とverified_atだけを返す。'
+  'concur_login_id自体は一切返さない。対象会社へ所属していなければ0行'
+  '（fail-closed）。他ユーザーの紐付けは一切参照できない。';
+
+-- RPC: ログイン中ユーザー本人が、指定した会社の紐付けを解除する。
+--
+-- 直接のDELETE用RLSポリシーではなくRPCにした理由：company_members・
+-- concur_oauth_connectionsと同じく「書き込み系の操作は明示的なRPCを経由
+-- させ、RLSポリシーだけに依存しない」という既存方針を踏襲するため
+-- （本節冒頭コメント(d)参照）。
+create or replace function unlink_my_concur_user(p_company_code text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_company_id uuid;
+  v_deleted_count int;
+begin
+  if auth.uid() is null then
+    raise exception 'authentication required' using errcode = '28000';
+  end if;
+
+  select c.id into v_company_id
+  from companies c
+  join company_members cm
+    on cm.company_id = c.id
+   and cm.user_id = auth.uid()
+  where c.company_code = p_company_code;
+
+  if v_company_id is null then
+    return false;
+  end if;
+
+  delete from concur_user_links
+  where user_id = auth.uid()
+    and company_id = v_company_id;
+
+  get diagnostics v_deleted_count = row_count;
+  return v_deleted_count > 0;
+end;
+$$;
+
+revoke all on function unlink_my_concur_user(text) from public;
+grant execute on function unlink_my_concur_user(text) to authenticated;
+
+comment on function unlink_my_concur_user(text) is
+  'ログイン中ユーザー(auth.uid())本人の、指定した会社（company_code）に対する'
+  'concur_user_links行だけを削除する。他ユーザーの行・他社の行は対象にならない。'
+  '対象会社へ所属していない、または紐付けが無い場合はfalseを返す（例外にしない）。';
+
+-- RPC: link-concur-user Edge Function専用（service_roleのみEXECUTE可）。
+-- Identity APIで実在確認済みのConcurログインIDをupsertする。
+--
+-- p_user_id・p_company_idについて：resolve_concur_oauth_company_idと同じ
+-- 信頼モデル。service_roleクライアント経由の呼び出しにはJWTコンテキストが
+-- 無いためauth.uid()は使えず、呼び出し元（link-concur-user/index.ts）が
+-- 別のJWTスコープのSupabaseクライアントで既に検証済みのuser.idと、
+-- resolve_concur_oauth_company_id()が解決したcompanies.idだけを渡す。
+create or replace function save_concur_user_link(
+  p_user_id uuid,
+  p_company_id uuid,
+  p_concur_login_id text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into concur_user_links (user_id, company_id, concur_login_id, verified_at)
+  values (p_user_id, p_company_id, p_concur_login_id, now())
+  on conflict (user_id, company_id)
+  do update set
+    concur_login_id = excluded.concur_login_id,
+    verified_at = excluded.verified_at,
+    updated_at = now();
+end;
+$$;
+
+revoke all on function save_concur_user_link(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function save_concur_user_link(uuid, uuid, text) to service_role;
+
+comment on function save_concur_user_link(uuid, uuid, text) is
+  'Edge Function専用（service_roleのみEXECUTE可）。link-concur-userがIdentity API'
+  'でfound=true・hasUserId=true・multipleMatches=falseを確認した場合だけ呼び出す。'
+  '未検証の値を保存する経路はこの関数の外には無い。(user_id, company_id)が'
+  '既存なら上書き（ログインIDの変更に対応）、無ければ新規作成する。';
+
+-- RPC: create-concur-quick-expense Edge Function専用（service_roleのみ
+-- EXECUTE可）。保存済みのConcurログインIDを取得する。
+--
+-- 【重要】Concur内部のUser ID（UUID）はこの関数からもどこからも返らない
+-- （concur_user_links自体がconcur_login_idしか保持しない設計。本節冒頭
+-- コメント(b)参照）。取得したconcur_login_idはhandleQuickExpenseRequest.js
+-- 側でlookupConcurUser()へ渡すためだけに使い、レスポンス・ログには出さない。
+create or replace function get_concur_user_link_for_edge(
+  p_user_id uuid,
+  p_company_id uuid
+)
+returns text
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select concur_login_id
+  from concur_user_links
+  where user_id = p_user_id
+    and company_id = p_company_id;
+$$;
+
+revoke all on function get_concur_user_link_for_edge(uuid, uuid) from public, anon, authenticated;
+grant execute on function get_concur_user_link_for_edge(uuid, uuid) to service_role;
+
+comment on function get_concur_user_link_for_edge(uuid, uuid) is
+  'Edge Function専用（service_roleのみEXECUTE可）。create-concur-quick-expenseが'
+  '保存済みのConcurログインIDを取得するためだけに使う。該当行が無ければNULL'
+  '（未紐付け。呼び出し元はfail-closedで扱い、既定接続的なフォールバックは'
+  '行わない）。';
+
+-- ============================================================================
+-- ここまででPhase 9・10・11・12・13のスキーマも完成です。
 --
 -- 最初のplatform_admin登録について：
 --   platform_adminsへのINSERTは、company_membersの最初のadmin登録と同様、
@@ -2044,6 +2304,12 @@ comment on function resolve_concur_oauth_company_id(uuid, text) is
 --     だが、migration未適用のためRPC自体が存在せず、実際には呼び出せない。
 --     適用後、Vaultへの実Refresh Token登録（手作業）・
 --     CONCUR_OAUTH_CHECK_ENABLEDの有効化を検討する
+--   ・Phase 13（concur_user_links）は本番未適用。適用は
+--     supabase/migrations/20260808120000_concur_user_links.sqlで行う想定
+--     （このファイル自体はまだ`supabase db push`していない）。
+--     link-concur-user Edge Functionのコード自体は既にこのPhaseのRPC呼び出し
+--     へ対応済みだが、migration未適用のためRPC自体が存在せず、実際には
+--     呼び出せない。適用後、CONCUR_USER_LINK_ENABLEDの有効化を検討する。
 --
 -- 「下書き変更履歴（draft_config_versions・save_draft_with_history・
 -- restore_draft_version）」は一度Phase 5として実装したが、オーバースペックと

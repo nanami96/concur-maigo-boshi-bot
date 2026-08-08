@@ -29,6 +29,13 @@
 //     Concur側のOAuth・アクセストークン関連のエラー（getAccessToken()等）を
 //     このコンポーネントで扱うようになった際の受け皿として、要件通りの
 //     カテゴリ名で先に用意しておく。
+//   - user_not_found・user_ambiguous（Phase 13で追加）は、linkConcurUser()
+//     （src/data/concurUserLinkRepository.js、link-concur-user Edge Function）が
+//     返しうるconcur_user_not_found・concur_user_ambiguousを、利用者が
+//     入力したConcurログインIDを直接修正できる具体的なメッセージへ変換する
+//     （既存のQuick Expense作成時にも同じコードが理論上返りうるが、Phase 13
+//     以降は紐付け未完了時にlinkConcurUser()側で先に検知されるため、実際には
+//     ほぼこの入口でしか発生しない）。
 const ERROR_TYPE_TO_CATEGORY = {
   unauthorized: "unauthorized",
   auth_error: "auth_error",
@@ -37,6 +44,8 @@ const ERROR_TYPE_TO_CATEGORY = {
   multiple_mappings_found: "forbidden",
   validation_error: "validation_error",
   invalid_json: "validation_error",
+  concur_user_not_found: "user_not_found",
+  concur_user_ambiguous: "user_ambiguous",
   timeout: "timeout",
   network: "network_error",
   internal_error: "function_error",
@@ -49,6 +58,8 @@ const CATEGORY_MESSAGES = {
   auth_error: "ログインの有効期限が切れている可能性があります。再度ログインしてください。",
   forbidden: "この操作を行う権限がありません。管理者にお問い合わせください。",
   validation_error: "登録内容に不備があるため、Concurへ登録できませんでした。内容をご確認のうえ、もう一度お試しください。",
+  user_not_found: "入力されたConcurログインIDが見つかりませんでした。入力内容をご確認ください。",
+  user_ambiguous: "入力されたConcurログインIDに複数の利用者が該当しました。管理者にお問い合わせください。",
   timeout: "Concurへの登録に時間がかかりすぎたため中断しました。もう一度お試しください。",
   network_error: "通信エラーが発生しました。通信状態を確認して再度お試しください。",
   function_error: "処理中にエラーが発生しました。しばらくしてから再度お試しください。",
