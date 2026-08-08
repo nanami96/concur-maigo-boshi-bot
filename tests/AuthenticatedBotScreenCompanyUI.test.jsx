@@ -4,6 +4,7 @@ import {
   CompanyHeaderIndicator,
   CompanySelectionGate,
   CompanySwitchErrorMessage,
+  JoinAnotherCompanyPanel,
 } from "../src/AuthenticatedBotScreen.jsx";
 
 // AuthenticatedBotScreen.jsxのReactコンポーネントテスト（Commit 4）。
@@ -160,6 +161,36 @@ describe("CompanySelectionGate（selection-required時の会社選択UI）", () 
     );
 
     expect(html).not.toMatch(/role="alert"/);
+  });
+});
+
+describe("JoinAnotherCompanyPanel（Commit 7：既存ログインユーザーが別会社へ参加する導線）", () => {
+  it("既定では折りたたまれており、「別の会社に参加」ボタンだけを表示する（フォームは表示しない）", () => {
+    const html = renderToStaticMarkup(<JoinAnotherCompanyPanel onJoined={() => {}} />);
+
+    expect(html).toContain("別の会社に参加");
+    expect(html).toContain("<button");
+    expect(html).not.toContain("<form");
+    expect(html).not.toContain("招待コード");
+  });
+
+  it("1社所属・複数社所属いずれの場合でも同じ導線を表示する（companiesの件数を引数に取らない設計）", () => {
+    // JoinAnotherCompanyPanelはcompanies/currentCompanyを一切propsに取らない
+    // ため、所属会社数に関わらず全く同じ結果になる。
+    const htmlA = renderToStaticMarkup(<JoinAnotherCompanyPanel onJoined={() => {}} />);
+    const htmlB = renderToStaticMarkup(<JoinAnotherCompanyPanel onJoined={() => {}} />);
+
+    expect(htmlA).toBe(htmlB);
+    expect(htmlA).toContain("別の会社に参加");
+  });
+
+  it("展開時(defaultOpen)は招待コード入力フォームと「キャンセル」ボタンを表示する", () => {
+    const html = renderToStaticMarkup(<JoinAnotherCompanyPanel onJoined={() => {}} defaultOpen />);
+
+    expect(html).toContain("<form");
+    expect(html).toContain("招待コード");
+    expect(html).toContain("参加する");
+    expect(html).toContain("キャンセル");
   });
 });
 

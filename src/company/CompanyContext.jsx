@@ -42,7 +42,11 @@ export function CompanyProvider({ children }) {
   // 古い呼び出しの結果でstateを上書きしない（後勝ちのレースコンディション対策）。
   const requestIdRef = useRef(0);
 
-  const load = useCallback(async () => {
+  // preferredCompanyCode（Commit 7）：別会社への参加直後（JoinAnotherCompanyPanel）に、
+  // reload()と同時に「参加した会社を優先的に選んでほしい」と伝えるためのオプション引数。
+  // 通常のreload（初回ログイン・NoMembershipGateからの復帰等）は引数無しで呼ばれ、
+  // 従来通りlastCompanyCodeベースの解決になる。resolveCurrentCompany.js参照。
+  const load = useCallback(async (preferredCompanyCode) => {
     const requestId = ++requestIdRef.current;
     setState(INITIAL_STATE);
     // 再読み込み（初回ログイン・NoMembershipGateからの復帰等）は、会社切替とは
@@ -54,6 +58,7 @@ export function CompanyProvider({ children }) {
       fetchMembership: fetchMyMembership,
       readLastCompanyCode,
       clearLastCompanyCode,
+      preferredCompanyCode,
     });
 
     if (requestId !== requestIdRef.current) {

@@ -39,4 +39,10 @@ describe("resolveMembershipErrorMessage", () => {
       resolveMembershipErrorMessage("unknown"),
     );
   });
+
+  it("【複数社所属対応・Commit 7】already_memberは「参加しようとしたその会社」への既存所属を示す文言であり、「どこかの会社」という古い(1ユーザー1社時代の)文言ではない", () => {
+    const message = resolveMembershipErrorMessage("already_member");
+    expect(message).toBe("この会社にはすでに所属しています。");
+    expect(message).not.toContain("どこか");
+  });
 });

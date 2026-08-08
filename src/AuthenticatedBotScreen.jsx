@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import BotConversation from "./BotConversation";
 import InviteCodeScreen from "./admin/InviteCodeScreen";
+import InviteCodeForm from "./admin/InviteCodeForm";
 import { redeemInviteCode } from "./data/membershipRepository";
 import { resolveMembershipErrorMessage } from "./admin/membershipErrorMessages";
 import {
@@ -218,6 +219,51 @@ export function CompanyHeaderIndicator({ currentCompany, companies, isSwitching,
   );
 }
 
+// 既にログイン済み・1社以上所属済みのユーザーが、別会社の招待コードを使って
+// 追加でその会社へ参加するための導線（Commit 7）。0社ユーザー向けの
+// NoMembershipGate（初回参加）とは別の入口で、1社所属ユーザー・複数社所属
+// ユーザーの区別なく同じものを表示する（company_membersの「1ユーザー1社」
+// 制約は撤廃済みで、redeem_invite_code() RPC自体が会社数を気にしない設計の
+// ため。詳細はsupabase/schema.sqlのredeem_invite_code()参照）。
+//
+// フォーム自体はNoMembershipGate配下のInviteCodeScreenと共通のInviteCodeForm
+// （src/admin/InviteCodeForm.jsx）を再利用し、フォームを複製しない。
+// このコンポーネント自身はSupabase RPCを一切直接呼ばない（InviteCodeForm経由で
+// redeemInviteCode()を呼ぶのみ）。参加成功後の所属会社一覧の再取得は、
+// 呼び出し元から渡されたonJoined（実体はCompanyContext.reload()。下の
+// AuthenticatedBotScreenContent参照）だけに委ねる。
+//
+// 既定では折りたたんだ「別の会社に参加」ボタンのみを表示し、クリックで
+// 小さなフォームを展開する（新しいモーダルライブラリ・大きな新規画面は
+// 追加しない方針のため）。defaultOpenはテスト用のオプション引数で、
+// 通常の呼び出し元（AuthenticatedBotScreenContent）は指定しない。
+export function JoinAnotherCompanyPanel({ onJoined, defaultOpen = false }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  if (!isOpen) {
+    return (
+      <button type="button" className="resetButton" onClick={() => setIsOpen(true)}>
+        別の会社に参加
+      </button>
+    );
+  }
+
+  return (
+    <div className="joinAnotherCompanyPanel">
+      <InviteCodeForm
+        submitLabel="参加する"
+        onJoined={(company) => {
+          setIsOpen(false);
+          onJoined(company);
+        }}
+      />
+      <button type="button" className="authModeSwitchLink" onClick={() => setIsOpen(false)}>
+        キャンセル
+      </button>
+    </div>
+  );
+}
+
 // ログイン済みであることが確定した後（AppAuthGate経由）に表示する、
 // 一般利用者Bot画面の本体。
 //
@@ -292,6 +338,20 @@ function AuthenticatedBotScreenContent({ onSignOut }) {
 
   const isAdmin = currentCompany.role === "admin";
 
+  // 別会社への参加成功後の処理（Commit 7）。CompanyContext.reload()
+  // （companiesの再取得）だけを行い、他の場所からSupabase RPCを直接
+  // 呼ばない。redeem_invite_code()のレスポンス（company_code）が安全に
+  // 取得できた場合はpreferredCompanyCodeとして渡し、参加した会社を
+  // そのまま選択済みにする（resolveCurrentCompany.js参照。所属会社一覧に
+  // 実在しない値だった場合はreload側で無視され、通常のreloadと同じ
+  // 挙動＝会社セレクタから選べる状態になるだけにフォールバックする）。
+  const handleJoinedAnotherCompany = useCallback(
+    (company) => {
+      reload(company?.companyCode);
+    },
+    [reload],
+  );
+
   // 管理画面（#admin）はAdminViewportGateにより1024px未満ではPC利用案内へ
   // 差し替わり編集UIを表示しないため、その導線であるこのリンク自体も
   // スマホ幅では意味を持たない。adminLinkButtonクラスでCSS側から
@@ -309,6 +369,10 @@ function AuthenticatedBotScreenContent({ onSignOut }) {
   // このheaderActionsはready・unpublishedの両方で全く同じJSXをそのまま使う
   // （複製しない。unpublished状態でも他の所属会社へ切り替えられるようにする
   // ため。詳細は下のunpublishedブロック参照）。
+  //
+  // 【複数社所属対応・Commit 7で追加】JoinAnotherCompanyPanel（別会社への参加導線）も
+  // ここへ追加した。1社所属ユーザー・複数社所属ユーザーの区別なく常に表示する
+  // （companiesの件数で出し分けない）。
   const headerActions = (
     <>
       <CompanyHeaderIndicator
@@ -318,6 +382,7 @@ function AuthenticatedBotScreenContent({ onSignOut }) {
         onSelectCompany={selectCompany}
       />
       <CompanySwitchErrorMessage message={companySwitchError} />
+      <JoinAnotherCompanyPanel onJoined={handleJoinedAnotherCompany} />
       {isAdmin && (
         <a className="resetButton adminLinkButton" href="#admin">
           管理画面へ

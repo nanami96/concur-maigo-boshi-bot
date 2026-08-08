@@ -187,6 +187,20 @@ button {
   background: #f8fafc;
 }
 
+/* 別会社への参加フォーム（JoinAnotherCompanyPanel、Commit 7）。
+   .headerActions（flex-wrap）内の1項目として、展開時だけ折り返して
+   自分の行に収まる程度の幅を確保する。.authForm自体は幅を持たないため
+   （.authScreen配下での利用を前提にしていたため）、ここで最小限だけ広げる。 */
+.joinAnotherCompanyPanel {
+  flex: 1 1 240px;
+  max-width: 320px;
+}
+
+.joinAnotherCompanyPanel .authForm {
+  margin-top: 0;
+  gap: 8px;
+}
+
 .companySelector select:focus-visible,
 .resetButton:focus-visible,
 .companyManageMenuTrigger:focus-visible {

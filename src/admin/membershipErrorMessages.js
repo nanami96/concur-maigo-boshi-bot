@@ -3,7 +3,10 @@
 // 自体のエラー）とは別に、company_members関連RPC（redeem_invite_code・
 // update_company_member_role等）専用のメッセージ集としてここに置く。
 const MEMBERSHIP_ERROR_MESSAGES = {
-  already_member: "既にどこかの会社に所属しています。",
+  // 【複数社所属対応・Commit 7で文言更新】redeem_invite_code()のalready_memberは
+  // Commit 1以降「どこかの会社に所属している」ではなく「参加しようとした
+  // その会社に既に所属している」ことを意味する（1ユーザー1社制約は撤廃済み）。
+  already_member: "この会社にはすでに所属しています。",
   invalid_code: "招待コードが正しくありません。会社の管理者にご確認ください。",
   platform_forbidden: "この操作にはサービス運営者権限が必要です。",
   forbidden: "この操作には管理者権限が必要です。",

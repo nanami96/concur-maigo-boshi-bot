@@ -69,11 +69,18 @@ async function resolveCompanyByCode({ companies, companyCode, fetchMembership })
   return { outcome: "ok", currentCompany: matched, membership };
 }
 
+// preferredCompanyCode（Commit 7で追加）：別会社への参加直後など、
+// lastCompanyCodeより優先して選びたい会社が分かっている場合に指定する。
+// companiesに実在する場合だけ採用し、実在しない場合は黙って無視して
+// 従来通りlastCompanyCodeベースの解決にフォールバックする（不正な値や
+// 未反映の値を渡されても安全側に倒れる。呼び出し元がcompaniesの中身を
+// 検証する必要は無い）。1件所属の場合は元々自動選択されるため無関係。
 export async function resolveCurrentCompany({
   fetchCompanies,
   fetchMembership,
   readLastCompanyCode,
   clearLastCompanyCode,
+  preferredCompanyCode = null,
 }) {
   const { companies, error: companiesError } = await fetchCompanies();
 
@@ -98,17 +105,20 @@ export async function resolveCurrentCompany({
     };
   }
 
-  const lastCompanyCode = readLastCompanyCode();
-  if (!lastCompanyCode) {
+  const hasPreferred =
+    preferredCompanyCode && companies.some((company) => company.companyCode === preferredCompanyCode);
+  const targetCompanyCode = hasPreferred ? preferredCompanyCode : readLastCompanyCode();
+
+  if (!targetCompanyCode) {
     return { status: "selection-required", currentCompany: null, membership: null, companies };
   }
 
-  if (!companies.some((company) => company.companyCode === lastCompanyCode)) {
+  if (!hasPreferred && !companies.some((company) => company.companyCode === targetCompanyCode)) {
     clearLastCompanyCode();
     return { status: "selection-required", currentCompany: null, membership: null, companies };
   }
 
-  const resolved = await resolveCompanyByCode({ companies, companyCode: lastCompanyCode, fetchMembership });
+  const resolved = await resolveCompanyByCode({ companies, companyCode: targetCompanyCode, fetchMembership });
 
   if (resolved.outcome !== "ok") {
     return { status: "error", currentCompany: null, membership: null, companies };

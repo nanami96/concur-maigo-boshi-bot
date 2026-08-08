@@ -173,6 +173,85 @@ describe("resolveCurrentCompany（list_my_companies()→currentCompany決定→g
   });
 });
 
+describe("resolveCurrentCompany（Commit 7：preferredCompanyCode。別会社への参加直後の優先選択）", () => {
+  it("所属2件以上・preferredCompanyCodeがcompaniesに実在する場合、lastCompanyCodeより優先してその会社を選ぶ", async () => {
+    const companies = [companyOf({ companyCode: "company-a" }), companyOf({ companyCode: "company-b", role: "admin" })];
+    const membership = membershipOf({ companyCode: "company-b", role: "admin" });
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies, error: null }),
+      fetchMembership: vi.fn().mockResolvedValue({ membership, error: null }),
+      readLastCompanyCode: vi.fn().mockReturnValue("company-a"),
+    });
+
+    const result = await resolveCurrentCompany({ ...deps, preferredCompanyCode: "company-b" });
+
+    expect(result).toEqual({ status: "ready", currentCompany: companies[1], membership, companies });
+    expect(deps.fetchMembership).toHaveBeenCalledWith("company-b");
+    // preferredCompanyCodeで解決できた場合、lastCompanyCodeは参照しない。
+    expect(deps.readLastCompanyCode).not.toHaveBeenCalled();
+    expect(deps.clearLastCompanyCode).not.toHaveBeenCalled();
+  });
+
+  it("preferredCompanyCodeがあり、かつlastCompanyCodeが無い（selection-requiredになるはずだった）場合でも、preferredCompanyCodeだけで解決する", async () => {
+    const companies = [companyOf({ companyCode: "company-a" }), companyOf({ companyCode: "company-b" })];
+    const membership = membershipOf({ companyCode: "company-b" });
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies, error: null }),
+      fetchMembership: vi.fn().mockResolvedValue({ membership, error: null }),
+      readLastCompanyCode: vi.fn().mockReturnValue(null),
+    });
+
+    const result = await resolveCurrentCompany({ ...deps, preferredCompanyCode: "company-b" });
+
+    expect(result.status).toBe("ready");
+    expect(result.currentCompany).toEqual(companies[1]);
+  });
+
+  it("preferredCompanyCodeがcompaniesに実在しない場合、無視して従来通りlastCompanyCodeベースで解決する", async () => {
+    const companies = [companyOf({ companyCode: "company-a" }), companyOf({ companyCode: "company-b" })];
+    const membership = membershipOf({ companyCode: "company-a" });
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies, error: null }),
+      fetchMembership: vi.fn().mockResolvedValue({ membership, error: null }),
+      readLastCompanyCode: vi.fn().mockReturnValue("company-a"),
+    });
+
+    // company-c はfetchMyCompanies()にまだ反映されていない値、という想定
+    // （反映ラグ等の防御。companiesの中身をここで検証する必要は無い）。
+    const result = await resolveCurrentCompany({ ...deps, preferredCompanyCode: "company-c" });
+
+    expect(result.status).toBe("ready");
+    expect(result.currentCompany).toEqual(companies[0]);
+    expect(deps.readLastCompanyCode).toHaveBeenCalled();
+  });
+
+  it("preferredCompanyCode未指定の場合、既存の挙動（lastCompanyCodeベース）と完全に同じになる", async () => {
+    const companies = [companyOf({ companyCode: "company-a" }), companyOf({ companyCode: "company-b" })];
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies, error: null }),
+      readLastCompanyCode: vi.fn().mockReturnValue(null),
+    });
+
+    const result = await resolveCurrentCompany(deps);
+
+    expect(result).toEqual({ status: "selection-required", currentCompany: null, membership: null, companies });
+  });
+
+  it("所属1件の場合、preferredCompanyCodeの有無に関わらず自動選択される（1件所属には無関係）", async () => {
+    const companies = [companyOf()];
+    const membership = membershipOf();
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies, error: null }),
+      fetchMembership: vi.fn().mockResolvedValue({ membership, error: null }),
+    });
+
+    const result = await resolveCurrentCompany({ ...deps, preferredCompanyCode: "company-a" });
+
+    expect(result.status).toBe("ready");
+    expect(deps.readLastCompanyCode).not.toHaveBeenCalled();
+  });
+});
+
 describe("resolveCompanySwitchError（Commit 5：会社切替失敗時の固定・安全なユーザー向けメッセージ）", () => {
   it("切替成功（ready/unpublished）の場合はnull（エラー無し）", () => {
     expect(resolveCompanySwitchError("ready")).toBeNull();
