@@ -3,6 +3,7 @@ import QuestionEngine from "./engine/QuestionEngine";
 import { renderTextWithLinks } from "./lib/linkifyText";
 import { shouldShowPolicySection } from "./lib/policyVisibility";
 import { shouldShowReceiptOcr } from "./lib/receiptOcrVisibility";
+import { scrollElementIntoViewNaturally } from "./lib/scrollIntoViewNaturally";
 import ReceiptOcrPanel from "./ReceiptOcrPanel";
 import ManualExpenseEntryPanel from "./ManualExpenseEntryPanel";
 import ConcurRegistrationPanel from "./ConcurRegistrationPanel";
@@ -18,23 +19,6 @@ import policyTagIcon from "./assets/policy-tag.png";
 // 自動判定される認証済みBot画面（AuthenticatedBotScreen.jsx）の両方から、
 // このコンポーネントをそのまま再利用する。headerActionsに渡すJSX
 // （会社セレクタ・管理画面リンク等）だけが呼び出し側ごとに異なる。
-
-// prefers-reduced-motionを尊重しつつ、対象要素が見える位置まで自然にスクロール
-// する共通処理（会話の前進時・領収書確定時など、複数のuseEffectから使う）。
-function scrollElementIntoViewNaturally(target, block) {
-  if (!target) {
-    return;
-  }
-
-  const prefersReducedMotion = window.matchMedia(
-    "(prefers-reduced-motion: reduce)",
-  ).matches;
-
-  target.scrollIntoView({
-    behavior: prefersReducedMotion ? "auto" : "smooth",
-    block,
-  });
-}
 
 function getReceiptStatus(receiptRequired) {
   if (receiptRequired === true) {

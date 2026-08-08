@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { analyzeReceiptImage } from "./data/ocrReceiptRepository";
 import { resolveOcrErrorMessage } from "./receiptOcrErrorMessages";
 import { sanitizeDigitsOnly } from "./lib/numericInput";
+import { scrollElementIntoViewNaturally } from "./lib/scrollIntoViewNaturally";
 
 // クライアント側の事前チェック用（Edge Function側の上限と揃えている。
 // supabase/functions/ocr-receipt/index.tsのMAX_FILE_SIZE_BYTES参照）。
@@ -58,6 +59,13 @@ export default function ReceiptOcrPanel({ onConfirm, onAuthExpired }) {
 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  // このパネル自身のルート要素（下のreturn文それぞれで同じrefを渡す）。
+  // ボタン操作でphaseが変わり表示内容が入れ替わる・伸びるたびに、その末尾まで
+  // 自然にスクロールするためのスクロール先として使う。
+  const panelRef = useRef(null);
+  // 初回マウント時（phase="idle"の初期表示）はスクロール不要なため、
+  // BotConversation.jsxのskipNextScrollRefと同じガードパターンを使う。
+  const skipNextScrollRef = useRef(true);
 
   // Object URLはメモリリークを避けるため、fileが変わる・アンマウントされる
   // タイミングで必ずrevokeする。
@@ -72,6 +80,21 @@ export default function ReceiptOcrPanel({ onConfirm, onAuthExpired }) {
       URL.revokeObjectURL(url);
     };
   }, [file]);
+
+  // 「領収書を読み取る」「この画像を読み取る」「読み直す」等、このパネル内の
+  // ボタン操作でphaseが変わるたびに、新しく表示された内容（プレビュー画像・
+  // OCR結果フォーム・エラーメッセージ等）が見える位置まで自動スクロールする。
+  // 「この内容で進む」（review→confirmed）による結果カード全体のスクロールは
+  // 既にBotConversation.jsx側のreceiptData監視で行われるが、それ以前の
+  // phase遷移（idle→picking→preview→analyzing→review等）はこのパネルの外からは
+  // 検知できないため、ここで自己完結的にスクロールする。
+  useEffect(() => {
+    if (skipNextScrollRef.current) {
+      skipNextScrollRef.current = false;
+      return;
+    }
+    scrollElementIntoViewNaturally(panelRef.current, "end");
+  }, [phase]);
 
   function resetInputs() {
     if (fileInputRef.current) {
@@ -196,7 +219,7 @@ export default function ReceiptOcrPanel({ onConfirm, onAuthExpired }) {
 
   if (phase === "idle") {
     return (
-      <div className="receiptOcrSection">
+      <div className="receiptOcrSection" ref={panelRef}>
         <button type="button" className="receiptOcrPrimaryButton" onClick={handleStart}>
           <ReceiptCameraIcon />
           領収書を読み取る（β）
@@ -206,7 +229,7 @@ export default function ReceiptOcrPanel({ onConfirm, onAuthExpired }) {
   }
 
   return (
-    <div className="receiptOcrSection">
+    <div className="receiptOcrSection" ref={panelRef}>
       <div className="receiptOcrCard">
         <h3 className="receiptOcrHeading">
           <ReceiptCameraIcon />

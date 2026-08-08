@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { buildConcurRegistrationData } from "./lib/concurRegistrationData";
 import { resolveConcurRegistrationErrorMessage } from "./concurRegistrationErrorMessages";
+import { scrollElementIntoViewNaturally } from "./lib/scrollIntoViewNaturally";
 import {
   computeRegistrationSignature,
   runConcurRegistrationSubmit,
@@ -82,20 +83,41 @@ export default function ConcurRegistrationPanel({
   // 非同期に反映）ではなくこちらで判定する理由は
   // concurRegistrationSubmission.js冒頭コメント参照。
   const submittingRef = useRef(false);
+  // このカード自身のルート要素。「Concurに登録」ボタン押下後に表示される
+  // 「登録中…」「受け付けました」「エラー」の文言（下のaria-live領域）まで
+  // 自動スクロールするためのスクロール先として使う。
+  const panelRef = useRef(null);
 
   // 登録対象データ（registrationData）自体が変わった場合（例：OCR内容の
   // 修正・別の判定結果への遷移）は、以前の送信結果を引き継がず状態を
   // 初期化する。
   const registrationSignature = computeRegistrationSignature(registrationData);
   const previousSignatureRef = useRef(registrationSignature);
+  // 下のphase監視スクロール用のガード。初回マウント時と、このデータ変更に
+  // よるidleへのリセット時は、利用者のボタン操作ではないためスクロール
+  // しない（trueにした次のphase変化を1回だけスキップする）。
+  const skipNextPhaseScrollRef = useRef(true);
 
   useEffect(() => {
     if (previousSignatureRef.current !== registrationSignature) {
       previousSignatureRef.current = registrationSignature;
+      skipNextPhaseScrollRef.current = true;
       setPhase("idle");
       setErrorType(null);
     }
   }, [registrationSignature]);
+
+  // 「Concurに登録」ボタン押下によるphaseの変化（idle→submitting→success/
+  // error）のたびに、新しく表示される案内文（下のaria-live領域）が見える
+  // 位置まで自動スクロールする。データ変更によるidleへのリセット
+  // （上のuseEffect）はskipNextPhaseScrollRefにより対象外にする。
+  useEffect(() => {
+    if (skipNextPhaseScrollRef.current) {
+      skipNextPhaseScrollRef.current = false;
+      return;
+    }
+    scrollElementIntoViewNaturally(panelRef.current, "end");
+  }, [phase]);
 
   async function handleRegister() {
     await runConcurRegistrationSubmit({
@@ -121,7 +143,7 @@ export default function ConcurRegistrationPanel({
   }
 
   return (
-    <div className="concurRegistrationSection">
+    <div className="concurRegistrationSection" ref={panelRef}>
       <div className="concurRegistrationCard">
         <h3 className="concurRegistrationHeading">Concurへの登録内容を確認</h3>
         <p className="concurRegistrationHint">
