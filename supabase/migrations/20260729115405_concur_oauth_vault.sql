@@ -347,8 +347,55 @@ comment on function complete_concur_oauth_refresh(uuid, uuid, boolean, text, tex
   'Vault更新（vault.update_secret）とメタデータ更新は同一トランザクション内。';
 
 -- ----------------------------------------------------------------------------
+-- 7. RPC: create-concur-quick-expense専用・Concur OAuth Vault接続の会社境界
+--    解決（company_members/companiesから直接解決。concur_oauth_connections
+--    自体には依存しないため、このRPC単体は本migrationが未適用でも動作しうるが、
+--    用途上Phase 12と一体で扱う）。
+--
+-- 【設計レビューの結論・追記】当初はget_my_public_config(p_company_code)
+-- （supabase/schema.sql Phase 7、既に本番適用済みの利用者向けRPC）の戻り値へ
+-- company_id列を追加する案を検討したが、(a)利用者向けRPCにEdge Function
+-- 内部専用の値を持ち込むべきではない、(b)既存のlist_my_companies()が
+-- company UUIDを意図的に含めない最小metadata設計を採っており矛盾する、
+-- (c)get_concur_refresh_token_for_edge・complete_concur_oauth_refreshと同じ
+-- service_role専用RPCとして分離すれば、company UUIDをブラウザへ一切返さずに
+-- 解決できる、という理由から採用しなかった。詳細はsupabase/schema.sqlの
+-- 同名関数の直前コメント参照（本ファイルとschema.sqlのこのRPC本体は一致させる
+-- こと。tests/schemaSqlConcurOAuthVault.test.js参照）。
+create or replace function resolve_concur_oauth_company_id(
+  p_user_id uuid,
+  p_company_code text
+)
+returns uuid
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select c.id
+  from company_members cm
+  join companies c on c.id = cm.company_id
+  where cm.user_id = p_user_id
+    and c.company_code = p_company_code;
+$$;
+
+revoke all on function resolve_concur_oauth_company_id(uuid, text) from public, anon, authenticated;
+grant execute on function resolve_concur_oauth_company_id(uuid, text) to service_role;
+
+comment on function resolve_concur_oauth_company_id(uuid, text) is
+  'Edge Function専用（service_roleのみEXECUTE可）。p_user_id（呼び出し元が'
+  '既にauth.getUser()等で検証済みのユーザーID）がp_company_codeで指定された'
+  '会社へ実際に所属している場合だけ、その会社のcompanies.id（Supabase内部'
+  'UUID）を返す。未所属・存在しない会社はNULLを返す（先頭行の自動選択は行わ'
+  'ない。company_code完全一致のみで解決するため複数社所属でも一意に決まる）。'
+  'auth.uid()は使わない（service_role呼び出しにはJWTコンテキストが無いため）。'
+  'create-concur-quick-expenseがConcur OAuth Vault接続'
+  '（concur_oauth_connections.company_id）の会社境界解決にのみ使う。';
+
+-- ----------------------------------------------------------------------------
 -- rollback（未適用・案。実行が必要になった場合にこのブロックだけを使う）
 -- ----------------------------------------------------------------------------
+-- drop function if exists resolve_concur_oauth_company_id(uuid, text);
 -- drop function if exists complete_concur_oauth_refresh(uuid, uuid, boolean, text, text);
 -- drop function if exists get_concur_refresh_token_for_edge(uuid);
 -- drop table if exists concur_oauth_connections;

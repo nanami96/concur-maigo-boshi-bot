@@ -195,6 +195,67 @@ describe.each(SOURCES)("$label: grant/revokeは今回変更していない", ({ 
   });
 });
 
+// resolve_concur_oauth_company_id()：Quick ExpenseのVault会社境界解決専用に
+// 新設したRPC（設計レビューの結論。get_my_public_config()へcompany_id列を
+// 追加する当初案は撤回した）。既存のget_concur_refresh_token_for_edge・
+// complete_concur_oauth_refreshと同じ「service_role専用」パターンで、
+// company UUIDをブラウザへ一切返さないことを確認する。
+describe.each(SOURCES)(
+  "$label: resolve_concur_oauth_company_id()はcompany_members/companiesから直接解決し、auth.uid()を使わない",
+  ({ filePath }) => {
+    const sql = stripComments(fs.readFileSync(filePath, "utf8"));
+    const block = extractBlock(
+      sql,
+      "create or replace function resolve_concur_oauth_company_id(",
+      "revoke all on function resolve_concur_oauth_company_id",
+    );
+
+    it("p_user_id・p_company_codeの両方でcompany_members/companiesを絞り込む", () => {
+      expect(block).toMatch(/where cm\.user_id = p_user_id\s*\n?\s*and c\.company_code = p_company_code/);
+    });
+
+    it("auth.uid()を使っていない（service_role呼び出しにはJWTコンテキストが無いため）", () => {
+      expect(block).not.toMatch(/auth\.uid\(\)/);
+    });
+
+    it("limit 1やorder byで先頭行だけを機械的に選ぶ実装になっていない（company_code完全一致だけで一意に決まる設計）", () => {
+      expect(block).not.toMatch(/limit 1/i);
+      expect(block).not.toMatch(/order by/i);
+    });
+
+    it("returns uuid（スカラー）であり、returns tableではない", () => {
+      const signatureBlock = extractBlock(sql, "create or replace function resolve_concur_oauth_company_id(", "$$;");
+      expect(signatureBlock).toMatch(/returns uuid/);
+      expect(signatureBlock).not.toMatch(/returns table/);
+    });
+  },
+);
+
+describe.each(SOURCES)(
+  "$label: resolve_concur_oauth_company_id(uuid, text)はservice_roleのみEXECUTE可（今回新設）",
+  ({ filePath }) => {
+    const sql = stripComments(fs.readFileSync(filePath, "utf8"));
+
+    it("public/anon/authenticatedからrevoke allされている", () => {
+      expect(sql).toMatch(
+        /revoke all on function resolve_concur_oauth_company_id\(uuid, text\) from public, anon, authenticated;/,
+      );
+    });
+
+    it("service_roleへのみgrant executeされている", () => {
+      expect(sql).toMatch(
+        /grant execute on function resolve_concur_oauth_company_id\(uuid, text\) to service_role;/,
+      );
+    });
+
+    it("authenticatedへのgrant executeが存在しない（get_my_public_config()等の利用者向けRPCとは異なり、ブラウザから直接呼び出せない）", () => {
+      expect(sql).not.toMatch(
+        /grant execute on function resolve_concur_oauth_company_id\(uuid, text\) to authenticated;/,
+      );
+    });
+  },
+);
+
 describe("supabase/schema.sqlとMigrationファイルのPhase 12部分が実質的に一致している", () => {
   const schemaSql = stripComments(fs.readFileSync(SCHEMA_SQL_PATH, "utf8"));
   const migrationSql = stripComments(fs.readFileSync(MIGRATION_SQL_PATH, "utf8"));
@@ -229,6 +290,20 @@ describe("supabase/schema.sqlとMigrationファイルのPhase 12部分が実質�
       migrationSql,
       "create or replace function complete_concur_oauth_refresh(",
       "revoke all on function complete_concur_oauth_refresh",
+    );
+    expect(schemaBlock).toBe(migrationBlock);
+  });
+
+  it("resolve_concur_oauth_company_id()の関数本体が一致する", () => {
+    const schemaBlock = normalize(
+      schemaSql,
+      "create or replace function resolve_concur_oauth_company_id(",
+      "revoke all on function resolve_concur_oauth_company_id",
+    );
+    const migrationBlock = normalize(
+      migrationSql,
+      "create or replace function resolve_concur_oauth_company_id(",
+      "revoke all on function resolve_concur_oauth_company_id",
     );
     expect(schemaBlock).toBe(migrationBlock);
   });

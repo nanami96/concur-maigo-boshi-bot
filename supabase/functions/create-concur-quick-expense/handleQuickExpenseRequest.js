@@ -54,6 +54,29 @@
 //      functions/lookup-concur-user/handleLookupConcurUserRequest.jsと同じ
 //      Vaultリース手順）。取得できない場合はconcur_oauth_not_connectedを返す。
 //      token endpointへは通信しない。
+//      【重要・会社境界（複数社対応・設計レビューにより最終決定）】ここで渡す
+//      companyId（Vault接続の識別子。concur_oauth_connections.company_id）は、
+//      resolveOAuthCompanyId({ userId, companyCode })（service_role専用の
+//      resolve_concur_oauth_company_id RPC相当。supabase/schema.sql参照）が、
+//      authResult.user.id（手順2で検証済み）とvalidated.companyId（手順5で
+//      所属確認済みのcompany_code）から解決したcompanies.idだけを使う。
+//      クライアントがcompany UUIDを送ってくる経路は無い（リクエストスキーマに
+//      そのようなフィールドは存在しない。validateQuickExpenseRequest.js
+//      参照）ため、信用できるのはこの解決結果以外にない。
+//      【設計レビューの経緯】当初はget_my_public_config(p_company_code)の
+//      戻り値へcompany_id列を追加し、fetchCompanyMembershipが返す
+//      membership.company_idを使う案を検討したが、利用者向けの汎用RPCへ
+//      Edge Function内部専用の値を持ち込むべきではないと判断し、
+//      resolveOAuthCompanyId（service_role専用の別RPC呼び出し。ブラウザから
+//      直接呼び出す経路が無い）へ分離した（get_my_public_configは無変更）。
+//      以前はcompanyIdを解決する手段自体が無く、常にnull（＝既定接続）を
+//      渡していたため、複数社対応後は「A社のリクエストなのにB社（または
+//      共有の既定接続）のConcur OAuth接続を使ってしまう」cross-company混在
+//      のリスクがあった。resolveOAuthCompanyId()の呼び出しは安全ゲート
+//      （手順7）の内側で行う（ゲートOFFなら呼ばれない）。解決できない場合
+//      （未所属・存在しない会社・本番未適用でRPC自体が無い場合を含む）は、
+//      既定接続へフォールバックせずfail-closedでconcur_oauth_not_connected
+//      を返す（Vaultリース取得自体を行わない）。
 //   9. refreshConcurAccessToken()でtoken endpointへRefresh Token Grantを実行する。
 //      失敗した場合：completeOAuthRefresh({success:false, errorCode})でリースを
 //      解放し（ベストエフォート）、Concur側最終呼び出し・Identity APIへは進まない。
@@ -81,7 +104,7 @@
 //      だけで独立に判定する（明示DIがあってもゲートOFFならパイプラインは動かない）。
 //  13. 成功結果を返す
 //
-// companyIdの値空間について（重要）：
+// companyIdの値空間について（重要・2種類のcompanyIdを混同しないこと）：
 //   本文のcompanyId・fetchCompanyMembershipが返すmembership.company_codeは、
 //   いずれもcompanies.company_code（人が識別するためのスラッグ）であり、
 //   company_members.company_id（Supabase内部UUID）ではない。
@@ -89,6 +112,20 @@
 //   index.ts・resolveMembershipFromPublicConfigRow.js参照（複数社所属対応後は
 //   get_my_public_config(p_company_code)へcompanyIdをそのまま渡し、
 //   auth.uid()とcompanyIdの両方に一致する所属だけを解決する）。
+//   get_my_public_config()はこの所属確認・経費タイプ検証専用の責務のみを持ち、
+//   company UUIDは一切返さない（設計レビューにより、Vault会社境界解決とは
+//   明確に分離した。下記resolveOAuthCompanyId参照）。
+//
+//   一方、getRefreshTokenForEdge()へ渡すcompanyId（Vault接続の識別子。
+//   concur_oauth_connections.company_id）は全く別の値空間で、
+//   companies.id（Supabase内部UUID）そのもの。この値はクライアントから
+//   受け取らず、またmembership（fetchCompanyMembershipの戻り値）からも
+//   取り出さない。必ずresolveOAuthCompanyId({ userId, companyCode })
+//   （service_role専用のresolve_concur_oauth_company_id RPC。
+//   supabase/schema.sql参照）を、authResult.user.id（fetchUserで検証済み）と
+//   validated.companyId（company_code）で呼び出し、その戻り値だけを使う
+//   （外部から渡せる入力パラメータとしてのcompanyIdはこの関数には存在せず、
+//   常にこのRPC呼び出し結果からのみ得られる）。
 //
 // このEdge Functionが返しうるエラーコード：
 //   - method_not_allowed        … POST以外のメソッド
@@ -184,8 +221,9 @@ async function safeCompleteFailure(completeOAuthRefresh, connectionId, leaseId, 
  *   （company_code）が確定してから呼ぶ必要があるため）。解決したuserが
  *   companyCodeで指定された会社へ実際に所属している場合だけmembership
  *   （company_code・role・所属会社が公開している経費タイプ一覧expenseTypes・
- *   expenseTypeIdMode）を返す。所属していなければnull（下の
- *   input.companyId＝Vaultの既定接続識別子とは全く別の値であることに注意）。
+ *   expenseTypeIdMode）を返す。所属していなければnull。company UUIDは
+ *   含まない（get_my_public_config()は所属確認・経費タイプ検証専用の責務の
+ *   ため。Vault会社境界の解決はresolveOAuthCompanyId参照）。
  * @param {typeof resolveQuickExpenseAuthorization} [input.resolveAuthorization]
  *   本人確認（fetchUserのみ）のロジック本体。既定はresolveQuickExpenseAuthorization
  *   （実運用の呼び出し元・index.tsは指定不要。テストでの差し替え用）。
@@ -200,9 +238,17 @@ async function safeCompleteFailure(completeOAuthRefresh, connectionId, leaseId, 
  *   一切参照しない安全なスタブ応答）を内部で自動的に選ぶ。index.tsは
  *   この選択に一切関与しない（ファイル冒頭コメント・最終報告参照）。
  * @param {Record<string, string|undefined>} [input.env] CONCUR_CLIENT_ID等のSecret名をキーとした値の集合。
- * @param {string|null} [input.companyId] Concur OAuth Vault接続の識別子（現時点では
- *   常にnull＝既定接続。将来のConcur側複数社対応用で、今回の「1ユーザー複数会社」
- *   対応（fetchCompanyMembershipのcompanyCode）とは全く別の概念のため混同しないこと）。
+ * @param {(input: { userId: string, companyCode: string }) => Promise<string|null>} [input.resolveOAuthCompanyId]
+ *   Concur OAuth Vault接続の会社境界（concur_oauth_connections.company_id）を
+ *   解決する、service_role専用RPC（resolve_concur_oauth_company_id。
+ *   supabase/schema.sql参照）の呼び出し。安全ゲート（isConcurQuickExpenseEnabled）
+ *   がtrueの場合だけ呼ばれる。userIdはauthResult.user.id（fetchUserで検証
+ *   済み）、companyCodeはvalidated.companyId（手順5で所属確認済み）を渡す。
+ *   対象の所属が無ければnullを返す想定（RPC自体が0行→NULLを返す設計）。
+ *   この関数の外部入力パラメータとしてのcompanyId（Vault接続識別子そのもの）は
+ *   存在しない（以前は呼び出し元がcompanyIdを直接渡せたが、常にnull固定で
+ *   呼ばれており、複数社対応後にcross-company接続混在のリスクがあったため
+ *   廃止した）。常にこの関数の戻り値だけをgetRefreshTokenForEdgeへ渡す。
  * @param {(input: { companyId: string|null }) => Promise<{ connectionId: string, leaseId: string, refreshToken: string } | null>} [input.getRefreshTokenForEdge]
  * @param {(input: { connectionId: string, leaseId: string, success: boolean, newRefreshToken: string|null, errorCode: string|null }) => Promise<boolean>} [input.completeOAuthRefresh]
  * @param {typeof refreshConcurAccessToken} [input.refreshAccessToken]
@@ -219,7 +265,7 @@ export async function handleQuickExpenseRequest({
   resolveAuthorization = resolveQuickExpenseAuthorization,
   createQuickExpense,
   env,
-  companyId = null,
+  resolveOAuthCompanyId,
   getRefreshTokenForEdge,
   completeOAuthRefresh,
   refreshAccessToken = refreshConcurAccessToken,
@@ -300,9 +346,34 @@ export async function handleQuickExpenseRequest({
   // 下のcreateQuickExpenseのDI優先順位（明示DIの有無）とは完全に独立している。
   let context;
   if (isConcurQuickExpenseEnabled(env)) {
+    // 会社境界（重要）：Vaultから取得するRefresh Tokenの対象会社は、必ず
+    // resolveOAuthCompanyId({ userId, companyCode })（service_role専用の
+    // resolve_concur_oauth_company_id RPC相当）が、authResult.user.id
+    // （手順2で検証済み）とvalidated.companyId（手順5で所属確認済みの
+    // company_code）から解決したcompanies.idだけを使う。クライアントは
+    // company UUIDを一切送ってこない（リクエストスキーマにそのような
+    // フィールドは存在しない。validateQuickExpenseRequest.js参照）ため、
+    // ここで信用できるのはこのRPCの解決結果以外にない。get_my_public_config
+    // 経由のmembershipオブジェクトはcompany UUIDを持たない（設計レビューに
+    // より、利用者向けRPCとVault会社境界解決の責務を分離したため）。
+    // 未解決（未所属・存在しない会社・本番未適用でRPC自体が無い場合を含む）
+    // の場合は、既定接続（company_id IS NULLの共有接続）へフォールバックせず、
+    // Vaultリース取得自体を行わずfail-closedにする（他社・既定接続の
+    // Refresh Tokenを誤って使う経路を構造的に無くす）。
+    let vaultCompanyId = null;
+    try {
+      vaultCompanyId = await resolveOAuthCompanyId({ userId: authResult.user.id, companyCode: validated.companyId });
+    } catch {
+      return { status: 500, body: errorBody("internal_error", "処理中にエラーが発生しました。") };
+    }
+
+    if (typeof vaultCompanyId !== "string" || vaultCompanyId.trim() === "") {
+      return { status: 503, body: errorBody("concur_oauth_not_connected", "現在Concurとの接続情報を利用できません。") };
+    }
+
     let lease = null;
     try {
-      lease = await getRefreshTokenForEdge({ companyId });
+      lease = await getRefreshTokenForEdge({ companyId: vaultCompanyId });
     } catch {
       return { status: 500, body: errorBody("internal_error", "処理中にエラーが発生しました。") };
     }

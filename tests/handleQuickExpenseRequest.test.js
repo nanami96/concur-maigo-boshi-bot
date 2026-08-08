@@ -24,6 +24,23 @@ const VALID_MEMBERSHIP = {
   expenseTypeIdMode: "concur_exp_key",
 };
 
+// company_id（Supabase内部UUID相当）：resolveOAuthCompanyId({ userId,
+// companyCode })（resolve_concur_oauth_company_id RPC相当）が解決したと
+// 想定するダミー値。membershipオブジェクトはcompany UUIDを一切持たない
+// （設計レビューにより責務分離。get_my_public_config()は所属確認・経費タイプ
+// 検証専用）。実際のUUID形式である必要はなく、テスト専用のダミー値だが、
+// 他社（COMPANY_C_UUID等）と衝突しない値にすることで「A社のリクエストで
+// B社のUUIDが使われていないか」を検証できる。
+const COMPANY_A_UUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+
+// resolveOAuthCompanyIdの既定モック（buildGateOnAuthedInput()参照）。
+// VALID_MEMBERSHIPのcompany_code（"company-a"）が指定された場合だけ
+// COMPANY_A_UUIDを返す（companyCodeを無視して固定値を返す危険な実装では
+// ないことを、この既定モック自体でも体現する）。
+function defaultResolveOAuthCompanyId() {
+  return vi.fn(async ({ companyCode }) => (companyCode === VALID_MEMBERSHIP.company_code ? COMPANY_A_UUID : null));
+}
+
 function buildValidBody(overrides = {}) {
   return {
     companyId: "company-a",
@@ -107,6 +124,7 @@ function buildAuthedInput(overrides = {}) {
 function buildGateOnAuthedInput(overrides = {}) {
   return buildAuthedInput({
     env: { CONCUR_QUICK_EXPENSE_ENABLED: "true" },
+    resolveOAuthCompanyId: defaultResolveOAuthCompanyId(),
     getRefreshTokenForEdge: defaultGetRefreshTokenForEdge(),
     completeOAuthRefresh: defaultCompleteOAuthRefresh(),
     refreshAccessToken: defaultRefreshAccessToken(),
@@ -1210,6 +1228,318 @@ describe("handleQuickExpenseRequest", () => {
       expect(body.error.code).toBe("internal_error");
       expect(JSON.stringify(body)).not.toContain(secretLike);
       expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+  });
+
+  // 【重要・cross-company Token混在の防止・設計レビューにより最終決定】
+  // 以前はgetRefreshTokenForEdgeへ常にcompanyId: null（既定の共有接続）を
+  // 渡す実装になっており、複数社対応後は「A社のリクエストなのに別会社
+  // （または共有の既定接続）のConcur OAuth接続を使ってしまう」リスクが
+  // あった。設計レビューの結論により、company UUIDの解決はget_my_public_
+  // config()（fetchCompanyMembership）ではなく、service_role専用の別RPC
+  // resolveOAuthCompanyId({ userId, companyCode })（resolve_concur_oauth_
+  // company_id相当。supabase/schema.sql参照）に分離した。membershipオブ
+  // ジェクトはcompany UUIDを一切持たない（get_my_public_config()は所属確認・
+  // 経費タイプ検証専用の責務のみ）。ここではresolveOAuthCompanyIdが解決した
+  // 値だけがgetRefreshTokenForEdgeへ渡ることを確認する
+  // （handleQuickExpenseRequest.js「会社境界（重要）」コメント参照）。
+  describe("会社ごとのVault OAuth接続の境界（company-scoped resolveOAuthCompanyId→getRefreshTokenForEdge）", () => {
+    const COMPANY_C_UUID = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+    const MULTI_COMPANY_MEMBERSHIPS = {
+      "company-a": {
+        company_code: "company-a",
+        role: "user",
+        expenseTypes: [VALID_EXPENSE_TYPE],
+        expenseTypeIdMode: "concur_exp_key",
+      },
+      "company-c": {
+        company_code: "company-c",
+        role: "user",
+        expenseTypes: [{ id: "01063", policyId: "policy-y", name: "交通費", active: true }],
+        expenseTypeIdMode: "concur_exp_key",
+      },
+    };
+
+    function buildMultiCompanyFetchCompanyMembership() {
+      return vi.fn(async (_user, companyCode) => MULTI_COMPANY_MEMBERSHIPS[companyCode] ?? null);
+    }
+
+    function buildMultiCompanyResolveOAuthCompanyId() {
+      return vi.fn(async ({ companyCode }) => {
+        if (companyCode === "company-a") return COMPANY_A_UUID;
+        if (companyCode === "company-c") return COMPANY_C_UUID;
+        return null;
+      });
+    }
+
+    function buildStubCreateQuickExpense() {
+      return vi.fn().mockResolvedValue({
+        result: { quickExpenseId: "stub_quick_expense_id", status: "stubbed" },
+        error: null,
+      });
+    }
+
+    it("resolveOAuthCompanyIdへ、JWTで検証済みのuserIdと本文のcompanyCode（company_code）が渡る", async () => {
+      const resolveOAuthCompanyId = vi.fn().mockResolvedValue(COMPANY_A_UUID);
+
+      await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ resolveOAuthCompanyId }),
+        parseBody: parseBodyFor(buildValidBody({ companyId: "company-a" })),
+        createQuickExpense: buildStubCreateQuickExpense(),
+      });
+
+      expect(resolveOAuthCompanyId).toHaveBeenCalledWith({ userId: VALID_USER.id, companyCode: "company-a" });
+    });
+
+    it("A社のリクエストは、resolveOAuthCompanyIdが返したA社UUIDだけをgetRefreshTokenForEdgeへ渡す", async () => {
+      const getRefreshTokenForEdge = vi.fn().mockResolvedValue({
+        connectionId: "conn-a",
+        leaseId: "lease-a",
+        refreshToken: DUMMY_REFRESH_TOKEN,
+      });
+      const fetchCompanyMembership = buildMultiCompanyFetchCompanyMembership();
+      const resolveOAuthCompanyId = buildMultiCompanyResolveOAuthCompanyId();
+
+      const { status } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ fetchCompanyMembership, resolveOAuthCompanyId, getRefreshTokenForEdge }),
+        parseBody: parseBodyFor(buildValidBody({ companyId: "company-a" })),
+        createQuickExpense: buildStubCreateQuickExpense(),
+      });
+
+      expect(status).toBe(200);
+      expect(getRefreshTokenForEdge).toHaveBeenCalledTimes(1);
+      expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: COMPANY_A_UUID });
+    });
+
+    it("C社のリクエストは、resolveOAuthCompanyIdが返したC社UUIDだけをgetRefreshTokenForEdgeへ渡す（A社のUUIDが混ざらない）", async () => {
+      const getRefreshTokenForEdge = vi.fn().mockResolvedValue({
+        connectionId: "conn-c",
+        leaseId: "lease-c",
+        refreshToken: DUMMY_REFRESH_TOKEN,
+      });
+      const fetchCompanyMembership = buildMultiCompanyFetchCompanyMembership();
+      const resolveOAuthCompanyId = buildMultiCompanyResolveOAuthCompanyId();
+
+      const { status } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ fetchCompanyMembership, resolveOAuthCompanyId, getRefreshTokenForEdge }),
+        parseBody: parseBodyFor(
+          buildValidBody({ companyId: "company-c", policyId: "policy-y", expenseTypeId: "01063" }),
+        ),
+        createQuickExpense: buildStubCreateQuickExpense(),
+      });
+
+      expect(status).toBe(200);
+      expect(getRefreshTokenForEdge).toHaveBeenCalledTimes(1);
+      expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: COMPANY_C_UUID });
+      expect(getRefreshTokenForEdge).not.toHaveBeenCalledWith({ companyId: COMPANY_A_UUID });
+    });
+
+    it("複数社所属ユーザーでも、リクエストのcompanyCodeから一意にVault会社UUIDが解決される（先頭会社の自動選択にならない）", async () => {
+      // COMPANY_A_MEMBERSHIP・COMPANY_C_MEMBERSHIPの両方に所属している
+      // ユーザーを想定し、リクエストごとのcompanyCodeだけで解決先が変わる
+      // ことを確認する（buildMultiCompanyResolveOAuthCompanyId自体が
+      // companyCodeを見て分岐する実装であることが前提だが、ここでは
+      // handleQuickExpenseRequest.js側が実際にそのcompanyCodeを毎回正しく
+      // 転送していることを検証する）。
+      const resolveOAuthCompanyId = buildMultiCompanyResolveOAuthCompanyId();
+      const fetchCompanyMembership = buildMultiCompanyFetchCompanyMembership();
+      const getRefreshTokenForEdgeForA = vi.fn().mockResolvedValue({
+        connectionId: "conn-a",
+        leaseId: "lease-a",
+        refreshToken: DUMMY_REFRESH_TOKEN,
+      });
+      const getRefreshTokenForEdgeForC = vi.fn().mockResolvedValue({
+        connectionId: "conn-c",
+        leaseId: "lease-c",
+        refreshToken: DUMMY_REFRESH_TOKEN,
+      });
+
+      await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({
+          fetchCompanyMembership,
+          resolveOAuthCompanyId,
+          getRefreshTokenForEdge: getRefreshTokenForEdgeForA,
+        }),
+        parseBody: parseBodyFor(buildValidBody({ companyId: "company-a" })),
+        createQuickExpense: buildStubCreateQuickExpense(),
+      });
+      await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({
+          fetchCompanyMembership,
+          resolveOAuthCompanyId,
+          getRefreshTokenForEdge: getRefreshTokenForEdgeForC,
+        }),
+        parseBody: parseBodyFor(
+          buildValidBody({ companyId: "company-c", policyId: "policy-y", expenseTypeId: "01063" }),
+        ),
+        createQuickExpense: buildStubCreateQuickExpense(),
+      });
+
+      expect(getRefreshTokenForEdgeForA).toHaveBeenCalledWith({ companyId: COMPANY_A_UUID });
+      expect(getRefreshTokenForEdgeForC).toHaveBeenCalledWith({ companyId: COMPANY_C_UUID });
+    });
+
+    it("A社リクエストの結果、A社用のRefresh Token（Vaultリース）だけが使われる", async () => {
+      const getRefreshTokenForEdge = vi.fn(async ({ companyId }) => {
+        if (companyId === COMPANY_A_UUID) {
+          return { connectionId: "conn-a", leaseId: "lease-a", refreshToken: "REFRESH_TOKEN_FOR_COMPANY_A" };
+        }
+        // A社以外（本来渡ってきてはいけない値）が渡された場合は、それを検出
+        // できるよう別会社用のダミーTokenを返す（後続のrefreshAccessTokenが
+        // このTokenを受け取ってしまわないことを確認する）。
+        return { connectionId: "conn-other", leaseId: "lease-other", refreshToken: "REFRESH_TOKEN_FOR_OTHER_COMPANY" };
+      });
+      const refreshAccessToken = vi.fn().mockResolvedValue({
+        ok: true,
+        rotated: false,
+        tokens: {
+          accessToken: DUMMY_ACCESS_TOKEN,
+          refreshToken: DUMMY_REFRESH_TOKEN,
+          tokenType: "Bearer",
+          expiresIn: 3600,
+          scope: "quickexpense.writeonly user.read identity.user.ids.read",
+          geolocation: DUMMY_GEOLOCATION,
+        },
+        logSummary: { ok: true },
+      });
+
+      await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ getRefreshTokenForEdge, refreshAccessToken }),
+        parseBody: parseBodyFor(buildValidBody({ companyId: "company-a" })),
+        createQuickExpense: buildStubCreateQuickExpense(),
+      });
+
+      expect(refreshAccessToken).toHaveBeenCalledWith(
+        expect.objectContaining({ refreshToken: "REFRESH_TOKEN_FOR_COMPANY_A" }),
+      );
+    });
+
+    it("resolveOAuthCompanyIdがnullを返す（未所属・存在しない会社・本番未適用でRPC自体が無い場合を含む）場合、Vaultリース取得自体を行わずconcur_oauth_not_connectedを返す（既定接続へフォールバックしない）", async () => {
+      const getRefreshTokenForEdge = vi.fn();
+      const resolveOAuthCompanyId = vi.fn().mockResolvedValue(null);
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ resolveOAuthCompanyId, getRefreshTokenForEdge }),
+        parseBody: parseBodyFor(buildValidBody()),
+      });
+
+      expect(status).toBe(503);
+      expect(body.error.code).toBe("concur_oauth_not_connected");
+      expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+    });
+
+    it("resolveOAuthCompanyIdが空文字を返した場合も未解決として扱いfail-closed（concur_oauth_not_connected）", async () => {
+      const getRefreshTokenForEdge = vi.fn();
+      const resolveOAuthCompanyId = vi.fn().mockResolvedValue("");
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ resolveOAuthCompanyId, getRefreshTokenForEdge }),
+        parseBody: parseBodyFor(buildValidBody()),
+      });
+
+      expect(status).toBe(503);
+      expect(body.error.code).toBe("concur_oauth_not_connected");
+      expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+    });
+
+    it("resolveOAuthCompanyId自体が例外を投げた場合はinternal_error（Vaultリース取得へは進まない）", async () => {
+      const getRefreshTokenForEdge = vi.fn();
+      const resolveOAuthCompanyId = vi.fn().mockRejectedValue(new Error("boom"));
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ resolveOAuthCompanyId, getRefreshTokenForEdge }),
+        parseBody: parseBodyFor(buildValidBody()),
+      });
+
+      expect(status).toBe(500);
+      expect(body.error.code).toBe("internal_error");
+      expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+    });
+
+    it("リクエスト本文のcompanyId（company_codeの文字列、例:'company-a'）がそのままgetRefreshTokenForEdgeへ渡ることはない（company_codeとcompany UUIDの取り違え防止）", async () => {
+      const getRefreshTokenForEdge = vi.fn().mockResolvedValue({
+        connectionId: "conn-a",
+        leaseId: "lease-a",
+        refreshToken: DUMMY_REFRESH_TOKEN,
+      });
+
+      await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ getRefreshTokenForEdge }),
+        parseBody: parseBodyFor(buildValidBody({ companyId: "company-a" })),
+        createQuickExpense: buildStubCreateQuickExpense(),
+      });
+
+      expect(getRefreshTokenForEdge).not.toHaveBeenCalledWith({ companyId: "company-a" });
+      expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: COMPANY_A_UUID });
+    });
+
+    it("クライアントがcompany UUIDらしき値を何らかの形で本文に紛れ込ませても、それは使われない（常にresolveOAuthCompanyIdの戻り値だけを使う）", async () => {
+      const getRefreshTokenForEdge = vi.fn().mockResolvedValue({
+        connectionId: "conn-a",
+        leaseId: "lease-a",
+        refreshToken: DUMMY_REFRESH_TOKEN,
+      });
+      const attackerSuppliedUuid = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+
+      await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput({ getRefreshTokenForEdge }),
+        // companyIdフィールドはcompany_code（スラッグ）を指す契約であり、
+        // このEdge Functionのリクエストスキーマにcompany UUID用の別フィールドは
+        // 存在しない（validateQuickExpenseRequest.js参照）。ここではその上で、
+        // 万一クライアントが無関係な値をどこかに含めても無視されることを示す
+        // ため、スキーマ外のフィールドとして紛れ込ませる。
+        parseBody: parseBodyFor(buildValidBody({ companyId: "company-a", companyDbId: attackerSuppliedUuid })),
+        createQuickExpense: buildStubCreateQuickExpense(),
+      });
+
+      expect(getRefreshTokenForEdge).not.toHaveBeenCalledWith({ companyId: attackerSuppliedUuid });
+      expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: COMPANY_A_UUID });
+    });
+
+    it("ゲートOFFの場合、resolveOAuthCompanyIdも含めVault/OAuth/Identity/Quick Expenseのいずれも呼ばれない", async () => {
+      const resolveOAuthCompanyId = vi.fn();
+      const getRefreshTokenForEdge = vi.fn();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({ resolveOAuthCompanyId, getRefreshTokenForEdge }),
+        parseBody: parseBodyFor(buildValidBody()),
+      });
+
+      expect(status).toBe(200);
+      expect(body.error).toBeNull();
+      expect(resolveOAuthCompanyId).not.toHaveBeenCalled();
+      expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+    });
+
+    it("応答・ログにcompany UUID（resolveOAuthCompanyIdの戻り値）が一切含まれない", async () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const { body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildGateOnAuthedInput(),
+        parseBody: parseBodyFor(buildValidBody()),
+        createQuickExpense: buildStubCreateQuickExpense(),
+      });
+
+      const allLoggedText = [...logSpy.mock.calls, ...errorSpy.mock.calls].flat().join(" ");
+      expect(allLoggedText).not.toContain(COMPANY_A_UUID);
+      expect(JSON.stringify(body)).not.toContain(COMPANY_A_UUID);
+
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
     });
   });
 

@@ -1935,6 +1935,82 @@ comment on function complete_concur_oauth_refresh(uuid, uuid, boolean, text, tex
   'lease_id不一致はfalseを返すだけで例外・状態変更を起こさない。Vault更新と'
   'メタデータ更新は同一トランザクション内。';
 
+-- ----------------------------------------------------------------------------
+-- 7. RPC: create-concur-quick-expense専用・Concur OAuth Vault接続の会社境界
+--    解決（company_members/companiesから直接解決。concur_oauth_connections
+--    自体には依存しない）。
+--
+-- 【設計レビューの結論】当初案ではget_my_public_config(p_company_code)の
+-- 戻り値へcompany_id（companies.id）を追加する案を検討したが、以下の理由で
+-- 採用しなかった：
+--   (a) get_my_public_config()は一般利用者Bot画面が毎回呼ぶ、最も広く使われる
+--       利用者向けRPCであり、Edge Function内部だけが必要とするVault接続の
+--       会社境界解決という別責務を持ち込むべきではない。
+--   (b) 既存のlist_my_companies()が「会社選択に必要な最小限のmetadata
+--       （company_code・company_name・role）だけを返す」設計を意図的に
+--       採っており（company_id・UUIDは含めない）、get_my_public_config()へ
+--       company_idを追加するとこの既存方針と矛盾する。
+--   (c) get_concur_refresh_token_for_edge・complete_concur_oauth_refreshと
+--       同じ「service_role専用RPC」という既存パターンで、company UUIDを
+--       ブラウザへ一切返さず（authenticatedへのgrantすら無い）解決できる
+--       ため、あえて利用者向けRPCを経由する理由が無い。
+-- そのため、Edge Function専用（service_roleのみEXECUTE可）の新しいRPCとして
+-- 分離する。
+--
+-- p_user_idについて（重要）：
+--   service_roleクライアント経由の呼び出しには、元のログインユーザーのJWT
+--   コンテキストが無いため、auth.uid()は使えない（NULLになる）。そのため
+--   p_user_idを明示引数として受け取る。この値は呼び出し元
+--   （create-concur-quick-expense/index.ts）が、別のJWTスコープの
+--   Supabaseクライアントでsupabase.auth.getUser()により既に検証済みの
+--   ユーザーIDだけを渡す（handleQuickExpenseRequest.js・
+--   resolveQuickExpenseAuthorization.js参照）。get_concur_refresh_token_
+--   for_edge()がconnection_id・lease_idを「呼び出し元が既に認証済みという
+--   前提で」受け取るのと同じ信頼モデル。
+--
+-- p_company_codeについて：
+--   本文で申告されたcompanyCode（company_code）をそのまま渡す。
+--   company_members.company_id・auth.uid()の両方をp_user_id・p_company_code
+--   （companiesのcompany_code経由）で絞り込むため、クライアントの申告を
+--   無条件に信用する経路にはならない（get_my_public_config(p_company_code)
+--   と同じ絞り込み条件）。
+--
+-- 戻り値について：
+--   該当行が無ければ（未所属・存在しない会社）NULLを返す（0行→NULL。
+--   language sqlの単一SELECT関数の標準的な挙動）。company_members
+--   (unique(company_id, user_id))・companies(company_code unique)の一意性に
+--   より、該当行は高々1件のため、複数社所属時でも先頭行を機械的に選ぶ実装には
+--   ならない（p_company_codeで一意に決まる）。
+create or replace function resolve_concur_oauth_company_id(
+  p_user_id uuid,
+  p_company_code text
+)
+returns uuid
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select c.id
+  from company_members cm
+  join companies c on c.id = cm.company_id
+  where cm.user_id = p_user_id
+    and c.company_code = p_company_code;
+$$;
+
+revoke all on function resolve_concur_oauth_company_id(uuid, text) from public, anon, authenticated;
+grant execute on function resolve_concur_oauth_company_id(uuid, text) to service_role;
+
+comment on function resolve_concur_oauth_company_id(uuid, text) is
+  'Edge Function専用（service_roleのみEXECUTE可）。p_user_id（呼び出し元が'
+  '既にauth.getUser()等で検証済みのユーザーID）がp_company_codeで指定された'
+  '会社へ実際に所属している場合だけ、その会社のcompanies.id（Supabase内部'
+  'UUID）を返す。未所属・存在しない会社はNULLを返す（先頭行の自動選択は行わ'
+  'ない。company_code完全一致のみで解決するため複数社所属でも一意に決まる）。'
+  'auth.uid()は使わない（service_role呼び出しにはJWTコンテキストが無いため）。'
+  'create-concur-quick-expenseがConcur OAuth Vault接続'
+  '（concur_oauth_connections.company_id）の会社境界解決にのみ使う。';
+
 -- ============================================================================
 -- ここまででPhase 9・10・11・12のスキーマも完成です。
 --

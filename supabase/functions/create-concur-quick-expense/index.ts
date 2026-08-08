@@ -52,6 +52,28 @@
 //   構造上ない。経費タイプID＝Concur EXP_KEYという設計への正式リファクタリング
 //   により、以前存在した独立したConcur Expense Type Mapping
 //   （config_snapshot.concur.expenseTypeMappings）は廃止した。
+//   get_my_public_config()はこの所属確認・経費タイプ検証専用の責務のみを持ち、
+//   company UUID（companies.id）は一切返さない（下記のVault会社境界解決の
+//   設計レビュー参照）。
+//
+//   【重要・Vault会社境界解決（設計レビューにより最終決定）】
+//   getRefreshTokenForEdge()（Concur OAuth Vault接続、supabase/schema.sql
+//   Phase 12参照）が必要とする会社の識別子はcompanies.id（Supabase内部UUID）
+//   であり、company_codeとは別の値空間。当初はget_my_public_config()の
+//   戻り値へcompany_id列を追加する案を検討したが、(a)get_my_public_config()は
+//   一般利用者Bot画面が毎回呼ぶ利用者向けRPCであり、Edge Function内部専用の
+//   値を持ち込むべきではない、(b)既存のlist_my_companies()がcompany UUIDを
+//   意図的に含めない最小metadata設計を採っており矛盾する、という理由で
+//   採用しなかった。代わりに、Edge Function専用（service_roleのみEXECUTE可）
+//   の新しいRPC resolve_concur_oauth_company_id(p_user_id, p_company_code)
+//   （supabase/schema.sql Phase 12参照）を新設し、buildVaultAdapters()の
+//   service_roleクライアントから、authAdapters.fetchUser()で検証済みの
+//   ユーザーIDと本文のcompanyCodeを渡して解決する。company UUIDはブラウザへ
+//   一切返らない（authenticatedへのgrantも無い）。以前はこの解決手段が無く、
+//   getRefreshTokenForEdgeへは常にcompanyId: null（既定の共有接続）を渡して
+//   いたため、複数社対応後は「A社のリクエストなのに別会社（または共有の
+//   既定接続）のConcur OAuth接続を使ってしまう」cross-company混在のリスクが
+//   あった（handleQuickExpenseRequest.js冒頭コメント参照）。
 //
 //   このEdge Functionは現状スタブ応答のみを返し、実際のConcurへのアクセス・
 //   実データの作成を一切行わないが、認証自体は「実データを扱うようになって
@@ -126,9 +148,10 @@ function buildConcurEnv() {
 
 // service_role専用クライアント（呼び出し元のAuthorizationヘッダーは一切
 // 使わない・上書きしない）。get_concur_refresh_token_for_edge /
-// complete_concur_oauth_refresh というVault関連の2 RPCだけに使う。
-// supabase/functions/lookup-concur-user/index.tsのbuildServiceRoleClient()と
-// 同じ実装（この2 RPCはSQL側でservice_role以外へのEXECUTE権限を持たない）。
+// complete_concur_oauth_refresh / resolve_concur_oauth_company_idという
+// Vault関連の3 RPCだけに使う。supabase/functions/lookup-concur-user/
+// index.tsのbuildServiceRoleClient()と同じ実装（これらのRPCはSQL側で
+// service_role以外へのEXECUTE権限を持たない）。
 function buildServiceRoleClient(createClient) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -140,12 +163,37 @@ function buildServiceRoleClient(createClient) {
 
 // get_concur_refresh_token_for_edge / complete_concur_oauth_refresh
 // （supabase/schema.sql Phase 12、check-concur-oauth・lookup-concur-userと
-// 共有する既存RPC。新しいRPC・migrationは追加していない）を、
+// 共有する既存RPC）と、resolve_concur_oauth_company_id（同じくPhase 12、
+// このEdge Function専用の新設RPC。会社別Vault接続の会社境界解決だけに使う）を、
 // handleQuickExpenseRequest.jsが期待するDeno非依存のインターフェースへ
-// 変換するアダプタ。supabase/functions/lookup-concur-user/index.tsの
-// buildVaultAdapters()と同じ実装。
+// 変換するアダプタ。get_concur_refresh_token_for_edge・complete_concur_oauth_
+// refreshの2つはsupabase/functions/lookup-concur-user/index.tsの
+// buildVaultAdapters()と同じ実装（check-concur-oauth・lookup-concur-userは
+// 引き続き会社非依存の既定接続company_id: nullを使い続けるため、この2つの
+// RPC自体・呼び出し方は変更していない）。
 function buildVaultAdapters(serviceClient, log) {
   return {
+    // resolve_concur_oauth_company_id(p_user_id, p_company_code)は
+    // service_roleのみEXECUTE可（supabase/schema.sql参照）。呼び出し元の
+    // JWTコンテキストが無いservice_roleクライアントではauth.uid()が使えない
+    // ため、userId（authAdapters.fetchUser()が既に検証済みの値）を明示的に
+    // 渡す。戻り値は該当行が無ければNULL（Postgresの単一SELECT関数の標準的な
+    // 挙動）で、supabase-jsからはスカラー値としてそのまま返る
+    // （is_platform_admin()等と同じ扱い。returns tableではないため配列では
+    // 返らない）。
+    resolveOAuthCompanyId: async ({ userId, companyCode }) => {
+      const { data, error } = await serviceClient.rpc("resolve_concur_oauth_company_id", {
+        p_user_id: userId,
+        p_company_code: companyCode,
+      });
+
+      if (error) {
+        log(`Vault会社UUID解決エラー (code=${error.code ?? "?"})`);
+        throw error;
+      }
+
+      return typeof data === "string" && data.trim() !== "" ? data : null;
+    },
     getRefreshTokenForEdge: async ({ companyId }) => {
       const { data, error } = await serviceClient.rpc("get_concur_refresh_token_for_edge", {
         p_company_id: companyId ?? null,
@@ -295,7 +343,7 @@ Deno.serve(async (req) => {
     fetchUser: authAdapters.fetchUser,
     fetchCompanyMembership: authAdapters.fetchCompanyMembership,
     env: buildConcurEnv(),
-    companyId: null, // 現時点では単一の既定接続のみ（check-concur-oauth・lookup-concur-userと同じ前提）。
+    resolveOAuthCompanyId: vaultAdapters.resolveOAuthCompanyId,
     getRefreshTokenForEdge: vaultAdapters.getRefreshTokenForEdge,
     completeOAuthRefresh: vaultAdapters.completeOAuthRefresh,
   });
