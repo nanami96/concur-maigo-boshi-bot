@@ -151,3 +151,20 @@ export async function selectCompany({ companyCode, companies, fetchMembership })
     membership: resolved.membership,
   };
 }
+
+// selectCompany()の失敗時（Commit 5）に利用者へ表示する、固定・安全な文言。
+// get_my_public_config()の生エラー・companyCode・会社の内部情報等は一切含めない
+// （この定数の文字列だけを表示する）。CompanyContext.jsxが直接この文字列を
+// 複製しないよう、resolveCompanySwitchError()経由でだけ使う。
+export const COMPANY_SWITCH_ERROR_MESSAGE = "会社の切り替えに失敗しました。時間をおいてもう一度お試しください。";
+
+// selectCompany()の戻り値のstatusから、companySwitchErrorとして表示すべき文言を
+// 決定する純粋関数（Reactに依存しない。CompanyContext.jsxから使う）。
+// "ready"/"unpublished"（切替成功）ならnull（エラー無し）、それ以外
+// （"rejected"/"error"）なら固定メッセージを返す。
+export function resolveCompanySwitchError(status) {
+  if (status === "ready" || status === "unpublished") {
+    return null;
+  }
+  return COMPANY_SWITCH_ERROR_MESSAGE;
+}

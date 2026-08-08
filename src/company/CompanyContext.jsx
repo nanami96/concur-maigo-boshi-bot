@@ -1,7 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { fetchMyCompanies, fetchMyMembership } from "../data/membershipRepository";
 import { readLastCompanyCode, saveLastCompanyCode, clearLastCompanyCode } from "../data/lastCompanyCodeStorage";
-import { resolveCurrentCompany, selectCompany as selectCompanyPure } from "../data/resolveCurrentCompany";
+import {
+  resolveCurrentCompany,
+  selectCompany as selectCompanyPure,
+  resolveCompanySwitchError,
+} from "../data/resolveCurrentCompany";
 
 // 「現在選択中会社(currentCompany)」の状態管理（Commit 2で導入、Commit 3で
 // companies一覧を追加、Commit 4で明示的な切替操作selectCompanyを追加）。
@@ -21,6 +25,11 @@ import { resolveCurrentCompany, selectCompany as selectCompanyPure } from "../da
 //   companyName, role}, ...]）。会社選択UIがそのまま使う。
 // isSwitching: selectCompany()呼び出し中かどうか。切替中の二重操作を防ぐため
 //   （UI側でselectを disabled にする等に使う）。
+// companySwitchError: 直近のselectCompany()呼び出しが失敗した場合だけ、
+//   固定の安全なユーザー向け文言（resolveCurrentCompany.jsの
+//   COMPANY_SWITCH_ERROR_MESSAGE）を保持する（Commit 5）。内部エラー内容
+//   （Supabaseの生エラー・会社の内部情報等）は一切含まない。切替成功時・
+//   再読み込み時に自動的にnullへ戻る。
 const CompanyContext = createContext(null);
 
 const INITIAL_STATE = { status: "loading", currentCompany: null, membership: null, companies: [] };
@@ -28,6 +37,7 @@ const INITIAL_STATE = { status: "loading", currentCompany: null, membership: nul
 export function CompanyProvider({ children }) {
   const [state, setState] = useState(INITIAL_STATE);
   const [isSwitching, setIsSwitching] = useState(false);
+  const [companySwitchError, setCompanySwitchError] = useState(null);
   // selectCompany()実行中に別のselectCompany()・reload()が呼ばれても、
   // 古い呼び出しの結果でstateを上書きしない（後勝ちのレースコンディション対策）。
   const requestIdRef = useRef(0);
@@ -35,6 +45,9 @@ export function CompanyProvider({ children }) {
   const load = useCallback(async () => {
     const requestId = ++requestIdRef.current;
     setState(INITIAL_STATE);
+    // 再読み込み（初回ログイン・NoMembershipGateからの復帰等）は、会社切替とは
+    // 独立した別の操作のため、古い切替エラーを引きずらない。
+    setCompanySwitchError(null);
 
     const result = await resolveCurrentCompany({
       fetchCompanies: fetchMyCompanies,
@@ -58,19 +71,26 @@ export function CompanyProvider({ children }) {
     load();
   }, [load]);
 
-  // 利用者が明示的に会社を切り替える（Commit 4）。BotConversation.jsx側の
-  // 会社セレクタからcompanyCode（companies[].companyCode、内部値）を渡す。
+  // 利用者が明示的に会社を切り替える（Commit 4、Commit 5でエラー表示を追加）。
+  // BotConversation.jsx側の会社セレクタ・CompanySelectionGateから
+  // companyCode（companies[].companyCode、内部値）を渡す。
   //
   // atomicな切替：resolveCurrentCompany.js（selectCompany純粋関数）が
   // 「companiesに実在するか」「実際にconfigが取得できるか」を検証し終えた
   // 場合（status: ready/unpublished）だけstate（currentCompany/membership）を
   // 更新する。検証に失敗した場合（rejected/error）はstateを一切変更せず、
-  // 直前の会社（例：A社）のまま維持する。lastCompanyCodeの保存も、切替成功が
-  // 確認できてから行う（失敗した切替でlastCompanyCodeを書き換えない）。
+  // 直前の会社（例：A社）のまま維持し、companySwitchErrorだけを設定する
+  // （エラー表示以外の状態は一切変えない）。lastCompanyCodeの保存も、
+  // 切替成功が確認できてから行う（失敗した切替でlastCompanyCodeを
+  // 書き換えない）。
   const selectCompany = useCallback(
     async (companyCode) => {
       const requestId = ++requestIdRef.current;
       setIsSwitching(true);
+      // 新しい切替を始めた時点で、前回の失敗表示を一旦消す（同じ会社の
+      // 再選択・別会社への切替のいずれでも、古いエラーが不自然に残り続けない
+      // ようにするため）。
+      setCompanySwitchError(null);
 
       const result = await selectCompanyPure({
         companyCode,
@@ -85,8 +105,11 @@ export function CompanyProvider({ children }) {
       if (result.status !== "ready" && result.status !== "unpublished") {
         // rejected（companiesに存在しない・既に所属していない）・error
         // （通信エラー等）。既存のcurrentCompany/membership/companiesは
-        // 一切変更しない（A社の状態を維持する）。
+        // 一切変更しない（A社の状態を維持する）。ログにはresult.status
+        // （"rejected"/"error"という固定の分類文字列）だけを出し、
+        // Supabaseの生エラー・companyCode・user情報・config内容は含めない。
         console.error("会社の切り替えに失敗しました", result.status);
+        setCompanySwitchError(resolveCompanySwitchError(result.status));
         setIsSwitching(false);
         return;
       }
@@ -104,7 +127,7 @@ export function CompanyProvider({ children }) {
   );
 
   return (
-    <CompanyContext.Provider value={{ ...state, isSwitching, reload: load, selectCompany }}>
+    <CompanyContext.Provider value={{ ...state, isSwitching, companySwitchError, reload: load, selectCompany }}>
       {children}
     </CompanyContext.Provider>
   );
@@ -121,6 +144,7 @@ const DEFAULT_CONTEXT_VALUE = {
   membership: null,
   companies: [],
   isSwitching: false,
+  companySwitchError: null,
   reload: () => {},
   selectCompany: async () => {},
 };

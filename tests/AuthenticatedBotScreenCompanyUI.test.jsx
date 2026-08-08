@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CompanyHeaderIndicator, CompanySelectionGate } from "../src/AuthenticatedBotScreen.jsx";
+import {
+  CompanyHeaderIndicator,
+  CompanySelectionGate,
+  CompanySwitchErrorMessage,
+} from "../src/AuthenticatedBotScreen.jsx";
 
 // AuthenticatedBotScreen.jsxのReactコンポーネントテスト（Commit 4）。
 // このプロジェクトにはReact Testing Library等のDOMレンダリング用テスト基盤が
@@ -132,5 +136,50 @@ describe("CompanySelectionGate（selection-required時の会社選択UI）", () 
     );
 
     expect(html).toMatch(/<button[^>]*disabled/);
+  });
+
+  it("【Commit 5】switchErrorを指定すると安全なエラーメッセージを表示する", () => {
+    const companies = [companyOf()];
+    const html = renderToStaticMarkup(
+      <CompanySelectionGate
+        companies={companies}
+        isSwitching={false}
+        switchError="会社の切り替えに失敗しました。時間をおいてもう一度お試しください。"
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html).toContain("会社の切り替えに失敗しました。時間をおいてもう一度お試しください。");
+    expect(html).toMatch(/role="alert"/);
+  });
+
+  it("【Commit 5】switchError未指定の場合はエラー表示を行わない", () => {
+    const companies = [companyOf()];
+    const html = renderToStaticMarkup(
+      <CompanySelectionGate companies={companies} isSwitching={false} onSelect={() => {}} />,
+    );
+
+    expect(html).not.toMatch(/role="alert"/);
+  });
+});
+
+describe("CompanySwitchErrorMessage（Commit 5：会社切替失敗時の固定・安全なエラー表示）", () => {
+  it("messageが指定されている場合、role=alertでそのまま表示する", () => {
+    const html = renderToStaticMarkup(
+      <CompanySwitchErrorMessage message="会社の切り替えに失敗しました。時間をおいてもう一度お試しください。" />,
+    );
+
+    expect(html).toContain("会社の切り替えに失敗しました。時間をおいてもう一度お試しください。");
+    expect(html).toMatch(/role="alert"/);
+  });
+
+  it("messageがnullの場合、何も描画しない", () => {
+    const html = renderToStaticMarkup(<CompanySwitchErrorMessage message={null} />);
+    expect(html).toBe("");
+  });
+
+  it("messageが未指定の場合も、何も描画しない", () => {
+    const html = renderToStaticMarkup(<CompanySwitchErrorMessage />);
+    expect(html).toBe("");
   });
 });

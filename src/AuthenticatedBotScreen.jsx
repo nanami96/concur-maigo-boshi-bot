@@ -121,6 +121,23 @@ function NoMembershipGate({ onJoined }) {
   return <InviteCodeScreen onJoined={onJoined} initialErrorMessage={autoErrorMessage} />;
 }
 
+// 会社切替失敗時の、固定・安全なユーザー向けエラーメッセージ表示（Commit 5）。
+// CompanySelectionGate・CompanyHeaderIndicatorの両方（headerActions経由）から
+// 共通で使う、これ以上分解しない最小のメッセージ表示専用コンポーネント。
+// NoMembershipGateの通信エラー表示と同じ.settingsErrorTextクラスを再利用し、
+// 新しいCSSは追加しない。messageがnull/未指定の場合は何も描画しない。
+export function CompanySwitchErrorMessage({ message }) {
+  if (!message) {
+    return null;
+  }
+
+  return (
+    <p className="settingsErrorText" role="alert">
+      {message}
+    </p>
+  );
+}
+
 // 2社以上に所属しており、かつlocalStorageに有効な前回会社が無い状態
 // （resolveCurrentCompany.js参照）で表示する、明示的な会社選択画面（Commit 4）。
 // 独自dropdownは実装せず、標準の<button>を1社ずつ並べる（キーボード操作可能な
@@ -128,12 +145,15 @@ function NoMembershipGate({ onJoined }) {
 // candidateList/candidateCard/candidateSelectButtonクラスを再利用し、新しい
 // CSSを増やさない）。選択に成功するとCompanyContextのstatusが
 // ready/unpublishedへ遷移し、この画面から自然に抜ける。
-export function CompanySelectionGate({ companies, isSwitching, onSelect }) {
+// switchError（Commit 5）：この画面での選択が失敗した場合も、通常のBot画面と
+// 同じCompanySwitchErrorMessageで表示する。
+export function CompanySelectionGate({ companies, isSwitching, switchError, onSelect }) {
   return (
     <main className="appShell">
       <section className="chatPanel botStatusPanel" aria-label="Concur迷子防止Botの質問">
         <h1>会社を選択してください</h1>
         <p>複数の会社に所属しています。利用する会社を選んでください。</p>
+        <CompanySwitchErrorMessage message={switchError} />
         <div className="candidateList">
           {companies.map((company) => (
             <div className="candidateCard" key={company.companyCode}>
@@ -221,7 +241,16 @@ export default function AuthenticatedBotScreen({ onSignOut }) {
 }
 
 function AuthenticatedBotScreenContent({ onSignOut }) {
-  const { status, currentCompany, membership, companies, isSwitching, reload, selectCompany } = useCompanyContext();
+  const {
+    status,
+    currentCompany,
+    membership,
+    companies,
+    isSwitching,
+    companySwitchError,
+    reload,
+    selectCompany,
+  } = useCompanyContext();
 
   if (status === "loading") {
     return (
@@ -251,7 +280,14 @@ function AuthenticatedBotScreenContent({ onSignOut }) {
   // （resolveCurrentCompany.js参照）。Commit 4で、所属会社一覧から明示的に
   // 選んでもらう画面（CompanySelectionGate）へ置き換えた。
   if (status === "selection-required") {
-    return <CompanySelectionGate companies={companies} isSwitching={isSwitching} onSelect={selectCompany} />;
+    return (
+      <CompanySelectionGate
+        companies={companies}
+        isSwitching={isSwitching}
+        switchError={companySwitchError}
+        onSelect={selectCompany}
+      />
+    );
   }
 
   const isAdmin = currentCompany.role === "admin";
@@ -262,11 +298,17 @@ function AuthenticatedBotScreenContent({ onSignOut }) {
   // 1024px未満のみ非表示にする（styles.css参照。role='admin'かどうかの
   // 判定自体はここでは変更していない）。
   //
-  // 【複数社所属対応・Commit 4で追加】会社表示・切替（CompanyHeaderIndicator）を
-  // headerActionsの先頭へ追加した。1社所属時はテキスト表示のみ（select無し）、
-  // 2社以上ではApp.jsx・admin/AdminRoot.jsxと同じ既存の.companySelector構造を
-  // 再利用した標準<select>にする（新しいdropdown実装・大規模レイアウト変更は
-  // 行っていない）。
+  // 【複数社所属対応・Commit 4で追加、Commit 5でエラー表示を追加】会社表示・
+  // 切替（CompanyHeaderIndicator）をheaderActionsの先頭へ追加した。1社所属時は
+  // テキスト表示のみ（select無し）、2社以上ではApp.jsx・admin/AdminRoot.jsxと
+  // 同じ既存の.companySelector構造を再利用した標準<select>にする（新しい
+  // dropdown実装・大規模レイアウト変更は行っていない）。CompanySwitchErrorMessage
+  // は、直近の切替が失敗した場合だけ.headerActions内に表示される
+  // （.headerActionsはflex-wrapのため、折り返して選択UIの下に表示される）。
+  //
+  // このheaderActionsはready・unpublishedの両方で全く同じJSXをそのまま使う
+  // （複製しない。unpublished状態でも他の所属会社へ切り替えられるようにする
+  // ため。詳細は下のunpublishedブロック参照）。
   const headerActions = (
     <>
       <CompanyHeaderIndicator
@@ -275,6 +317,7 @@ function AuthenticatedBotScreenContent({ onSignOut }) {
         isSwitching={isSwitching}
         onSelectCompany={selectCompany}
       />
+      <CompanySwitchErrorMessage message={companySwitchError} />
       {isAdmin && (
         <a className="resetButton adminLinkButton" href="#admin">
           管理画面へ
@@ -284,8 +327,18 @@ function AuthenticatedBotScreenContent({ onSignOut }) {
   );
 
   if (status === "unpublished") {
+    // 【複数社所属対応・Commit 5で変更】以前はheaderActions（会社切替UI）を
+    // 一切表示していなかったが、現在会社がunpublishedでも他の所属会社
+    // （公開済みの場合がある）へ切り替えられるようにするため、ready状態と
+    // 全く同じheaderActionsをここでも表示する。BotConversation.jsx自身は
+    // 使わない（そちらのstatus="unavailable"表示にすると、admin向けの
+    // 「管理画面で設定を作成・公開してください」という案内が失われるため）。
+    // .headerActionsクラス自体は.appHeaderの外でも単独で使えるutilityクラス
+    // （styles.css参照）なので、既存の.appHeaderのタイトル行を複製せずに
+    // 済んでいる。
     return (
       <main className="appShell">
+        <div className="headerActions">{headerActions}</div>
         <section className="chatPanel botStatusPanel" aria-label="Concur迷子防止Botの質問">
           <p>現在、この会社の利用設定は準備中です。</p>
           {isAdmin && <p>管理画面で設定を作成・公開してください。</p>}

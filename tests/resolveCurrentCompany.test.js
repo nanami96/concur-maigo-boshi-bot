@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { resolveCurrentCompany } from "../src/data/resolveCurrentCompany";
+import { resolveCurrentCompany, resolveCompanySwitchError, COMPANY_SWITCH_ERROR_MESSAGE } from "../src/data/resolveCurrentCompany";
 
 function companyOf(overrides = {}) {
   return { companyCode: "company-a", companyName: "A株式会社", role: "user", ...overrides };
@@ -170,5 +170,21 @@ describe("resolveCurrentCompany（list_my_companies()→currentCompany決定→g
       role: "admin",
     });
     expect(result.membership).toBe(membership);
+  });
+});
+
+describe("resolveCompanySwitchError（Commit 5：会社切替失敗時の固定・安全なユーザー向けメッセージ）", () => {
+  it("切替成功（ready/unpublished）の場合はnull（エラー無し）", () => {
+    expect(resolveCompanySwitchError("ready")).toBeNull();
+    expect(resolveCompanySwitchError("unpublished")).toBeNull();
+  });
+
+  it("切替失敗（rejected/error）の場合は固定メッセージを返す", () => {
+    expect(resolveCompanySwitchError("rejected")).toBe(COMPANY_SWITCH_ERROR_MESSAGE);
+    expect(resolveCompanySwitchError("error")).toBe(COMPANY_SWITCH_ERROR_MESSAGE);
+  });
+
+  it("メッセージは固定文言のみで、companyCode等の動的な内部情報を含まない", () => {
+    expect(COMPANY_SWITCH_ERROR_MESSAGE).toBe("会社の切り替えに失敗しました。時間をおいてもう一度お試しください。");
   });
 });
