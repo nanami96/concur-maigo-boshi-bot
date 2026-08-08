@@ -88,6 +88,17 @@ export function CompanyProvider({ children }) {
   // （エラー表示以外の状態は一切変えない）。lastCompanyCodeの保存も、
   // 切替成功が確認できてから行う（失敗した切替でlastCompanyCodeを
   // 書き換えない）。
+  //
+  // 【バグ修正】応答が届いた後に何をすべきか（isSwitching/companySwitchError/
+  // stateの更新要否）の判定だけをresolveSelectCompanyOutcome()（このファイル内、
+  // 下で定義）へ切り出した。以前はrequestIdRef.currentと不一致（自分より新しい
+  // load()/selectCompany()呼び出しに追い越された）の場合、早期returnするだけで
+  // isSwitchingを一切戻していなかった。追い越した相手がload()（isSwitchingを
+  // 一切管理しない）だった場合、isSwitchingがtrueのまま復旧不能になるバグが
+  // あった（例：会社切替の応答待ち中に「別の会社に参加」が成功しreload()が
+  // 走った場合）。resolveSelectCompanyOutcome()はstale（追い越された）かどうかに
+  // 関わらず必ずisSwitching:falseを返すことでこれを解消する。stateの更新は
+  // 従来通りstale時にはスキップする。
   const selectCompany = useCallback(
     async (companyCode) => {
       const requestId = ++requestIdRef.current;
@@ -103,30 +114,33 @@ export function CompanyProvider({ children }) {
         fetchMembership: fetchMyMembership,
       });
 
-      if (requestId !== requestIdRef.current) {
-        return;
-      }
+      const outcome = resolveSelectCompanyOutcome({
+        isStale: requestId !== requestIdRef.current,
+        result,
+      });
 
-      if (result.status !== "ready" && result.status !== "unpublished") {
-        // rejected（companiesに存在しない・既に所属していない）・error
-        // （通信エラー等）。既存のcurrentCompany/membership/companiesは
-        // 一切変更しない（A社の状態を維持する）。ログにはresult.status
-        // （"rejected"/"error"という固定の分類文字列）だけを出し、
-        // Supabaseの生エラー・companyCode・user情報・config内容は含めない。
+      setIsSwitching(outcome.isSwitching);
+
+      if (outcome.shouldLogError) {
+        // ログにはresult.status（"rejected"/"error"という固定の分類文字列）
+        // だけを出し、Supabaseの生エラー・companyCode・user情報・config内容は
+        // 含めない。
         console.error("会社の切り替えに失敗しました", result.status);
-        setCompanySwitchError(resolveCompanySwitchError(result.status));
-        setIsSwitching(false);
-        return;
       }
 
-      saveLastCompanyCode(result.currentCompany.companyCode);
-      setState((prev) => ({
-        status: result.status,
-        currentCompany: result.currentCompany,
-        membership: result.membership,
-        companies: prev.companies,
-      }));
-      setIsSwitching(false);
+      if (outcome.switchError !== undefined) {
+        setCompanySwitchError(outcome.switchError);
+      }
+
+      if (outcome.applyState) {
+        saveLastCompanyCode(outcome.currentCompany.companyCode);
+        setState((prev) => ({
+          status: outcome.status,
+          currentCompany: outcome.currentCompany,
+          membership: outcome.membership,
+          companies: prev.companies,
+        }));
+      }
     },
     [state.companies],
   );
@@ -136,6 +150,44 @@ export function CompanyProvider({ children }) {
       {children}
     </CompanyContext.Provider>
   );
+}
+
+// selectCompany()の応答（selectCompanyPure()の結果）が届いた時点で、
+// isSwitching/companySwitchError/state（currentCompany・membership）を
+// どう更新すべきかだけを判定する純粋関数（バグ修正で追加）。Reactの
+// useState/refから切り離してテストできるようにする（resolveCurrentCompany.js の
+// resolveCompanySwitchError等と同じ方針。このファイル自体はJSXを含みJSDOM無しの
+// テスト環境では直接レンダリングできないため、判定ロジックだけをここへ
+// 切り出してテスト可能にしている）。
+//
+// isStale：true の場合（自分より新しいload()/selectCompany()呼び出しに
+// 追い越された）は、stateの更新は行わない（新しい呼び出し側の責務）が、
+// isSwitchingは必ずfalseを返す。追い越した相手がload()だった場合、load()は
+// isSwitchingを一切管理しないため、ここでfalseを返さないとisSwitchingが
+// trueのまま復旧不能になる（このファイルの本バグ修正の本体）。
+export function resolveSelectCompanyOutcome({ isStale, result }) {
+  if (isStale) {
+    return { isSwitching: false, applyState: false, switchError: undefined, shouldLogError: false };
+  }
+
+  if (result.status !== "ready" && result.status !== "unpublished") {
+    return {
+      isSwitching: false,
+      applyState: false,
+      switchError: resolveCompanySwitchError(result.status),
+      shouldLogError: true,
+    };
+  }
+
+  return {
+    isSwitching: false,
+    applyState: true,
+    status: result.status,
+    currentCompany: result.currentCompany,
+    membership: result.membership,
+    switchError: undefined,
+    shouldLogError: false,
+  };
 }
 
 // CompanyProviderの外（未ログイン画面・ローカル開発/デモ用のApp.jsx等）から
