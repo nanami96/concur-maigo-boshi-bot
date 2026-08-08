@@ -105,28 +105,45 @@ export async function fetchMyRole() {
 }
 
 // ログイン中ユーザー(auth.uid())の所属会社・役割・公開設定をまとめて取得する。
-// company_codeを一切渡さない＝他社を指定する経路が存在しない
-// （get_my_public_config() RPC参照）。
 //
-// membership: null            … 未所属（company_membersに行が無い）
+// 【複数社所属対応・Commit 2で変更】companyCodeを省略した場合の挙動は
+// get_my_public_config() RPC（supabase/schema.sql参照）自体の仕様に従う：
+//   - 所属0件 → membership: null（未所属）
+//   - 所属1件 → サーバー側で自動解決（既存の1社利用者との後方互換）
+//   - 所属2件以上 → RPCがfail-closedな例外を返す。これをambiguous: trueとして
+//     呼び出し側（resolveCurrentCompany.js）へ伝える（データを一切返さない。
+//     先頭行を機械的に選ぶことは絶対に行わない）。
+// companyCodeを明示指定した場合は、その会社に実際に所属しているかどうかを
+// サーバー側（get_my_public_config内のcompany_members照合）が検証する。
+// 所属していなければmembership: nullが返るだけで、他社の情報が漏れることはない。
+//
+// membership: null            … 未所属、または指定した会社に所属していない
 // membership: {companyCode, companyName, role, configSnapshot, publishedAt}
 //   configSnapshot/publishedAtは、所属していてもまだ未公開ならnullになる。
-export async function fetchMyMembership() {
+// ambiguous: true             … companyCode省略・所属2件以上のため一意に決定できない
+//   （このときmembership/errorは共にnull）。
+export async function fetchMyMembership(companyCode) {
   if (!isSupabaseConfigured) {
-    return { membership: null, error: null };
+    return { membership: null, error: null, ambiguous: false };
   }
 
   try {
-    const { data, error } = await supabase.rpc("get_my_public_config");
+    const hasCompanyCode = typeof companyCode === "string" && companyCode.trim() !== "";
+    const { data, error } = hasCompanyCode
+      ? await supabase.rpc("get_my_public_config", { p_company_code: companyCode })
+      : await supabase.rpc("get_my_public_config");
 
     if (error) {
-      return { membership: null, error: { type: "unknown", message: error.message } };
+      if (String(error.message || "").includes("company must be specified")) {
+        return { membership: null, error: null, ambiguous: true };
+      }
+      return { membership: null, error: { type: "unknown", message: error.message }, ambiguous: false };
     }
 
     const row = Array.isArray(data) ? data[0] : data;
 
     if (!row) {
-      return { membership: null, error: null };
+      return { membership: null, error: null, ambiguous: false };
     }
 
     return {
@@ -138,9 +155,10 @@ export async function fetchMyMembership() {
         publishedAt: row.published_at || null,
       },
       error: null,
+      ambiguous: false,
     };
   } catch (caughtError) {
-    return { membership: null, error: { type: "network", message: caughtError.message } };
+    return { membership: null, error: { type: "network", message: caughtError.message }, ambiguous: false };
   }
 }
 

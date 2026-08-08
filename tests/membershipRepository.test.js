@@ -97,14 +97,14 @@ describe("fetchMyMembership", () => {
   it("Supabase未設定なら呼び出さずmembership:nullを返す", async () => {
     mockState.isSupabaseConfigured = false;
     const result = await fetchMyMembership();
-    expect(result).toEqual({ membership: null, error: null });
+    expect(result).toEqual({ membership: null, error: null, ambiguous: false });
     expect(rpcMock).not.toHaveBeenCalled();
   });
 
   it("未所属（0行）ならmembership:null・error:null", async () => {
     rpcMock.mockResolvedValue({ data: [], error: null });
     const result = await fetchMyMembership();
-    expect(result).toEqual({ membership: null, error: null });
+    expect(result).toEqual({ membership: null, error: null, ambiguous: false });
   });
 
   it("所属しているが未公開の場合、configSnapshotがnullで返る", async () => {
@@ -155,6 +155,58 @@ describe("fetchMyMembership", () => {
     const result = await fetchMyMembership();
     expect(result.membership).toBeNull();
     expect(result.error).not.toBeNull();
+    expect(result.ambiguous).toBe(false);
+  });
+
+  describe("複数社所属対応（Commit 2：company_code省略時の2件以上・明示指定）", () => {
+    it("会社コードを明示指定した場合、p_company_codeとしてRPCへ渡す", async () => {
+      rpcMock.mockResolvedValue({
+        data: [
+          {
+            company_code: "company-b",
+            company_name: "B株式会社",
+            role: "admin",
+            config_snapshot: null,
+            published_at: null,
+          },
+        ],
+        error: null,
+      });
+
+      const result = await fetchMyMembership("company-b");
+
+      expect(rpcMock).toHaveBeenCalledWith("get_my_public_config", { p_company_code: "company-b" });
+      expect(result.membership.companyCode).toBe("company-b");
+      expect(result.ambiguous).toBe(false);
+    });
+
+    it("会社コード省略・所属2件以上の場合、RPCのfail-closedな例外をambiguous:trueとして返す（membership/errorはnull）", async () => {
+      rpcMock.mockResolvedValue({
+        data: null,
+        error: { message: "company must be specified" },
+      });
+
+      const result = await fetchMyMembership();
+
+      expect(result).toEqual({ membership: null, error: null, ambiguous: true });
+    });
+
+    it("指定した会社に所属していない場合、他社情報を返さずmembership:nullになる（エラーでもambiguousでもない）", async () => {
+      rpcMock.mockResolvedValue({ data: [], error: null });
+
+      const result = await fetchMyMembership("company-not-mine");
+
+      expect(result).toEqual({ membership: null, error: null, ambiguous: false });
+      expect(rpcMock).toHaveBeenCalledWith("get_my_public_config", { p_company_code: "company-not-mine" });
+    });
+
+    it("空文字のcompanyCodeは未指定として扱う（p_company_codeを渡さない）", async () => {
+      rpcMock.mockResolvedValue({ data: [], error: null });
+
+      await fetchMyMembership("");
+
+      expect(rpcMock).toHaveBeenCalledWith("get_my_public_config");
+    });
   });
 });
 

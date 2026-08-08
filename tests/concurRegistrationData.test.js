@@ -102,6 +102,41 @@ describe("buildConcurRegistrationData（正常系）", () => {
     expect(result).not.toHaveProperty("receiptFile");
   });
 
+  it("【複数社所属対応・Commit 2】companyCodeを明示指定した場合、company.company_idより優先してcompanyIdに使われる", () => {
+    const { result, error } = buildConcurRegistrationData({
+      company: buildCompany({ company_id: "old-config-embedded-code" }),
+      result: buildResult(),
+      receiptData: buildReceiptData(),
+      companyCode: "current-selected-company",
+    });
+
+    expect(error).toBeNull();
+    expect(result.companyId).toBe("current-selected-company");
+  });
+
+  it("companyCode省略時は既存どおりcompany.company_idにフォールバックする（後方互換）", () => {
+    const { result, error } = buildConcurRegistrationData({
+      company: buildCompany(),
+      result: buildResult(),
+      receiptData: buildReceiptData(),
+    });
+
+    expect(error).toBeNull();
+    expect(result.companyId).toBe("sample-company");
+  });
+
+  it("companyCodeが空文字の場合はcompany.company_idにフォールバックする", () => {
+    const { result, error } = buildConcurRegistrationData({
+      company: buildCompany(),
+      result: buildResult(),
+      receiptData: buildReceiptData(),
+      companyCode: "",
+    });
+
+    expect(error).toBeNull();
+    expect(result.companyId).toBe("sample-company");
+  });
+
   it("concurLoginIdを指定した場合はそのまま含まれる", () => {
     const { result, error } = buildConcurRegistrationData({
       company: buildCompany(),

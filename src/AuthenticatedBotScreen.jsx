@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import BotConversation from "./BotConversation";
 import InviteCodeScreen from "./admin/InviteCodeScreen";
-import { fetchMyMembership, redeemInviteCode } from "./data/membershipRepository";
+import { redeemInviteCode } from "./data/membershipRepository";
 import { resolveMembershipErrorMessage } from "./admin/membershipErrorMessages";
 import {
   readPendingInviteCode,
@@ -9,6 +9,7 @@ import {
   resolveAutoRedeemOutcome,
 } from "./data/pendingInviteCode";
 import { createAutoRedeemPendingInvite } from "./data/autoRedeemPendingInvite";
+import { CompanyProvider, useCompanyContext } from "./company/CompanyContext";
 
 // 未ログイン時点で「会社へ参加」画面（InviteCodeEntryScreen.jsx）に入力された招待コードを、
 // ログイン確定後に自動的にredeem_invite_code()へ渡すためのゲート。
@@ -23,10 +24,12 @@ import { createAutoRedeemPendingInvite } from "./data/autoRedeemPendingInvite";
 // （useRefで保持）を使い続けるため、React StrictModeのeffect二重実行や
 // 何らかの理由での再レンダーが重なっても、実際にredeem_invite_code() RPCが
 // 2回同時に呼ばれることはない。仮に何らかの経路で2回呼ばれてしまっても、
-// DB側のcompany_members_user_id_key（1ユーザー1社のunique制約）と
-// redeem_invite_code()自身の「既に所属済み」チェックが最終防御として働くため、
-// 2社に同時所属してしまうことは無い（resolveAutoRedeemOutcomeはalready_memberを
-// 「成功と同様に扱ってよい」と判定する。詳細はpendingInviteCode.js参照）。
+// DB側のunique(company_id, user_id)制約とredeem_invite_code()自身の
+// 「同じ会社への重複所属」チェックが最終防御として働くため、同じ会社へ
+// 二重に所属してしまうことは無い（複数社所属は正式仕様のため、これは
+// 「1ユーザー1社」を守るものではなく「同一会社への二重登録」だけを防ぐ。
+// resolveAutoRedeemOutcomeはalready_memberを「成功と同様に扱ってよい」と
+// 判定する。詳細はpendingInviteCode.js・supabase/schema.sql参照）。
 function NoMembershipGate({ onJoined }) {
   const [phase, setPhase] = useState(() => (readPendingInviteCode() ? "auto-redeeming" : "manual"));
   const [autoErrorMessage, setAutoErrorMessage] = useState(null);
@@ -122,41 +125,28 @@ function NoMembershipGate({ onJoined }) {
 // 一般利用者Bot画面の本体。
 //
 // company_codeをユーザーに選ばせたり入力させたりすることは一切無い。
-// get_my_public_config() RPC（membershipRepository.fetchMyMembership）が
-// auth.uid()だけから所属会社を解決するため、会社セレクタ・?company=・
+// 所属会社の解決（0件/1件/2件以上・localStorageからの復元）はCompanyContext.jsx
+// （実体はresolveCurrentCompany.js）へ集約した。会社セレクタ・?company=・
 // 他社一覧はこの画面のどこにも存在しない
 // （list_public_companies/?companyのロジックはApp.jsx側にしか無く、
 // この画面からは一切importしていない）。
+//
+// 【複数社所属対応・Commit 2で変更】以前はこのコンポーネント自身がfetchMyMembership()を
+// 直接呼んでいたが、CompanyProviderへ委譲した（重複したRPC呼び出し・状態の
+// 二重管理を避けるため）。CompanyProviderで画面全体をラップし、実際の描画は
+// AuthenticatedBotScreenContentが useCompanyContext() 経由で行う。
 export default function AuthenticatedBotScreen({ onSignOut }) {
-  const [state, setState] = useState({ status: "loading", membership: null });
+  return (
+    <CompanyProvider>
+      <AuthenticatedBotScreenContent onSignOut={onSignOut} />
+    </CompanyProvider>
+  );
+}
 
-  const load = useCallback(async () => {
-    setState({ status: "loading", membership: null });
+function AuthenticatedBotScreenContent({ onSignOut }) {
+  const { status, currentCompany, membership, reload } = useCompanyContext();
 
-    const { membership, error } = await fetchMyMembership();
-
-    if (error) {
-      console.error("所属会社・公開設定の取得に失敗しました", error);
-      setState({ status: "error", membership: null });
-      return;
-    }
-
-    if (!membership) {
-      setState({ status: "no-membership", membership: null });
-      return;
-    }
-
-    setState({
-      status: membership.configSnapshot ? "ready" : "unpublished",
-      membership,
-    });
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  if (state.status === "loading") {
+  if (status === "loading") {
     return (
       <main className="appShell">
         <section className="chatPanel botStatusPanel" aria-label="Concur迷子防止Botの質問">
@@ -166,7 +156,7 @@ export default function AuthenticatedBotScreen({ onSignOut }) {
     );
   }
 
-  if (state.status === "error") {
+  if (status === "error") {
     return (
       <main className="appShell">
         <section className="chatPanel botStatusPanel" aria-label="Concur迷子防止Botの質問">
@@ -176,11 +166,25 @@ export default function AuthenticatedBotScreen({ onSignOut }) {
     );
   }
 
-  if (state.status === "no-membership") {
-    return <NoMembershipGate onJoined={load} />;
+  if (status === "no-membership") {
+    return <NoMembershipGate onJoined={reload} />;
   }
 
-  const isAdmin = state.membership.role === "admin";
+  // 2社以上に所属しており、かつlocalStorageに有効な前回会社が無い状態
+  // （resolveCurrentCompany.js参照）。会社を選ばせるUIはまだ無いため、
+  // 今回はこの状態を案内するだけの非対話的な文言に留める（ドロップダウン等の
+  // 選択UIはCommit 3以降で追加する）。
+  if (status === "selection-required") {
+    return (
+      <main className="appShell">
+        <section className="chatPanel botStatusPanel" aria-label="Concur迷子防止Botの質問">
+          <p>複数の会社に所属しています。会社を選択する機能は近日提供予定です。</p>
+        </section>
+      </main>
+    );
+  }
+
+  const isAdmin = currentCompany.role === "admin";
 
   // 管理画面（#admin）はAdminViewportGateにより1024px未満ではPC利用案内へ
   // 差し替わり編集UIを表示しないため、その導線であるこのリンク自体も
@@ -193,7 +197,7 @@ export default function AuthenticatedBotScreen({ onSignOut }) {
     </a>
   ) : null;
 
-  if (state.status === "unpublished") {
+  if (status === "unpublished") {
     return (
       <main className="appShell">
         <section className="chatPanel botStatusPanel" aria-label="Concur迷子防止Botの質問">
@@ -213,7 +217,7 @@ export default function AuthenticatedBotScreen({ onSignOut }) {
 
   return (
     <BotConversation
-      config={state.membership.configSnapshot}
+      config={membership.configSnapshot}
       status="ready"
       headerActions={headerActions}
       onSignOut={onSignOut}

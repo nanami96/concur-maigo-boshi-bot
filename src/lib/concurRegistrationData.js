@@ -114,6 +114,14 @@ function resolvePolicyId(result) {
  * @param {string|null} [input.memo]
  *   利用者の自由入力コメント。現状UIに入力欄が無いため、指定が無ければ
  *   常にnull（ダミー文字列は生成しない）。
+ * @param {string|null} [input.companyCode]
+ *   【複数社所属対応・Commit 2で追加】現在選択中会社(currentCompany.companyCode。
+ *   src/company/CompanyContext.jsx参照)を明示的に渡すためのオプション引数。
+ *   指定時はcompany.company_id（config_snapshot内に埋め込まれた複製値。上記の
+ *   「companyIdについて」参照）より優先してcompanyIdとして使う。省略時は
+ *   既存どおりcompany.company_idへフォールバックする（後方互換）。
+ *   Commit 2時点ではまだどのUIからもこの引数は渡していない
+ *   （呼び出し側の配線・実際の複数社切替UIはCommit 3以降）。
  * @param {string|null} [input.concurLoginId]
  *   Concur Identity APIでuserIDを解決するためのConcurログインID。
  *   ConcurRegistrationPanel.jsxが用意する入力欄の値をそのまま渡す想定。
@@ -147,8 +155,10 @@ export function buildConcurRegistrationData({
   receiptFile,
   memo,
   concurLoginId,
+  companyCode,
 } = {}) {
-  const companyId = resolveCompanyCode(company);
+  const companyId =
+    typeof companyCode === "string" && companyCode.trim() !== "" ? companyCode : resolveCompanyCode(company);
   if (!companyId) {
     return {
       result: null,
