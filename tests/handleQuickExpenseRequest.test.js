@@ -85,11 +85,18 @@ function defaultLookupUser() {
 // （ゲートがOFFの限り、createQuickExpenseを明示的に渡さない呼び出しは
 // 常にcreateQuickExpenseStubへ解決される）。Vault/OAuth/Identityパイプラインを
 // 検証するテストはbuildGateOnAuthedInput()を使う。
+// 【複数社所属対応】fetchCompanyMembershipは(user, companyCode)の2引数を
+// 受け取り、実際に所属している会社のcompanyCodeを渡された場合だけmembershipを
+// 返す（それ以外はnull）。buildValidBody()の既定companyId（"company-a"）と
+// 一致させているため、companyId未指定の既存テストは従来どおり動作するが、
+// 引数を無視して常に固定値を返す実装（＝companyIdの検証をすり抜けてしまう
+// 危険な実装）ではないことを、この既定モック自体でも体現している。
 function buildAuthedInput(overrides = {}) {
   return {
     authHeader: "Bearer valid.jwt",
     fetchUser: async () => VALID_USER,
-    fetchCompanyMembership: async () => VALID_MEMBERSHIP,
+    fetchCompanyMembership: async (_user, companyCode) =>
+      companyCode === VALID_MEMBERSHIP.company_code ? VALID_MEMBERSHIP : null,
     env: {},
     ...overrides,
   };
@@ -368,12 +375,18 @@ describe("handleQuickExpenseRequest", () => {
       expect(createQuickExpense).not.toHaveBeenCalled();
     });
 
-    it("認証済みユーザーの所属会社と、本文のcompanyIdが一致しない場合は403(forbidden)。スタブは呼ばれない", async () => {
+    it("認証済みユーザーが本文のcompanyIdへ実際には所属していない場合は403(forbidden)。スタブは呼ばれない（cross-company拒否）", async () => {
       const createQuickExpense = vi.fn();
+      // このユーザーは実際にはcompany-bにしか所属していない、という状況を
+      // 再現する（fetchCompanyMembershipはcompanyCode引数で絞り込み、
+      // company-aを問い合わせられた場合はnull＝所属なしを返す）。
+      const fetchCompanyMembership = vi.fn(async (_user, companyCode) =>
+        companyCode === "company-b" ? { company_code: "company-b", role: "user", expenseTypes: [] } : null,
+      );
 
       const { status, body } = await handleQuickExpenseRequest({
         method: "POST",
-        ...buildAuthedInput({ fetchCompanyMembership: async () => ({ company_code: "company-b", role: "user", expenseTypes: [] }) }),
+        ...buildAuthedInput({ fetchCompanyMembership }),
         parseBody: parseBodyFor(buildValidBody({ companyId: "company-a" })),
         createQuickExpense,
       });
@@ -381,6 +394,7 @@ describe("handleQuickExpenseRequest", () => {
       expect(status).toBe(403);
       expect(body.result).toBeNull();
       expect(body.error.code).toBe("forbidden");
+      expect(fetchCompanyMembership).toHaveBeenCalledWith(VALID_USER, "company-a");
       expect(createQuickExpense).not.toHaveBeenCalled();
     });
 
@@ -445,6 +459,124 @@ describe("handleQuickExpenseRequest", () => {
 
       logSpy.mockRestore();
       errorSpy.mockRestore();
+    });
+  });
+
+  // 【複数社所属対応・Commit 1】1人のユーザーがA社・C社の2社に所属している
+  // 状況を再現し、companyId（company_code）の明示検証がcross-company混在を
+  // 防いでいることを確認する。fetchCompanyMembershipは実際のRPC
+  // （get_my_public_config(p_company_code)）と同じく、渡されたcompanyCodeで
+  // 絞り込んだ結果だけを返す（先頭行・data[0]への依存が無いことを表現する
+  // ため、companyCodeをキーにしたマップから引く実装にしている）。
+  describe("複数社所属対応（Commit 1：companyIdの明示検証によるcross-company防止）", () => {
+    const COMPANY_A_MEMBERSHIP = {
+      company_code: "company-a",
+      role: "admin",
+      expenseTypes: [{ id: "taxi", policyId: "policy-x", name: "タクシー", active: true }],
+      expenseTypeIdMode: "concur_exp_key",
+    };
+    const COMPANY_C_MEMBERSHIP = {
+      company_code: "company-c",
+      role: "user",
+      expenseTypes: [{ id: "01063", policyId: "policy-y", name: "交通費", active: true }],
+      expenseTypeIdMode: "concur_exp_key",
+    };
+    const MULTI_COMPANY_MEMBERSHIPS = {
+      "company-a": COMPANY_A_MEMBERSHIP,
+      "company-c": COMPANY_C_MEMBERSHIP,
+    };
+
+    function buildMultiCompanyFetchCompanyMembership() {
+      return vi.fn(async (_user, companyCode) => MULTI_COMPANY_MEMBERSHIPS[companyCode] ?? null);
+    }
+
+    it("12. companyId=company-a・A社所属・A社の経費タイプコードの組み合わせは認可成功（200）", async () => {
+      const createQuickExpense = vi.fn().mockResolvedValue({
+        result: { quickExpenseId: "stub_quick_expense_id", status: "stubbed" },
+        error: null,
+      });
+      const fetchCompanyMembership = buildMultiCompanyFetchCompanyMembership();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({ fetchCompanyMembership }),
+        parseBody: parseBodyFor(
+          buildValidBody({ companyId: "company-a", policyId: "policy-x", expenseTypeId: "taxi" }),
+        ),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(200);
+      expect(body.error).toBeNull();
+      expect(createQuickExpense).toHaveBeenCalledTimes(1);
+    });
+
+    it("13. companyId=company-bだが所属していない（company-a・company-cにしか所属していない）場合は403(forbidden)", async () => {
+      const createQuickExpense = vi.fn();
+      const fetchCompanyMembership = buildMultiCompanyFetchCompanyMembership();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({ fetchCompanyMembership }),
+        parseBody: parseBodyFor(buildValidBody({ companyId: "company-b" })),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(403);
+      expect(body.error.code).toBe("forbidden");
+      expect(fetchCompanyMembership).toHaveBeenCalledWith(VALID_USER, "company-b");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("14. companyId=company-aのリクエストにcompany-cの経費タイプコード（01063）を指定すると拒否される（他社の経費タイプは使えない）", async () => {
+      const createQuickExpense = vi.fn();
+      const fetchCompanyMembership = buildMultiCompanyFetchCompanyMembership();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({ fetchCompanyMembership }),
+        parseBody: parseBodyFor(
+          buildValidBody({ companyId: "company-a", policyId: "policy-y", expenseTypeId: "01063" }),
+        ),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(403);
+      expect(body.error.code).toBe("expense_type_not_found");
+      expect(createQuickExpense).not.toHaveBeenCalled();
+    });
+
+    it("15. fetchCompanyMembershipが必ず本文のcompanyIdとともに呼ばれる（data[0]・先頭membershipへの暗黙依存が無いことの確認）", async () => {
+      const fetchCompanyMembership = buildMultiCompanyFetchCompanyMembership();
+
+      await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({ fetchCompanyMembership }),
+        parseBody: parseBodyFor(
+          buildValidBody({ companyId: "company-c", policyId: "policy-y", expenseTypeId: "01063" }),
+        ),
+      });
+
+      expect(fetchCompanyMembership).toHaveBeenCalledTimes(1);
+      expect(fetchCompanyMembership).toHaveBeenCalledWith(VALID_USER, "company-c");
+    });
+
+    it("A社adminがA社の一覧を取得する通常フローでも、C社の経費タイプ一覧が一切参照されない", async () => {
+      const createQuickExpense = vi.fn().mockResolvedValue({ result: { quickExpenseId: "x", status: "created" }, error: null });
+      const fetchCompanyMembership = buildMultiCompanyFetchCompanyMembership();
+
+      const { status, body } = await handleQuickExpenseRequest({
+        method: "POST",
+        ...buildAuthedInput({ fetchCompanyMembership }),
+        parseBody: parseBodyFor(
+          buildValidBody({ companyId: "company-a", policyId: "policy-x", expenseTypeId: "taxi" }),
+        ),
+        createQuickExpense,
+      });
+
+      expect(status).toBe(200);
+      // company-c固有の経費タイプコード（01063）がレスポンスに紛れ込んでいないこと。
+      expect(JSON.stringify(body)).not.toContain("01063");
     });
   });
 
@@ -1163,7 +1295,8 @@ describe("handleQuickExpenseRequest", () => {
       const companyMismatch = await handleQuickExpenseRequest({
         method: "POST",
         ...buildAuthedInput({
-          fetchCompanyMembership: async () => ({ company_code: "company-b", role: "user", expenseTypes: [] }),
+          fetchCompanyMembership: async (_user, companyCode) =>
+            companyCode === "company-b" ? { company_code: "company-b", role: "user", expenseTypes: [] } : null,
           getRefreshTokenForEdge,
         }),
         parseBody: parseBodyFor(buildValidBody({ companyId: "company-a" })),

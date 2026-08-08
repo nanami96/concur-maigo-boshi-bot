@@ -60,10 +60,20 @@ comment on column companies.current_published_version_id is
   '現在本番Botに公開されている published_versions.id。まだ一度も公開していない会社はnull。';
 
 -- 会社ごとの所属ユーザー。誰がどの会社に属し、管理者かどうかを表す唯一のテーブル。
--- Phase 7以降、一般利用者もここに（role='user'として）登録されるようになったため、
--- 「1つのauth.users.idは必ず1社にしか所属できない」という制約を追加している
--- （本ファイル末尾のPhase 7節、company_members_user_id_key参照）。
+--
+-- 【重要・複数社所属を正式仕様とする（1ユーザー1社制約の撤廃）】
+-- Phase 7では一般利用者もここに（role='user'として）登録されるようになった際、
+-- 「1つのauth.users.idは必ず1社にしか所属できない」という制約
+-- （company_members_user_id_key、unique(user_id)）を追加していたが、
+-- 「1 Authユーザー = 複数会社に所属可能」を正式仕様とするため、本節より後の
+-- Phase 7-1でこの制約を削除する（本ファイル末尾のPhase 7-1節参照）。
+-- 一方、以下のunique(company_id, user_id)は「同じ会社へ重複登録できない」
+-- という別の制約であり、複数社対応後も維持する（同じ会社に同じユーザーの
+-- 行が2つ存在することは引き続き禁止する）。
 -- 1社に複数の管理者を置くこと自体は引き続き可能（company_idは複数行で重複してよい）。
+-- roleはこのテーブルの行（＝会社ごとの所属）に紐づくため、同じユーザーが
+-- A社ではadmin・B社ではuserのように、会社ごとに異なるroleを持つことも
+-- スキーマ上すでに矛盾なく表現できる。
 create table if not exists company_members (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references companies (id) on delete cascade,
@@ -82,13 +92,14 @@ comment on column company_members.role is
 -- 「全会社を横断して管理できるサービス運営者」を、company_members.roleの
 -- 3つ目の値として追加するのではなく、完全に別軸の専用テーブルとして管理する。
 -- 理由：
---   ・company_members.user_idにはPhase 7でunique制約を付けており「1ユーザー1社」
---     を保証している。platform_adminがある会社のadminを兼務しつつ、全社を横断
---     管理できる状態を許容したいため、「会社への所属」と「運営者権限」を
---     同じテーブル・同じ行で表現すると矛盾する（1行は1社としか紐付けられない）。
 --   ・company_members.roleに'platform_admin'を追加すると、company_idが
 --     not null制約のため「どの会社の運営者か」という誤った意味を持ってしまう
---     （運営者は特定の1社に属する概念ではない）。
+--     （運営者は特定の1社に属する概念ではない。1ユーザー1社制約の有無に
+--     関わらず、company_membersの各行は必ず特定の1社に紐づく設計のため、
+--     「全社横断」という概念をこのテーブルの行として表現すること自体ができない）。
+--   ・「会社への所属」と「運営者権限」を分離しておくことで、platform_adminが
+--     ある会社のadmin（company_membersの1行）を兼務しつつ、全社を横断して
+--     管理できる状態を自然に表現できる。
 -- そのため、「auth.users.idそのものが運営者かどうか」だけを表す最小限の
 -- テーブルにする。company_idを一切持たない。
 create table if not exists platform_admins (
@@ -98,7 +109,7 @@ create table if not exists platform_admins (
 
 comment on table platform_admins is
   'サービス運営者（全会社を横断管理できる権限）。company_membersとは別軸で管理し、'
-  '1ユーザー1社制約（company_members.user_id unique）とは独立している。'
+  '同テーブルが1ユーザー複数社所属を許容する設計になったことの影響を受けない。'
   '運営者の登録・削除は運営者自身がSupabase SQL Editorから手動で行う運用とし、'
   'アプリからのINSERT/UPDATE/DELETEは一切許可しない（本ファイルのgrant文参照）。';
 
@@ -714,21 +725,35 @@ grant execute on function list_public_companies() to anon, authenticated;
 --   companies_select_admin等のCREATE POLICY文もあわせて実行すること。
 --   docs/supabase-setup.mdの「既存Supabaseへ追加実行するSQL」参照）。
 
--- --- 7-1. 1ユーザー1社の保証（DBレベル） -------------------------------------
+-- --- 7-1. 1ユーザー1社制約の撤廃（複数社所属を正式仕様とする） ----------------
 --
--- 重要：この制約を実際のSupabaseへ追加する前に、既存データに複数会社へ
--- 所属しているuser_idが無いか必ず確認すること
--- （docs/supabase-setup.md「Phase 7既存データ確認」節の確認SQLを参照）。
--- 重複がある状態でこのALTERを実行すると、Postgresが制約違反として
--- エラーを返すだけで、既存データが勝手に削除されることはない
--- （安全側に倒れる。ただしエラーの原因を解消するまで、以後この節のALTERは
--- 適用されない状態が続く）。
+-- 【重要・設計変更】以前はここで company_members_user_id_key
+-- （unique(user_id)、「1つのauth.users.idは必ず1社にしか所属できない」制約）を
+-- 追加していたが、「1 Authユーザー = 複数会社に所属可能」を正式仕様とするため、
+-- この制約を削除する（既にこの制約が存在する環境に対しても安全に再実行できる
+-- よう、削除自体もif existsで保護する）。
+--
+-- 削除後も、company_members作成時に定義したunique(company_id, user_id)は
+-- そのまま残る（本ファイル冒頭のcreate table if not exists company_members
+-- 参照）。そのため、
+--   ・A社 + user1 の登録 → OK
+--   ・B社 + user1 の登録 → OK（従来は禁止していたが、これを許可するのが今回の変更）
+--   ・A社 + user1 をもう一度登録 → 引き続きNG（unique(company_id, user_id)違反）
+-- という仕様になる。
+--
+-- 【重要・この節はコードの変更のみを表す】このcommit時点では、この
+-- ALTER文自体をSupabaseへ実行しない（実DBへの適用は別途指示のもとで行う）。
+-- 実際に適用する際は、company_members_user_id_keyに依存するコード
+-- （get_my_public_config()・redeem_invite_code()・list_my_company_members()の
+-- 呼び出し元）が本ファイルの変更後バージョンに揃っていることを事前に確認すること
+-- （揃っていない状態でこの制約だけを先に削除すると、旧バージョンのRPCが
+-- 複数行を暗黙に1行として扱う既存の非決定的動作の問題が顕在化する）。
 do $$
 begin
-  if not exists (
+  if exists (
     select 1 from pg_constraint where conname = 'company_members_user_id_key'
   ) then
-    alter table company_members add constraint company_members_user_id_key unique (user_id);
+    alter table company_members drop constraint company_members_user_id_key;
   end if;
 end $$;
 
@@ -758,19 +783,49 @@ comment on column companies.invite_code_hash is
   '招待コードのSHA-256ハッシュ（hex）。運営者がSQL Editorから会社登録時に設定する。'
   '平文の招待コードはDBに保存せず、発行時に管理者へ別途伝える。';
 
--- --- 7-3. get_my_public_config(): ログイン中ユーザー専用、会社自動判定 -------
+-- --- 7-3. get_my_public_config(): ログイン中ユーザー専用、会社ごとの設定取得 --
 --
--- 一般利用者Bot画面の唯一のデータ取得口。引数を一切取らない
--- （company_codeを渡させない＝他社を指定する余地自体が無い）。
--- auth.uid()から company_members → companies → published_versions の順に
--- 解決し、以下のいずれの状態も同じ関数で自然に区別できる：
+-- 一般利用者Bot画面の唯一のデータ取得口。
+--
+-- 【重要・複数社所属対応（1ユーザー1社制約の撤廃）に伴う変更】
+-- 以前は引数を一切取らず、company_membersからauth.uid()に一致する行を
+-- 無条件に1行だけ想定して解決していた（1ユーザー1社制約により、実際にも
+-- 1行しか存在し得なかったため）。複数社所属を許可すると、無引数のままでは
+-- 「どの会社の設定を返すべきか」が決まらず、複数行が返った場合に呼び出し元が
+-- 先頭行（data[0]）を無条件に使うような非決定的な実装になってしまう
+-- （実際に過去の呼び出し元コードはそうなっていた）。
+--
+-- そのため、会社を明示的に指定できるp_company_code引数を追加した：
+--   ・p_company_codeを指定した場合：
+--       company_members cm join companies c ... where cm.user_id = auth.uid()
+--       and c.company_code = p_company_code という、常にauth.uid()自身の行だけに
+--       絞り込んだ条件で解決する。呼び出し元が指定したp_company_codeを
+--       無条件に信用するのではなく、実際にauth.uid()がその会社へ所属して
+--       いなければ0行しか返らない（＝サーバー側で必ず所属を検証している）。
+--   ・p_company_codeを省略（null）した場合：
+--       既存1社ユーザーとの後方互換のため、呼び出し元の所属会社が
+--       ちょうど1件であれば、従来どおりその1件を自動解決して返す。
+--       所属会社が0件の場合は、以前と同じく0行を返す（未所属）。
+--       所属会社が2件以上ある場合は、先頭行を勝手に選ばずraise exceptionで
+--       fail-closedにする（'company must be specified'、errcode '22023'。
+--       呼び出し元は明示的にp_company_codeを指定し直す必要がある）。
+--
+-- 戻り値の形（company_code・company_name・role・config_snapshot・
+-- published_at）・以下の状態区別は従来どおり：
 --   ・company_membersに行が無い     → 0行を返す（＝会社未所属）
 --   ・行はあるが未公開               → company_code/company_name/roleは返るが
 --                                       config_snapshot/published_atはnull
 --   ・行があり公開済み               → 全列が埋まって返る
--- roleも一緒に返すことで、呼び出し側が「管理画面への導線を出してよいか」を
--- 追加の問い合わせ無しに判断できる。
-create or replace function get_my_public_config()
+--
+-- 【重要・シグネチャ変更に伴う旧関数の削除】PostgreSQLはCREATE OR REPLACE
+-- FUNCTIONを引数の型（シグネチャ）で区別するため、引数無し→デフォルト引数
+-- ありへの変更は「置き換え」ではなく「別関数の追加」になり、旧来の引数無し
+-- get_my_public_config()が残ってしまう（デフォルト引数付きの新関数と共存し、
+-- 無引数呼び出し時にどちらが解決されるか紛らわしい状態になる）。そのため、
+-- 新しい定義の前に明示的にdrop functionしてから作り直す。
+drop function if exists get_my_public_config();
+
+create or replace function get_my_public_config(p_company_code text default null)
 returns table (
   company_code text,
   company_name text,
@@ -778,34 +833,80 @@ returns table (
   config_snapshot jsonb,
   published_at timestamptz
 )
-language sql
+language plpgsql
 security definer
 set search_path = public
 stable
 as $$
-  select c.company_code, c.company_name, cm.role, pv.config_snapshot, pv.published_at
+declare
+  v_membership_count int;
+begin
+  if p_company_code is not null then
+    return query
+      select c.company_code, c.company_name, cm.role, pv.config_snapshot, pv.published_at
+      from company_members cm
+      join companies c on c.id = cm.company_id
+      left join published_versions pv on pv.id = c.current_published_version_id
+      where cm.user_id = auth.uid()
+        and c.company_code = p_company_code;
+    return;
+  end if;
+
+  select count(*) into v_membership_count
   from company_members cm
-  join companies c on c.id = cm.company_id
-  left join published_versions pv on pv.id = c.current_published_version_id
   where cm.user_id = auth.uid();
+
+  if v_membership_count > 1 then
+    raise exception 'company must be specified' using errcode = '22023';
+  end if;
+
+  return query
+    select c.company_code, c.company_name, cm.role, pv.config_snapshot, pv.published_at
+    from company_members cm
+    join companies c on c.id = cm.company_id
+    left join published_versions pv on pv.id = c.current_published_version_id
+    where cm.user_id = auth.uid();
+end;
 $$;
 
-comment on function get_my_public_config() is
-  'ログイン中ユーザー(auth.uid())の所属会社を自動判定し、company_code・company_name・'
-  'role・config_snapshot・published_atを返す。パラメータは無く、他社を指定する経路が'
-  '存在しない。未所属なら0行、所属していても未公開ならconfig_snapshot/published_atがnull。';
+comment on function get_my_public_config(text) is
+  'ログイン中ユーザー(auth.uid())の所属会社の設定を返す。p_company_codeを指定した'
+  '場合、実際にauth.uid()がその会社へ所属している場合だけ1行返す（未所属なら0行。'
+  'クライアントの申告を無条件に信用しない）。省略した場合、所属会社がちょうど1件'
+  'なら従来どおり自動解決するが、複数件所属している場合は先頭行を選ばずraise'
+  'exceptionでfail-closedにする（company must be specified、errcode 22023）。';
 
-revoke all on function get_my_public_config() from public;
-grant execute on function get_my_public_config() to authenticated;
+revoke all on function get_my_public_config(text) from public;
+grant execute on function get_my_public_config(text) to authenticated;
 
 -- --- 7-4. redeem_invite_code(): 招待コードで会社へ所属する（role=userのみ） ---
 --
 -- 権限昇格を防ぐ設計：
 --   ・roleはこの関数の中で 'user' に固定でINSERTする（パラメータとして
 --     受け取らない＝クライアントがrole=adminを指定する経路が存在しない）。
---   ・既にどこかの会社へ所属している場合は拒否する（1ユーザー1社を、
---     DB制約に加えてアプリ層でも早期に分かりやすいエラーとして守る）。
 --   ・招待コードはハッシュ同士の比較でのみ照合する。
+--
+-- 【重要・複数社所属を正式仕様とする（1ユーザー1社制約の撤廃）に伴う変更】
+-- 以前は「このAuthユーザーがcompany_membersに1件でも存在するか」だけを見て
+-- 一律拒否していたが、これは1ユーザー1社制約の時代の実装である。
+-- 複数社所属を許可するため、拒否条件を「招待コードが指し示す会社に、
+-- 既にこのユーザーの行が存在するか」（＝同じ会社への重複参加）だけに変更する。
+--   ・A社所属ユーザーがB社の招待コードをredeem → 許可（B社への新規所属を追加）
+--   ・A社所属ユーザーがA社の招待コードをredeemし直す → 拒否（同一会社への重複）
+-- この判定を行うには、どのコードがどの会社を指すかを先に確定させる必要があるため、
+-- 招待コードの照合（company解決）を、所属確認より先に行う順序へ変更した
+-- （以前は「所属確認 → コード照合」の順だったが、「コード照合（会社確定）→
+-- その会社への所属確認」の順に入れ替えている）。エラーメッセージ・errcodeは
+-- 呼び出し元（src/data/membershipRepository.jsのclassifyMembershipRpcError）が
+-- 文字列一致で分類しているため、'already belongs to a company'という文言・
+-- errcode '42710' は意味を「同じ会社への重複所属」に変えつつ、そのまま維持する
+-- （フロント側の変更は今回のCommitの対象外のため、既存の分類ロジックを
+-- 変更しなくても動くようにする）。
+--
+-- unique(company_id, user_id)（1ユーザー1社制約とは別に、テーブル作成時から
+-- 存在する制約）による二重防御は引き続き維持する：上のexists検査と
+-- このINSERTの間に同じ会社への同時redeemが競合した場合、unique_violationとして
+-- 拾い、同じ固定メッセージを返す。
 --
 -- 重要（実Supabaseで発生した不具合の修正）：
 --   この関数は search_path = public に固定している（SECURITY DEFINERの
@@ -834,10 +935,6 @@ begin
     raise exception 'invite code required' using errcode = '22023';
   end if;
 
-  if exists (select 1 from company_members where company_members.user_id = auth.uid()) then
-    raise exception 'already belongs to a company' using errcode = '42710';
-  end if;
-
   select * into v_company
   from companies c
   where c.invite_code_hash = encode(extensions.digest(v_normalized, 'sha256'), 'hex');
@@ -846,14 +943,22 @@ begin
     raise exception 'invalid invite code' using errcode = 'P0002';
   end if;
 
+  if exists (
+    select 1 from company_members
+    where company_members.user_id = auth.uid()
+      and company_members.company_id = v_company.id
+  ) then
+    raise exception 'already belongs to a company' using errcode = '42710';
+  end if;
+
   insert into company_members (company_id, user_id, role)
   values (v_company.id, auth.uid(), 'user');
 
   return query select v_company.company_code, v_company.company_name;
 exception
   when unique_violation then
-    -- company_members_user_id_key（1ユーザー1社制約）に、上のexists検査と
-    -- このINSERTの間の競合状態で引っかかった場合の保険。
+    -- unique(company_id, user_id)に、上のexists検査とこのINSERTの間の
+    -- 競合状態で引っかかった場合の保険（同じ会社への同時redeem）。
     raise exception 'already belongs to a company' using errcode = '42710';
 end;
 $$;
@@ -861,23 +966,40 @@ $$;
 comment on function redeem_invite_code(text) is
   '招待コードを検証し、ログイン中ユーザーをrole=userとして対象会社のcompany_membersへ'
   '登録する。roleはこの関数内で固定しており、呼び出し側から管理者権限を要求する'
-  '経路は存在しない。';
+  '経路は存在しない。1ユーザー複数社所属を許可するため、拒否するのは招待先と'
+  '同じ会社への重複所属だけであり、既に他社へ所属していること自体は拒否しない。';
 
 revoke all on function redeem_invite_code(text) from public;
 grant execute on function redeem_invite_code(text) to authenticated;
 
--- --- 7-5. list_my_company_members(): 自社ユーザー一覧（adminのみ、メール込み）---
+-- --- 7-5. list_my_company_members(): 自社（または指定した1社）のユーザー一覧 ---
 --
 -- なぜSECURITY DEFINERが必要か：
 --   一覧にメールアドレスを表示するには auth.users.email が要るが、authは
 --   Supabaseが管理する保護スキーマであり、authenticatedロールには
 --   auth.usersへの直接SELECT権限が無い（意図的な制限）。この関数だけが
---   その制限を越えて、呼び出し元の所属会社に限定した最小限の列
+--   その制限を越えて、対象会社に限定した最小限の列
 --   （member_id・user_id・email・role・created_at）を返す。
--- 安全設計：
---   ・パラメータを取らない（company_idを渡させない＝他社を指定できない）。
---   ・呼び出し元がadminでない、または未所属の場合は0行を返す（エラーにはしない。
---     UIが「権限がありません」を自然に出せるようにするため）。
+--
+-- 【重要・複数社所属対応（1ユーザー1社制約の撤廃）に伴う変更】
+-- 以前は引数を取らず、company_membersからauth.uid()に一致する行を無条件に
+-- 1行だけ想定してv_company_id・v_roleへ解決していた（plpgsqlのSELECT INTOは
+-- 複数行マッチ時にエラーにならず、順序不定のまま1行を暗黙に選ぶ）。複数社
+-- 所属を許可すると、この暗黙解決はadmin本人が意図しない会社の一覧を返しかねない
+-- 危険な実装になるため、対象会社を明示的に指定できるp_company_id引数を追加した：
+--   ・p_company_idを指定した場合：is_platform_admin()、または
+--     「auth.uid()がその会社(p_company_id)のadminであること」を検証したうえで
+--     初めてその会社の一覧を返す（他社のadminが別会社のp_company_idを渡しても
+--     0行になる。list_platform_company_members(p_company_id)と同じ検証方式）。
+--   ・p_company_idを省略（null）した場合：既存1社admin（このcommit時点で唯一の
+--     実運用パターン）との後方互換のため、呼び出し元の所属会社がちょうど1件
+--     であれば、従来どおりその1件を自動解決して使う。0件、または2件以上の
+--     場合は0行を返す（以前からの「未所属・非adminなら0行、エラーにしない」
+--     という安全側の挙動をそのまま踏襲する）。
+--
+-- 【重要・シグネチャ変更に伴う旧関数の削除】get_my_public_config()と同じ理由
+-- （PostgreSQLは引数の型でCREATE OR REPLACEの対象を区別するため）で、
+-- 引数無し→デフォルト引数ありへの変更前に明示的にdrop functionする。
 --
 -- 重要（実Supabaseで発生した不具合の修正）：
 --   auth.users.email の実際の列型は character varying(255) だが、
@@ -887,7 +1009,9 @@ grant execute on function redeem_invite_code(text) to authenticated;
 --   「structure of query does not match function result type」
 --   （Postgresエラーコード42804）になる。u.email::text と明示的に
 --   キャストすることで解消する。
-create or replace function list_my_company_members()
+drop function if exists list_my_company_members();
+
+create or replace function list_my_company_members(p_company_id uuid default null)
 returns table (member_id uuid, user_id uuid, email text, role text, created_at timestamptz)
 language plpgsql
 security definer
@@ -895,14 +1019,34 @@ set search_path = public
 stable
 as $$
 declare
-  v_company_id uuid;
-  v_role text;
+  v_target_company_id uuid;
+  v_membership_count int;
 begin
-  select cm.company_id, cm.role into v_company_id, v_role
-  from company_members cm
-  where cm.user_id = auth.uid();
+  if p_company_id is not null then
+    v_target_company_id := p_company_id;
+  else
+    select count(*) into v_membership_count
+    from company_members cm
+    where cm.user_id = auth.uid();
 
-  if v_company_id is null or v_role <> 'admin' then
+    if v_membership_count <> 1 then
+      return;
+    end if;
+
+    select cm.company_id into v_target_company_id
+    from company_members cm
+    where cm.user_id = auth.uid();
+  end if;
+
+  if not (
+    is_platform_admin()
+    or exists (
+      select 1 from company_members
+      where company_members.company_id = v_target_company_id
+        and company_members.user_id = auth.uid()
+        and company_members.role = 'admin'
+    )
+  ) then
     return;
   end if;
 
@@ -910,17 +1054,19 @@ begin
     select cm.id, cm.user_id, u.email::text, cm.role, cm.created_at
     from company_members cm
     join auth.users u on u.id = cm.user_id
-    where cm.company_id = v_company_id
+    where cm.company_id = v_target_company_id
     order by cm.created_at;
 end;
 $$;
 
-comment on function list_my_company_members() is
-  '呼び出し元がadminの場合のみ、自社company_membersの一覧をemail付きで返す。'
-  'それ以外（未所属・一般user）は0行。company_idはパラメータとして受け取らない。';
+comment on function list_my_company_members(uuid) is
+  '呼び出し元がその会社(p_company_id)のadmin、またはplatform_adminの場合のみ、'
+  '対象会社のcompany_members一覧をemail付きで返す。それ以外は0行。'
+  'p_company_idを省略した場合、所属会社がちょうど1件のときだけ従来どおり'
+  '自動解決する（2件以上・0件の場合は0行）。';
 
-revoke all on function list_my_company_members() from public;
-grant execute on function list_my_company_members() to authenticated;
+revoke all on function list_my_company_members(uuid) from public;
+grant execute on function list_my_company_members(uuid) to authenticated;
 
 -- --- 7-6. update_company_member_role(): role変更（adminのみ、最後のadmin保護）---
 --

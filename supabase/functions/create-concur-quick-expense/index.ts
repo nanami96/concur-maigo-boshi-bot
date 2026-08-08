@@ -17,30 +17,41 @@
 //   所属会社確認」の認証境界を実装している（実際の判定ロジックは
 //   resolveQuickExpenseAuthorization.js、Deno固有のI/OはこのファイルのbuildAuthAdapters()
 //   が担当。ocr-receipt/index.tsのresolveAuthorization()と同じ役割分担）。
-//   さらに、認証済みユーザーが実際に所属する会社と、リクエスト本文の
-//   companyIdが一致するかもhandleQuickExpenseRequest.js側で確認する
-//   （フロントから渡された値を認証の根拠にしない）。
+//   ただし複数社所属対応（Commit 1）により、「所属会社確認」自体は
+//   resolveQuickExpenseAuthorization.jsではなくhandleQuickExpenseRequest.js側で、
+//   本文検証（＝companyIdが判明した後）に行うよう変更した（詳細は下記
+//   companyId解決の実装について、およびhandleQuickExpenseRequest.jsの
+//   処理順序コメント参照）。
 //
-//   companyId比較の実装について（重要）：
+//   companyId解決の実装について（重要・複数社所属対応で変更）：
 //   リクエスト本文のcompanyIdは、フロント（src/lib/concurRegistrationData.js）が
 //   一貫してcompany_code（人が識別するためのスラッグ。例："sample-company"）を
 //   指すものとして生成している。一方、company_membersテーブルが持つのは
 //   company_id（companies.idへのSupabase内部UUID）であり、company_codeでは
 //   ない。この2つを取り違えて比較すると、正規のリクエストであっても
 //   常に不一致（forbidden）になってしまう。そのため、fetchCompanyMembership()は
-//   company_membersを直接読むのではなく、既存のget_my_public_config() RPC
-//   （Phase 7、一般利用者Bot画面が既に使っている、roleを問わず所属会社の
-//   company_codeを解決するSECURITY DEFINER関数）を呼び出し、company_codeを
-//   取得する（詳細はresolveMembershipFromPublicConfigRow.js参照）。
+//   company_membersを直接読むのではなく、既存のget_my_public_config(p_company_code)
+//   RPC（Phase 7、一般利用者Bot画面が既に使っている、roleを問わず所属会社の
+//   company_codeを解決するSECURITY DEFINER関数。複数社所属対応でp_company_code
+//   引数を追加した）へ、本文のcompanyIdをそのままp_company_codeとして渡す。
+//   これにより、「auth.uid()がこのcompanyCodeへ実際に所属しているか」を
+//   RPC自身がサーバー側で検証したうえでの結果だけを受け取る（未所属・
+//   存在しない会社なら0行＝forbidden。詳細はresolveMembershipFromPublicConfigRow.js
+//   参照）。1ユーザーが複数の会社へ所属できるようになったため、以前のように
+//   「無引数のget_my_public_config()を呼び、返ってきた配列の先頭を無条件に
+//   採用する」実装は行わない（フロントとバックエンドが別々に非決定的な
+//   先頭行を解決し、たまたま一致すれば通ってしまう設計を避けるため）。
 //
-//   get_my_public_config()が返すconfig_snapshotには、同じ会社の公開済み
-//   経費タイプ一覧（config_snapshot.expenseTypes）も含まれているため、
+//   get_my_public_config(p_company_code)が返すconfig_snapshotには、同じ会社の
+//   公開済み経費タイプ一覧（config_snapshot.expenseTypes）も含まれているため、
 //   company_codeと同時にこれも取り出し、handleQuickExpenseRequest.js側で
 //   policyId・expenseTypeId（＝Concur EXP_KEY）の検証
 //   （verifyExpenseTypeForQuickExpense.js）に使う（フロントから送られた
-//   これらの値もそのまま信用しない）。経費タイプID＝Concur EXP_KEYという
-//   設計への正式リファクタリングにより、以前存在した独立したConcur Expense
-//   Type Mapping（config_snapshot.concur.expenseTypeMappings）は廃止した。
+//   これらの値もそのまま信用しない）。company_codeで絞り込んだ行から
+//   取り出すため、他社（本文のcompanyId以外）の経費タイプ一覧が混ざることは
+//   構造上ない。経費タイプID＝Concur EXP_KEYという設計への正式リファクタリング
+//   により、以前存在した独立したConcur Expense Type Mapping
+//   （config_snapshot.concur.expenseTypeMappings）は廃止した。
 //
 //   このEdge Functionは現状スタブ応答のみを返し、実際のConcurへのアクセス・
 //   実データの作成を一切行わないが、認証自体は「実データを扱うようになって
@@ -203,26 +214,35 @@ function buildAuthAdapters(createClient, authHeader, log) {
       }
       return data.user;
     },
-    // 引数のuserは使わない：get_my_public_config()はauth.uid()（＝呼び出し元の
-    // JWTから解決される、fetchUser()が返したのと同じユーザー）を内部で
-    // 参照するSECURITY DEFINER関数のため、ここで改めてuser.idを渡す必要が
-    // 無い（呼び出しインターフェースはresolveQuickExpenseAuthorization.jsとの
+    // 【複数社所属対応・Commit 1で変更】引数のuserは使わない：
+    // get_my_public_config(p_company_code)はauth.uid()（＝呼び出し元のJWTから
+    // 解決される、fetchUser()が返したのと同じユーザー）を内部で参照する
+    // SECURITY DEFINER関数のため、ここで改めてuser.idを渡す必要が無い
+    // （呼び出しインターフェースはresolveQuickExpenseAuthorization.jsとの
     // 互換性のためそのまま残す）。
-    fetchCompanyMembership: async () => {
-      // company_membersを直接SELECTしてcompany_id（Supabase内部UUID）を
-      // 取るのではなく、get_my_public_config()（Phase 7、一般利用者Bot画面が
-      // 既に使っているSECURITY DEFINER RPC）を呼び、company_code（フロントの
-      // companyIdと同じ値空間）を取得する（理由はファイル冒頭コメント・
-      // resolveMembershipFromPublicConfigRow.js参照）。
-      const { data, error } = await supabase.rpc("get_my_public_config");
+    //
+    // companyCode（本文で申告されたcompanyId）は必須の第2引数として受け取り、
+    // 必ずp_company_codeへそのまま渡す。以前はget_my_public_config()を無引数で
+    // 呼び、返ってきた配列の先頭（data[0]）を無条件に採用していたが、これは
+    // 「1ユーザー1社」だった時代の設計であり、1ユーザーが複数社へ所属できる
+    // ようになった今、無引数のまま先頭行を採用する実装は「フロントとバック
+    // エンドが別々に非決定的な先頭行を解決し、たまたま一致すれば通る」という
+    // 危険な設計になる。p_company_codeを明示的に渡すことで、RPC自身が
+    // 「auth.uid()がこのcompanyCodeへ実際に所属しているか」をサーバー側で
+    // 検証したうえでの結果だけを返すようになる（未所属・存在しない会社なら
+    // 0行）。
+    fetchCompanyMembership: async (_user, companyCode) => {
+      const { data, error } = await supabase.rpc("get_my_public_config", { p_company_code: companyCode });
 
       if (error) {
         throw error;
       }
 
-      // get_my_public_config()はreturns tableのため、supabase-jsからは
-      // 常に配列で返る（未所属なら0件）。get_public_config同様の扱い
-      // （src/data/publicConfigRepository.js参照）。
+      // get_my_public_config(p_company_code)はreturns tableのため、
+      // supabase-jsからは常に配列で返る。company_codeを明示指定しているため、
+      // company_members側のunique(company_id, user_id)制約により、
+      // 該当行は0件または1件のいずれかにしかならない（複数社所属時でも
+      // 「この特定の会社」への所属は高々1行）。
       const row = Array.isArray(data) ? data[0] : data;
       return resolveMembershipFromPublicConfigRow(row);
     },

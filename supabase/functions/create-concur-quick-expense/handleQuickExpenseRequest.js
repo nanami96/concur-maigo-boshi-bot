@@ -6,21 +6,31 @@
 // fetchUser/fetchCompanyMembershipだけを受け取ることで、Deno無しに
 // Node/vitestから直接テストできる。
 //
-// 処理順序（認証をmethod確認の直後・本文の読み取りより前に行う理由：
-// ocr-receipt/index.tsと同じ「不正な呼び出しに余計な処理をさせない」方針。
-// 認証情報の確認自体は本文を必要としないため、先に済ませる）：
+// 処理順序（【複数社所属対応・Commit 1で変更】以前は「認証確認（本人確認＋
+// 所属会社の解決）→本文解析」の順だったが、1ユーザーが複数の会社へ所属できる
+// ようになったため、「どの会社への所属を確認するか」は本文のcompanyIdが
+// 分からないと決められない。そのため、本人確認（fetchUser）だけは従来どおり
+// 本文の読み取りより前に行い（ocr-receipt/index.tsと同じ「不正な呼び出しに
+// 余計な処理をさせない」方針を、認証ヘッダーの検証部分についてだけ維持する）、
+// 会社所属の確認は本文検証の後に、本文が申告するcompanyIdをそのまま
+// fetchCompanyMembershipへ渡して行う）：
 //   1. HTTPメソッド確認
-//   2. 認証確認（resolveQuickExpenseAuthorization.js）
-//      - 未認証 → unauthorized（401）
-//      - 認証済みだが所属会社なし → forbidden（403）
+//   2. 本人確認（resolveQuickExpenseAuthorization.js）
+//      - 未認証 → unauthorized（401）。ここでは所属会社の判定は行わない。
 //   3. リクエスト本文のJSON解析
 //   4. 入力検証（validateQuickExpenseRequest.js）
-//   5. 認証済みユーザーが実際に所属する会社（company_code）と、本文で申告
-//      された companyId（フロントも一貫してcompany_codeを送る。
-//      src/lib/concurRegistrationData.js参照）が一致するかを確認する
-//      （フロントから渡された値を認証の根拠にしない。ステップ2で取得済みの
-//      membershipをそのまま使うため、DB問い合わせは追加で発生しない）
-//      → 不一致なら forbidden（403）
+//   5. 本文で申告されたcompanyId（company_code）について、認証済みユーザーが
+//      実際にその会社へ所属しているかをfetchCompanyMembership(user, companyId)
+//      で確認する（フロントから渡された値を無条件に信用しない。
+//      サーバー側でauth.uid()とcompanyIdの両方に一致するcompany_members行が
+//      存在する場合にのみmembershipを取得する設計。index.ts・
+//      resolveMembershipFromPublicConfigRow.js参照）。所属していなければ
+//      forbidden（403）。以前あった「resolveAuthorizationが返した
+//      membership.company_codeと本文のcompanyIdが一致するか」という別々に
+//      解決した2値を比較するチェックは廃止した（fetchCompanyMembership自体が
+//      companyIdで絞り込むため、返ってきたmembershipは必ずその会社のものであり、
+//      比較の必要が無い。むしろ「双方が別々にdata[0]的な解決をして偶然一致する」
+//      という設計を避けるためにこの形にした）。
 //   6. 経費タイプの検証（verifyExpenseTypeForQuickExpense.js）
 //      … フロントから送られたpolicyId・expenseTypeId（＝Concur EXP_KEY）を
 //      そのまま信用せず、認証済みユーザーの所属会社が実際に公開している
@@ -72,19 +82,22 @@
 //  13. 成功結果を返す
 //
 // companyIdの値空間について（重要）：
-//   membership.company_code・本文のcompanyIdは、いずれも
-//   companies.company_code（人が識別するためのスラッグ）であり、
+//   本文のcompanyId・fetchCompanyMembershipが返すmembership.company_codeは、
+//   いずれもcompanies.company_code（人が識別するためのスラッグ）であり、
 //   company_members.company_id（Supabase内部UUID）ではない。
-//   fetchCompanyMembership()がこのcompany_codeをどう解決するかは
-//   index.ts・resolveMembershipFromPublicConfigRow.js参照。
+//   fetchCompanyMembership(user, companyId)がこのcompany_codeをどう解決するかは
+//   index.ts・resolveMembershipFromPublicConfigRow.js参照（複数社所属対応後は
+//   get_my_public_config(p_company_code)へcompanyIdをそのまま渡し、
+//   auth.uid()とcompanyIdの両方に一致する所属だけを解決する）。
 //
 // このEdge Functionが返しうるエラーコード：
 //   - method_not_allowed        … POST以外のメソッド
 //   - unauthorized              … Authorizationヘッダーが無い、または
 //                                  Supabaseユーザーとして解決できない
 //                                  （トークンが不正・期限切れ等）
-//   - forbidden                 … 認証は成功したが、所属会社が無い、または
-//                                  本文のcompanyIdが実際の所属と一致しない
+//   - forbidden                 … 認証は成功したが、本文のcompanyIdで指定された
+//                                  会社への所属が確認できない（未所属・
+//                                  存在しない会社・所属確認自体の失敗を含む）
 //   - invalid_json              … リクエストボディがJSONとして解析できない
 //   - validation_error          … 必須項目の不足・型/形式の不正
 //                                  （validateQuickExpenseRequest.js参照）
@@ -166,13 +179,19 @@ async function safeCompleteFailure(completeOAuthRefresh, connectionId, leaseId, 
  * @param {(authHeader: string) => Promise<object|null>} input.fetchUser
  *   Authorizationヘッダーから呼び出し元ユーザーを解決する関数
  *   （Denoでは supabase.auth.getUser() 経由。解決できない場合はnullを返す想定）。
- * @param {(user: object) => Promise<{ company_code: string, role: string, expenseTypes: Array }|null>} input.fetchCompanyMembership
- *   解決したユーザーの所属会社（company_code。Supabase内部UUIDではない。
- *   index.ts参照）・role・所属会社が公開している経費タイプ一覧
- *   （expenseTypes。無ければ空配列）を取得する関数。未所属ならnull。
+ * @param {(user: object, companyCode: string) => Promise<{ company_code: string, role: string, expenseTypes: Array, expenseTypeIdMode: string|null }|null>} input.fetchCompanyMembership
+ *   【複数社所属対応・Commit 1で変更】本文検証後に呼ばれる（本文のcompanyId
+ *   （company_code）が確定してから呼ぶ必要があるため）。解決したuserが
+ *   companyCodeで指定された会社へ実際に所属している場合だけmembership
+ *   （company_code・role・所属会社が公開している経費タイプ一覧expenseTypes・
+ *   expenseTypeIdMode）を返す。所属していなければnull（下の
+ *   input.companyId＝Vaultの既定接続識別子とは全く別の値であることに注意）。
  * @param {typeof resolveQuickExpenseAuthorization} [input.resolveAuthorization]
- *   認証・所属確認のロジック本体。既定はresolveQuickExpenseAuthorization
+ *   本人確認（fetchUserのみ）のロジック本体。既定はresolveQuickExpenseAuthorization
  *   （実運用の呼び出し元・index.tsは指定不要。テストでの差し替え用）。
+ *   【複数社所属対応・Commit 1で変更】以前はここで所属会社の解決も行っていたが、
+ *   companyIdが本文検証後にしか分からないため、この関数の責務からは外した
+ *   （resolveQuickExpenseAuthorization.js参照）。
  * @param {(payload: unknown, context: { accessToken: string, geolocation: string, userId: string }|undefined) => Promise<{ result: object|null, error: object|null }>} [input.createQuickExpense]
  *   Concur側の最終呼び出し。明示的に渡された場合は常にそれを使う（テスト用の
  *   差し替え）。省略した場合は、isConcurQuickExpenseEnabled(env)がtrueなら
@@ -181,7 +200,9 @@ async function safeCompleteFailure(completeOAuthRefresh, connectionId, leaseId, 
  *   一切参照しない安全なスタブ応答）を内部で自動的に選ぶ。index.tsは
  *   この選択に一切関与しない（ファイル冒頭コメント・最終報告参照）。
  * @param {Record<string, string|undefined>} [input.env] CONCUR_CLIENT_ID等のSecret名をキーとした値の集合。
- * @param {string|null} [input.companyId] 対象会社（現時点では常にnull＝既定接続）。
+ * @param {string|null} [input.companyId] Concur OAuth Vault接続の識別子（現時点では
+ *   常にnull＝既定接続。将来のConcur側複数社対応用で、今回の「1ユーザー複数会社」
+ *   対応（fetchCompanyMembershipのcompanyCode）とは全く別の概念のため混同しないこと）。
  * @param {(input: { companyId: string|null }) => Promise<{ connectionId: string, leaseId: string, refreshToken: string } | null>} [input.getRefreshTokenForEdge]
  * @param {(input: { connectionId: string, leaseId: string, success: boolean, newRefreshToken: string|null, errorCode: string|null }) => Promise<boolean>} [input.completeOAuthRefresh]
  * @param {typeof refreshConcurAccessToken} [input.refreshAccessToken]
@@ -209,14 +230,10 @@ export async function handleQuickExpenseRequest({
     return { status: 405, body: errorBody("method_not_allowed", "許可されていないメソッドです。") };
   }
 
-  const authResult = await resolveAuthorization({ authHeader, fetchUser, fetchCompanyMembership });
+  const authResult = await resolveAuthorization({ authHeader, fetchUser });
 
   if (authResult.outcome === "unauthorized") {
     return { status: 401, body: errorBody("unauthorized", UNAUTHORIZED_MESSAGE) };
-  }
-
-  if (authResult.outcome === "forbidden") {
-    return { status: 403, body: errorBody("forbidden", FORBIDDEN_MESSAGE) };
   }
 
   let rawBody;
@@ -232,23 +249,39 @@ export async function handleQuickExpenseRequest({
     return { status: 400, body: { result: null, error: validationError } };
   }
 
-  // 認証済みユーザーが実際に所属する会社（ステップ2で取得済みのmembership、
-  // company_code）と、本文で申告されたcompanyId（同じくcompany_code。
-  // ファイル冒頭コメント参照）が一致するかを確認する。フロントから渡された
-  // companyIdだけを信用して処理を進めない（要件：フロントの値を認証根拠に
-  // 使わない）。
-  if (authResult.membership.company_code !== validated.companyId) {
+  // 【複数社所属対応・Commit 1で変更】本文で申告されたcompanyId（company_code）を
+  // そのままfetchCompanyMembershipへ渡し、「認証済みユーザーが実際にこの会社へ
+  // 所属しているか」をここで初めてサーバー側に確認させる（フロントから渡された
+  // companyIdだけを信用して処理を進めない）。fetchCompanyMembershipはuser_id・
+  // companyIdの両方に一致するcompany_members行が存在する場合にのみ非nullの
+  // membershipを返す設計のため（index.ts参照）、返ってきたmembershipは必ず
+  // validated.companyIdそのものの所属情報であり、追加の一致確認は不要になった
+  // （フロントとバックエンドがそれぞれ別々に「先頭の所属」を解決し、たまたま
+  // 一致したから通る、という設計を避けるため）。
+  let membership;
+  try {
+    membership = await fetchCompanyMembership(authResult.user, validated.companyId);
+  } catch {
+    // 所属確認自体が失敗した場合（DB接続エラー等）は、安全側に倒して
+    // 「所属なし」と同じforbidden扱いにする（fail-closed）。
+    return { status: 403, body: errorBody("forbidden", FORBIDDEN_MESSAGE) };
+  }
+
+  if (!membership) {
     return { status: 403, body: errorBody("forbidden", FORBIDDEN_MESSAGE) };
   }
 
   // フロントから送られたpolicyId・expenseTypeId（＝Concur EXP_KEY）を
-  // そのまま信用せず、所属会社が実際に公開している経費タイプ一覧に、
-  // 指定された組み合わせが実在するかを確認する（要件：フロントの値を認証・
-  // 実行の根拠にしない）。エラー本文には経費タイプ一覧やconfig_snapshotを
-  // 一切含めない（固定のメッセージ・理由を区別しないcodeのみ）。
+  // そのまま信用せず、validated.companyId（＝上で所属確認済みの会社）が
+  // 実際に公開している経費タイプ一覧に、指定された組み合わせが実在するかを
+  // 確認する（要件：フロントの値を認証・実行の根拠にしない）。エラー本文には
+  // 経費タイプ一覧やconfig_snapshotを一切含めない（固定のメッセージ・理由を
+  // 区別しないcodeのみ）。他社（validated.companyId以外）のconfig_snapshotは
+  // ここでも一切参照しない（membership自体がvalidated.companyIdだけに
+  // 絞り込まれているため、cross-company参照は構造上発生し得ない）。
   const expenseTypeCheck = verifyExpenseTypeForQuickExpense({
-    expenseTypeIdMode: authResult.membership.expenseTypeIdMode,
-    expenseTypes: authResult.membership.expenseTypes,
+    expenseTypeIdMode: membership.expenseTypeIdMode,
+    expenseTypes: membership.expenseTypes,
     expenseTypeId: validated.expenseTypeId,
     policyId: validated.policyId,
   });

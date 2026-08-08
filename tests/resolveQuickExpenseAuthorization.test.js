@@ -3,36 +3,34 @@ import { resolveQuickExpenseAuthorization } from "../supabase/functions/create-c
 
 // tests/resolveOcrAuthorization.test.jsと同じ方針：Deno固有のAPI
 // （Deno.serve/Deno.env/createClient）には一切依存しない純粋関数のため、
-// fetchUser/fetchCompanyMembershipをモックしてNode/vitestから直接
-// テストできる。実際のConcur API・Supabaseプロジェクトへは一切接続しない。
+// fetchUserをモックしてNode/vitestから直接テストできる。実際のConcur API・
+// Supabaseプロジェクトへは一切接続しない。
+//
+// 【複数社所属対応・Commit 1で変更】この関数はもうfetchCompanyMembershipを
+// 呼ばない（会社所属の確認はhandleQuickExpenseRequest.js側、本文検証後に
+// companyIdを渡して行う。resolveQuickExpenseAuthorization.js冒頭コメント参照）。
+// そのため、このテストはfetchUserによる本人確認だけを検証する。
 
 describe("resolveQuickExpenseAuthorization", () => {
   it("Authorizationヘッダーが無い場合はunauthorized（fetchUserは呼ばれない）", async () => {
     const fetchUser = vi.fn();
-    const fetchCompanyMembership = vi.fn();
 
     const result = await resolveQuickExpenseAuthorization({
       authHeader: null,
       fetchUser,
-      fetchCompanyMembership,
     });
 
-    expect(result).toEqual({ outcome: "unauthorized", user: null, membership: null, reason: "no_auth_header" });
+    expect(result).toEqual({ outcome: "unauthorized", user: null, reason: "no_auth_header" });
     expect(fetchUser).not.toHaveBeenCalled();
-    expect(fetchCompanyMembership).not.toHaveBeenCalled();
   });
 
   it("不正なJWT（fetchUserがnullを返す）の場合はunauthorized", async () => {
-    const fetchCompanyMembership = vi.fn();
-
     const result = await resolveQuickExpenseAuthorization({
       authHeader: "Bearer invalid.jwt.here",
       fetchUser: async () => null,
-      fetchCompanyMembership,
     });
 
-    expect(result).toEqual({ outcome: "unauthorized", user: null, membership: null, reason: "fetch_user_null" });
-    expect(fetchCompanyMembership).not.toHaveBeenCalled();
+    expect(result).toEqual({ outcome: "unauthorized", user: null, reason: "fetch_user_null" });
   });
 
   it("fetchUserが例外を投げた場合もunauthorizedとして安全に扱う", async () => {
@@ -41,70 +39,30 @@ describe("resolveQuickExpenseAuthorization", () => {
       fetchUser: async () => {
         throw new Error("invalid token");
       },
-      fetchCompanyMembership: vi.fn(),
     });
 
     expect(result.outcome).toBe("unauthorized");
     expect(result.reason).toBe("fetch_user_exception");
   });
 
-  it("有効なJWTだがcompany_membersに所属が無い場合はforbidden", async () => {
+  it("有効なJWTの場合はauthorized（userをそのまま返す。所属会社の確認は行わない）", async () => {
     const user = { id: "user-1" };
 
     const result = await resolveQuickExpenseAuthorization({
       authHeader: "Bearer valid.jwt",
       fetchUser: async () => user,
-      fetchCompanyMembership: async () => null,
     });
 
-    expect(result).toEqual({ outcome: "forbidden", user, membership: null, reason: "no_company_membership" });
+    expect(result).toEqual({ outcome: "authorized", user, reason: null });
   });
 
-  it("fetchCompanyMembershipが例外を投げた場合はforbidden（fail-closed）", async () => {
-    const user = { id: "user-1" };
-
+  it("戻り値にmembershipキー自体を含めない（会社所属の解決はこの関数の責務外）", async () => {
     const result = await resolveQuickExpenseAuthorization({
       authHeader: "Bearer valid.jwt",
-      fetchUser: async () => user,
-      fetchCompanyMembership: async () => {
-        throw new Error("db error");
-      },
+      fetchUser: async () => ({ id: "user-1" }),
     });
 
-    expect(result.outcome).toBe("forbidden");
-    expect(result.reason).toBe("fetch_membership_exception");
-  });
-
-  it("有効なJWT + company_members所属ありの場合はauthorized（membershipをそのまま返す）", async () => {
-    const user = { id: "user-1" };
-    const membership = { company_code: "company-a", role: "user" };
-
-    const result = await resolveQuickExpenseAuthorization({
-      authHeader: "Bearer valid.jwt",
-      fetchUser: async () => user,
-      fetchCompanyMembership: async () => membership,
-    });
-
-    expect(result).toEqual({ outcome: "authorized", user, membership, reason: null });
-  });
-
-  it("別ユーザーのJWTを渡しても、そのユーザー自身のcompany_members所属で判定される（なりすまし不可）", async () => {
-    // fetchUserはAuthorizationヘッダーから解決された「本人」しか返せない
-    // 設計のため、他人のuser_idを直接指定して所属確認をすり抜ける経路は無い
-    // ことを、fetchCompanyMembershipへ渡されるuserがfetchUserの戻り値と
-    // 一致していることで確認する。
-    const resolvedUser = { id: "actual-caller" };
-    let receivedUser = null;
-
-    await resolveQuickExpenseAuthorization({
-      authHeader: "Bearer someones.jwt",
-      fetchUser: async () => resolvedUser,
-      fetchCompanyMembership: async (user) => {
-        receivedUser = user;
-        return { company_code: "company-a", role: "user" };
-      },
-    });
-
-    expect(receivedUser).toBe(resolvedUser);
+    expect(result).not.toHaveProperty("membership");
+    expect(Object.keys(result).sort()).toEqual(["outcome", "reason", "user"]);
   });
 });
