@@ -55,6 +55,7 @@ export default function ConcurRegistrationPanel({
   companyCode,
   result,
   receiptData,
+  receiptFile,
   expenseTypeName,
   policyName,
 }) {
@@ -70,6 +71,7 @@ export default function ConcurRegistrationPanel({
     companyCode,
     result,
     receiptData,
+    receiptFile,
     concurLoginId,
   });
 

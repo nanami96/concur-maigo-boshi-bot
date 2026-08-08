@@ -181,6 +181,10 @@ export default function ReceiptOcrPanel({ onConfirm, onAuthExpired }) {
       merchantName: formValues.merchantName.trim() || null,
       totalAmount: formValues.totalAmount === "" ? null : Number(formValues.totalAmount),
       currencyCode: ocrResult?.currencyCode ?? null,
+      // Concurへ添付する領収書画像そのもの（バグ修正で追加）。この時点で
+      // 選択済みのfile（このコンポーネントのstate）をそのまま含める。
+      // BotConversation.jsx側でreceiptDataとreceiptFileへ分離して保持する。
+      receiptFile: file,
     };
     onConfirm?.(confirmed);
     setPhase("confirmed");

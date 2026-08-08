@@ -61,6 +61,22 @@ function getPolicyName(policies, policyId) {
   return policies?.find((policy) => policy.policy_id === policyId)?.policy_name;
 }
 
+// ReceiptOcrPanel.jsxのonConfirmが渡す内容を、receiptData（既存のOCR
+// メタデータ。下流のbuildConcurExpenseData()にocrResultとしてそのまま渡る形。
+// transactionDate/merchantName/totalAmount/currencyCodeのみ）と、receiptFile
+// （Concurへ添付する領収書画像そのもの。receiptRequired=trueの経費タイプで
+// ConcurRegistrationPanelがvalidateConcurExpenseData()のreceipt_required_
+// but_missingを回避するために必要）へ分離する純粋関数（バグ修正で追加）。
+// ReactのuseState/DOMから切り離してテストできるようにする
+// （resolveCurrentCompany.js等と同じ方針）。
+//
+// ManualExpenseEntryPanel.jsxの確定内容にはreceiptFileフィールドが元々含まれ
+// ないため、この関数を通しても常にreceiptFile:nullになる（今回変更対象外）。
+export function splitReceiptOcrConfirmation(confirmed) {
+  const { receiptFile, ...receiptData } = confirmed ?? {};
+  return { receiptData, receiptFile: receiptFile ?? null };
+}
+
 // 「おすすめの経費タイプ」の目印用アイコン（メダル＋星＋青いリボン、
 // src/assets/recommended-medal.png、デザイン提供のPNG素材）。
 // 「ポリシー」ラベル（TagIcon）とは意図的に別コンポーネント・別クラスに
@@ -200,6 +216,15 @@ export default function BotConversation({
   // 将来のConcur連携等で使う想定のPoC用stateで、今回は保持するだけで
   // それ以上の送信・表示の拡張は行わない。
   const [receiptData, setReceiptData] = useState(null);
+  // 領収書画像そのもの（Fileオブジェクト、バグ修正で追加）。receiptRequired=trueの
+  // 経費タイプでConcurRegistrationPanelがvalidateConcurExpenseData()の
+  // receipt_required_but_missingを回避するために必要（src/lib/concurExpenseData.js
+  // 参照）。ReceiptOcrPanel.jsx経由（OCR確定時）だけがこの値を渡す
+  // （ManualExpenseEntryPanel.jsxは今回変更せず、領収書画像を持たないため常にnull）。
+  // Reactのstateだけで保持し、localStorage/sessionStorage/console等へは
+  // 一切出力しない。receiptDataと全く同じタイミング（会社切替・質問フロー
+  // リセット）でnullへ戻す。
+  const [receiptFile, setReceiptFile] = useState(null);
   // 「次の質問」または「判定結果」の会話領域末尾をスクロール先として指すref。
   // どちらか一方しか同時に描画されないため（!result / result && ... の排他条件）、
   // 1つのrefを使い回してよい。document.querySelector等の広範なDOM検索は使わず、
@@ -244,6 +269,13 @@ export default function BotConversation({
   // という設計のため、現時点ではどの会社でも既定の"JPY"が返るだけで、
   // 既存の判定結果表示には一切影響しない（src/lib/concurRegistrationConfig.js参照）。
   const concurDefaultCurrencyCode = resolveDefaultCurrencyCode(config);
+
+  function handleReceiptOcrConfirm(confirmed) {
+    const { receiptData: nextReceiptData, receiptFile: nextReceiptFile } =
+      splitReceiptOcrConfirmation(confirmed);
+    setReceiptData(nextReceiptData);
+    setReceiptFile(nextReceiptFile);
+  }
 
   function handleSelect(answer) {
     if (!engine || !currentQuestion) {
@@ -330,6 +362,7 @@ export default function BotConversation({
     setCurrentQuestion(firstQuestion);
     setHistory([]);
     setReceiptData(null);
+    setReceiptFile(null);
   }
 
   useEffect(() => {
@@ -344,6 +377,7 @@ export default function BotConversation({
     setMessages([]);
     setHistory([]);
     setReceiptData(null);
+    setReceiptFile(null);
   }, [engine]);
 
   // 回答によって次の質問または判定結果が表示されたときだけ、その要素の先頭が
@@ -548,7 +582,7 @@ export default function BotConversation({
                 {showReceiptOcr && (
                   <ReceiptOcrPanel
                     key={result.expenseType?.id ?? result.rule?.id}
-                    onConfirm={setReceiptData}
+                    onConfirm={handleReceiptOcrConfirm}
                     // セッション切れ時、ReceiptOcrPanel独自の画面遷移は持たせず、
                     // 既存のログアウト導線（AppAuthGateのsignOut。ログアウトボタンや
                     // eyebrowRowのmobileSignOutButtonと同じ関数）をそのまま使う。
@@ -593,6 +627,7 @@ export default function BotConversation({
                 companyCode={currentCompanyCode}
                 result={result}
                 receiptData={receiptData}
+                receiptFile={receiptFile}
                 expenseTypeName={result.expenseType?.name}
                 policyName={showPolicySection ? policyName : null}
               />
