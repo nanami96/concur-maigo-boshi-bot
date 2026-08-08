@@ -8,6 +8,21 @@ import {
   runConcurRegistrationSubmit,
   shouldRenderConcurRegistrationCard,
 } from "./concurRegistrationSubmission";
+import checkCircleIconSvg from "./assets/icons/check-circle.svg?raw";
+import editIconSvg from "./assets/icons/edit.svg?raw";
+import chevronRightIconSvg from "./assets/icons/chevron-right.svg?raw";
+import sendIconSvg from "./assets/icons/send.svg?raw";
+
+// アイコンはsrc/assets/icons/*.svgをVite標準の?raw import（追加パッケージ不要）で
+// 文字列として読み込み、そのままDOMへ挿入する。<img src="...svg">にしない理由：
+// 外部参照のSVGはブラウザ側でCSSのcurrentColorを継承できず、色をCSS側から
+// 制御できなくなるため（アイコンごとにSVGファイルを複製・ハードコードする
+// 必要が生じる）。挿入するSVGはこのプロジェクト自身が管理する静的アセット
+// （src/assets/icons/配下）で、外部・利用者由来の文字列ではないため
+// dangerouslySetInnerHTMLでもXSSの懸念はない。
+function InlineIcon({ svg, className }) {
+  return <span className={className} aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />;
+}
 
 // Concur「Quick Expense」登録前に、登録予定の内容をユーザーへ確認表示し、
 // 「Concurに登録」ボタンから既存のcreateQuickExpense()
@@ -113,10 +128,14 @@ export default function ConcurRegistrationPanel({
     };
   }, [companyCode]);
 
-  // hasLinkがまだ確認できていない間（null）は、安全側に倒して入力欄を表示する
-  // （fail-open：紐付け済みなのに誤って再入力を求めるだけで、セキュリティ上の
-  // 問題にはならない）。
-  const showConcurLoginIdInput = hasLink !== true || relinking;
+  // 表示状態の解決はresolveConcurLinkViewState()（このファイル末尾でexport、
+  // 単体テスト可能な純粋関数）へ委譲する。"checking"|"input"|"confirmed"の
+  // 3値のみで、以前の2つの真偽値（showConcurLoginIdInput・isCheckingLink）を
+  // 単一の状態へ統合した（表示分岐を追加しただけで、handleRegister()へ渡す
+  // needsLinkの実質的な計算内容・ensureConcurUserLinked()呼び出し条件は
+  // 変更していない）。
+  const linkViewState = resolveConcurLinkViewState({ hasLink, relinking });
+  const needsLink = linkViewState !== "confirmed";
 
   const { result: registrationData, error } = buildConcurRegistrationData({
     company,
@@ -176,7 +195,7 @@ export default function ConcurRegistrationPanel({
       phase,
       registrationData,
       isDev: import.meta.env.DEV,
-      needsLink: showConcurLoginIdInput,
+      needsLink,
       companyCode,
       concurLoginId,
       onLinked: () => {
@@ -259,7 +278,9 @@ export default function ConcurRegistrationPanel({
           )}
         </dl>
 
-        {showConcurLoginIdInput ? (
+        {linkViewState === "checking" ? (
+          <p className="concurRegistrationStatusText">Concur利用者情報を確認しています…</p>
+        ) : linkViewState === "input" ? (
           <div className="concurRegistrationConcurLoginIdField">
             <label className="concurRegistrationFieldLabel" htmlFor="concurRegistrationConcurLoginId">
               ConcurログインID
@@ -274,15 +295,24 @@ export default function ConcurRegistrationPanel({
             />
           </div>
         ) : (
-          <div className="concurRegistrationConcurLoginIdStatus">
-            <p className="concurRegistrationConcurLoginIdConfirmedText">Concur利用者：確認済み</p>
+          <div className="concurRegistrationLinkStatusCard">
+            <div className="concurRegistrationLinkStatusHeader">
+              <InlineIcon svg={checkCircleIconSvg} className="concurRegistrationLinkStatusIcon" />
+              <div className="concurRegistrationLinkStatusText">
+                <p className="concurRegistrationLinkStatusHeading">Concur利用者：確認済み</p>
+                <p className="concurRegistrationLinkStatusHint">この会社でのConcurアカウントは登録済みです。</p>
+                <p className="concurRegistrationLinkStatusHint">ログインIDの入力は不要です。</p>
+              </div>
+            </div>
             <button
               type="button"
               className="concurRegistrationChangeLinkButton"
               onClick={() => setRelinking(true)}
               disabled={phase === "submitting"}
             >
-              Concurアカウントの紐付けを変更
+              <InlineIcon svg={editIconSvg} className="concurRegistrationChangeLinkIcon" />
+              <span className="concurRegistrationChangeLinkText">Concurアカウントの紐付けを変更する</span>
+              <InlineIcon svg={chevronRightIconSvg} className="concurRegistrationChangeLinkChevron" />
             </button>
           </div>
         )}
@@ -293,12 +323,14 @@ export default function ConcurRegistrationPanel({
             className="concurRegistrationSubmitButton"
             onClick={handleRegister}
             disabled={
+              linkViewState === "checking" ||
               phase === "submitting" ||
               phase === "success" ||
-              (showConcurLoginIdInput && !isConcurLoginIdValid(concurLoginId))
+              (linkViewState === "input" && !isConcurLoginIdValid(concurLoginId))
             }
           >
-            {phase === "submitting" ? "登録中…" : "Concurに登録"}
+            <InlineIcon svg={sendIconSvg} className="concurRegistrationSubmitIcon" />
+            <span>{phase === "submitting" ? "登録中…" : "Concurに登録"}</span>
           </button>
         </div>
 
@@ -307,7 +339,10 @@ export default function ConcurRegistrationPanel({
             <p className="concurRegistrationStatusText">Concurへ登録リクエストを送信しています…</p>
           )}
           {phase === "success" && (
-            <p className="concurRegistrationSuccessText">Concurへの登録リクエストを受け付けました。</p>
+            <p className="concurRegistrationSuccessText">
+              <InlineIcon svg={checkCircleIconSvg} className="concurRegistrationSuccessIcon" />
+              Concurへの登録リクエストを受け付けました。
+            </p>
           )}
           {phase === "error" && (
             <p className="concurRegistrationErrorText" role="alert">
@@ -332,6 +367,29 @@ export default function ConcurRegistrationPanel({
 // 留める（フロント側にConcur側の禁止文字ルールを複製しない）。
 export function isConcurLoginIdValid(concurLoginId) {
   return typeof concurLoginId === "string" && concurLoginId.trim() !== "";
+}
+
+// 【Phase 13 UI改善で追加】hasLink（true|false|null）・relinking（boolean）から
+// 表示状態を1つの文字列へ解決する純粋関数。このプロジェクトにはDOM描画テスト
+// 基盤が無いため（ファイル末尾コメント参照）、コンポーネント本体のJSX分岐を
+// 薄く保ち、分岐条件そのものをここへ切り出してvitestから直接検証できるように
+// している。
+//   "checking"  … hasLinkがまだ確認できていない（読み込み中）。ログインID
+//                 入力欄・確認済みカードのどちらも表示せず、ローディング
+//                 文言だけを表示する（確認中に入力欄が一瞬見える問題の対策）。
+//   "input"     … ConcurログインID入力欄を表示する（未紐付け、または
+//                 「紐付けを変更」導線からの再入力中）。
+//   "confirmed" … 紐付け済みステータスカードを表示する（入力欄は表示しない）。
+// @param {{ hasLink: boolean|null, relinking: boolean }} input
+// @returns {"checking"|"input"|"confirmed"}
+export function resolveConcurLinkViewState({ hasLink, relinking }) {
+  if (hasLink === null && !relinking) {
+    return "checking";
+  }
+  if (hasLink !== true || relinking) {
+    return "input";
+  }
+  return "confirmed";
 }
 
 // "YYYY-MM-DD" → "2026年7月29日"のような自然な日本語表示にする。

@@ -6,6 +6,7 @@ import {
   resolveVendorNameDisplay,
   resolveExpenseTypeNameDisplay,
   isConcurLoginIdValid,
+  resolveConcurLinkViewState,
 } from "../src/ConcurRegistrationPanel.jsx";
 import { buildConcurRegistrationData } from "../src/lib/concurRegistrationData.js";
 import { shouldRenderConcurRegistrationCard } from "../src/concurRegistrationSubmission.js";
@@ -89,6 +90,38 @@ describe("isConcurLoginIdValid", () => {
   it("文字列以外（null・undefined）はfalse", () => {
     expect(isConcurLoginIdValid(null)).toBe(false);
     expect(isConcurLoginIdValid(undefined)).toBe(false);
+  });
+});
+
+describe("resolveConcurLinkViewState（Phase 13 UI改善：紐付け状態→表示状態の解決）", () => {
+  it("hasLink:null・relinking:falseは'checking'（確認中）", () => {
+    expect(resolveConcurLinkViewState({ hasLink: null, relinking: false })).toBe("checking");
+  });
+
+  it("hasLink:false・relinking:falseは'input'（未紐付け→ログインID入力欄）", () => {
+    expect(resolveConcurLinkViewState({ hasLink: false, relinking: false })).toBe("input");
+  });
+
+  it("hasLink:true・relinking:falseは'confirmed'（紐付け済み→確認済みカード）", () => {
+    expect(resolveConcurLinkViewState({ hasLink: true, relinking: false })).toBe("confirmed");
+  });
+
+  it("hasLink:true・relinking:trueは'input'（紐付け済みでも「変更」導線からは入力欄に戻る）", () => {
+    expect(resolveConcurLinkViewState({ hasLink: true, relinking: true })).toBe("input");
+  });
+
+  it("hasLink:null・relinking:trueは'input'（確認中でも紐付け変更操作中は入力欄を優先する）", () => {
+    expect(resolveConcurLinkViewState({ hasLink: null, relinking: true })).toBe("input");
+  });
+
+  it("hasLink:false・relinking:trueは'input'", () => {
+    expect(resolveConcurLinkViewState({ hasLink: false, relinking: true })).toBe("input");
+  });
+
+  it("'checking'・'input'状態ではConcurログインIDの実値・Identity UUID相当の値を一切返さない（真偽値の状態文字列のみ）", () => {
+    const state = resolveConcurLinkViewState({ hasLink: null, relinking: false });
+    expect(typeof state).toBe("string");
+    expect(["checking", "input", "confirmed"]).toContain(state);
   });
 });
 
