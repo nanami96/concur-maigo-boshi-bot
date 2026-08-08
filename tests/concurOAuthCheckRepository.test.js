@@ -24,6 +24,9 @@ const { checkConcurOAuthConnection, classifyConcurOAuthCheckFunctionError } = aw
   "../src/data/concurOAuthCheckRepository.js"
 );
 
+// 【会社別OAuth接続対応で追加】確認対象の会社（company_code）。
+const DUMMY_COMPANY_CODE = "connect-company";
+
 function mockValidSession() {
   getSessionMock.mockResolvedValue({ data: { session: { access_token: "valid-token" } } });
   refreshSessionMock.mockResolvedValue({ data: { session: null } });
@@ -46,7 +49,7 @@ describe("checkConcurOAuthConnection", () => {
   it("Supabase未設定なら呼び出さずエラーを返す", async () => {
     mockState.isSupabaseConfigured = false;
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(result.result).toBeNull();
     expect(result.error).not.toBeNull();
@@ -62,29 +65,30 @@ describe("checkConcurOAuthConnection", () => {
     };
     invokeMock.mockResolvedValue({ data: { result: success, error: null }, error: null });
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(result.error).toBeNull();
     expect(result.result).toEqual(success);
   });
 
-  it("bodyを送らずPOSTで呼び出す（リクエスト本文が無いことの回帰確認）", async () => {
+  it("会社別OAuth接続対応：companyCodeだけをリクエスト本文で送る（company UUIDは送らない）", async () => {
     invokeMock.mockResolvedValue({ data: { result: { connected: false, status: "disabled" } }, error: null });
 
-    await checkConcurOAuthConnection();
+    await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(invokeMock).toHaveBeenCalledWith("check-concur-oauth", {
+      body: { companyCode: DUMMY_COMPANY_CODE },
       timeout: expect.any(Number),
     });
     const [, options] = invokeMock.mock.calls[0];
-    expect(options.body).toBeUndefined();
+    expect(Object.keys(options.body)).toEqual(["companyCode"]);
   });
 
   it("安全ゲート無効時（connected:false, status:disabled）もエラーではなく成功として返す", async () => {
     const disabled = { connected: false, status: "disabled" };
     invokeMock.mockResolvedValue({ data: { result: disabled }, error: null });
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(result.error).toBeNull();
     expect(result.result).toEqual(disabled);
@@ -96,7 +100,7 @@ describe("checkConcurOAuthConnection", () => {
     };
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsHttpError(context) });
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(result.result).toBeNull();
     expect(result.error).toEqual({ type: "concur_oauth_not_connected" });
@@ -107,7 +111,7 @@ describe("checkConcurOAuthConnection", () => {
     const context = { json: async () => ({ error: { code: "unauthorized", message: "再度ログインしてください。" } }) };
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsHttpError(context) });
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(result.error.type).toBe("unauthorized");
   });
@@ -116,7 +120,7 @@ describe("checkConcurOAuthConnection", () => {
     const context = { json: async () => { throw new Error("not json"); } };
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsHttpError(context) });
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(result.error.type).toBe("unknown");
   });
@@ -125,7 +129,7 @@ describe("checkConcurOAuthConnection", () => {
     const context = { status: 401, json: async () => ({ message: "Missing authorization header" }) };
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsHttpError(context) });
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(result.error.type).toBe("unauthorized");
   });
@@ -133,7 +137,7 @@ describe("checkConcurOAuthConnection", () => {
   it("ネットワーク到達不可（FunctionsFetchError）はnetworkとして分類する", async () => {
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsFetchError({}) });
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(result.error.type).toBe("network");
   });
@@ -142,7 +146,7 @@ describe("checkConcurOAuthConnection", () => {
     const abortError = Object.assign(new Error("The operation was aborted"), { name: "AbortError" });
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsFetchError(abortError) });
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(result.error.type).toBe("timeout");
   });
@@ -150,7 +154,7 @@ describe("checkConcurOAuthConnection", () => {
   it("Supabaseリレー側のエラー（FunctionsRelayError）はunknownとして分類する", async () => {
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsRelayError({}) });
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(result.error.type).toBe("unknown");
   });
@@ -158,7 +162,7 @@ describe("checkConcurOAuthConnection", () => {
   it("invoke自体が例外を投げた場合はnetworkとして分類する", async () => {
     invokeMock.mockRejectedValue(new Error("boom"));
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(result.result).toBeNull();
     expect(result.error.type).toBe("network");
@@ -167,7 +171,7 @@ describe("checkConcurOAuthConnection", () => {
   it("セッションが無く、refreshSessionでも復元できない場合はEdge Functionを呼ばずunauthorizedを返す", async () => {
     mockNoSession();
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(invokeMock).not.toHaveBeenCalled();
     expect(result.result).toBeNull();
@@ -177,7 +181,7 @@ describe("checkConcurOAuthConnection", () => {
   it("getSession/refreshSession自体が例外を投げた場合もEdge Functionを呼ばずunauthorizedを返す（fail-closed）", async () => {
     getSessionMock.mockRejectedValue(new Error("network down"));
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(invokeMock).not.toHaveBeenCalled();
     expect(result.error.type).toBe("unauthorized");
@@ -186,7 +190,7 @@ describe("checkConcurOAuthConnection", () => {
   it("有効なセッションがある場合はrefreshSessionを呼ばずにEdge Functionを呼ぶ", async () => {
     invokeMock.mockResolvedValue({ data: { result: { connected: false, status: "disabled" } }, error: null });
 
-    await checkConcurOAuthConnection();
+    await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(refreshSessionMock).not.toHaveBeenCalled();
     expect(invokeMock).toHaveBeenCalledTimes(1);
@@ -198,7 +202,7 @@ describe("checkConcurOAuthConnection", () => {
       error: null,
     });
 
-    const result = await checkConcurOAuthConnection();
+    const result = await checkConcurOAuthConnection(DUMMY_COMPANY_CODE);
 
     expect(result.result).toEqual({
       connected: true,

@@ -13,6 +13,18 @@ const DUMMY_LEASE_ID = "22222222-2222-2222-2222-222222222222";
 const DUMMY_CURRENT_REFRESH_TOKEN = "DUMMY_CURRENT_REFRESH_TOKEN_SHOULD_NOT_LEAK";
 const DUMMY_SERVICE_ROLE_KEY = "DUMMY_SERVICE_ROLE_KEY_SHOULD_NOT_LEAK";
 
+// 【会社別OAuth接続対応】以前はcompanyIdを常にnull固定で呼び出し元が直接
+// 渡していたが、resolveOAuthCompanyId({ userId, companyCode })
+// （resolve_concur_oauth_company_id RPC相当）がauthResult.user.idと
+// リクエスト本文のcompanyCodeから解決したUUIDだけをgetRefreshTokenForEdgeへ
+// 渡すようになった。DUMMY_COMPANY_A_UUID等は実際のUUID形式である必要はなく、
+// テスト専用のダミー値だが、他社（DUMMY_COMPANY_B_UUID）と衝突しない値に
+// することで「A社のリクエストでB社のUUIDが使われていないか」を検証できる。
+const DUMMY_COMPANY_CODE = "connect-company";
+const DUMMY_COMPANY_UUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DUMMY_COMPANY_B_CODE = "other-company";
+const DUMMY_COMPANY_B_UUID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
 function buildEnv(overrides = {}) {
   return {
     CONCUR_CLIENT_ID: "dummy-client-id",
@@ -23,11 +35,24 @@ function buildEnv(overrides = {}) {
   };
 }
 
+function parseBodyFor(value) {
+  return async () => value;
+}
+
+// resolveOAuthCompanyIdの既定モック：DUMMY_COMPANY_CODEが指定された場合だけ
+// DUMMY_COMPANY_UUIDを返す（companyCodeを無視して固定値を返す危険な実装では
+// ないことを、この既定モック自体でも体現する）。
+function defaultResolveOAuthCompanyId() {
+  return vi.fn(async ({ companyCode }) => (companyCode === DUMMY_COMPANY_CODE ? DUMMY_COMPANY_UUID : null));
+}
+
 function buildAuthedInput(overrides = {}) {
   return {
     authHeader: DUMMY_AUTH_HEADER,
     fetchUser: async () => VALID_USER,
     isPlatformAdmin: async () => true,
+    parseBody: parseBodyFor({ companyCode: DUMMY_COMPANY_CODE }),
+    resolveOAuthCompanyId: defaultResolveOAuthCompanyId(),
     ...overrides,
   };
 }
@@ -52,13 +77,14 @@ function successfulOAuthResult(overrides = {}) {
 }
 
 describe("handleConcurOAuthCheckRequest（HTTP）", () => {
-  it("GETはmethod_not_allowed（405）。認可・Vault RPCのいずれも呼ばれない", async () => {
+  it("GETはmethod_not_allowed（405）。認可・入力検証・Vault RPCのいずれも呼ばれない", async () => {
     const isPlatformAdmin = vi.fn();
     const getRefreshTokenForEdge = vi.fn();
+    const resolveOAuthCompanyId = vi.fn();
 
     const { status, body } = await handleConcurOAuthCheckRequest({
       method: "GET",
-      ...buildAuthedInput({ isPlatformAdmin }),
+      ...buildAuthedInput({ isPlatformAdmin, resolveOAuthCompanyId }),
       env: buildEnv(),
       getRefreshTokenForEdge,
     });
@@ -66,6 +92,7 @@ describe("handleConcurOAuthCheckRequest（HTTP）", () => {
     expect(status).toBe(405);
     expect(body.error.code).toBe("method_not_allowed");
     expect(isPlatformAdmin).not.toHaveBeenCalled();
+    expect(resolveOAuthCompanyId).not.toHaveBeenCalled();
     expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
   });
 
@@ -93,41 +120,53 @@ describe("handleConcurOAuthCheckRequest（HTTP）", () => {
 });
 
 describe("handleConcurOAuthCheckRequest（認証・認可）", () => {
-  it("Authorizationヘッダーが無い場合は401。isPlatformAdmin・Vault RPCのいずれも呼ばれない", async () => {
+  it("Authorizationヘッダーが無い場合は401。isPlatformAdmin・入力検証・Vault RPCのいずれも呼ばれない", async () => {
     const isPlatformAdmin = vi.fn();
     const getRefreshTokenForEdge = vi.fn();
+    const resolveOAuthCompanyId = vi.fn();
+    const parseBody = vi.fn();
 
     const { status, body } = await handleConcurOAuthCheckRequest({
       method: "POST",
       authHeader: null,
       fetchUser: vi.fn(),
       isPlatformAdmin,
+      parseBody,
       env: buildEnv(),
+      resolveOAuthCompanyId,
       getRefreshTokenForEdge,
     });
 
     expect(status).toBe(401);
     expect(body.error.code).toBe("unauthorized");
     expect(isPlatformAdmin).not.toHaveBeenCalled();
+    expect(parseBody).not.toHaveBeenCalled();
+    expect(resolveOAuthCompanyId).not.toHaveBeenCalled();
     expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
   });
 
-  it("一般ユーザー（platform_adminでない）は403。Vault関連の管理RPCはいずれも呼ばれない", async () => {
+  it("一般ユーザー（platform_adminでない）は403。入力検証・Vault関連の管理RPCはいずれも呼ばれない", async () => {
     const getRefreshTokenForEdge = vi.fn();
     const completeOAuthRefresh = vi.fn();
+    const resolveOAuthCompanyId = vi.fn();
+    const parseBody = vi.fn();
 
     const { status, body } = await handleConcurOAuthCheckRequest({
       method: "POST",
       authHeader: DUMMY_AUTH_HEADER,
       fetchUser: async () => VALID_USER,
       isPlatformAdmin: async () => false,
+      parseBody,
       env: buildEnv(),
+      resolveOAuthCompanyId,
       getRefreshTokenForEdge,
       completeOAuthRefresh,
     });
 
     expect(status).toBe(403);
     expect(body.error.code).toBe("forbidden");
+    expect(parseBody).not.toHaveBeenCalled();
+    expect(resolveOAuthCompanyId).not.toHaveBeenCalled();
     expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
     expect(completeOAuthRefresh).not.toHaveBeenCalled();
   });
@@ -140,6 +179,7 @@ describe("handleConcurOAuthCheckRequest（認証・認可）", () => {
       authHeader: DUMMY_AUTH_HEADER,
       fetchUser: async () => ({ ...VALID_USER, companyRole: "admin" }),
       isPlatformAdmin: async () => false,
+      parseBody: vi.fn(),
       env: buildEnv(),
       getRefreshTokenForEdge,
     });
@@ -148,7 +188,7 @@ describe("handleConcurOAuthCheckRequest（認証・認可）", () => {
     expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
   });
 
-  it("platform_adminは安全ゲート・Vault RPCまで到達できる", async () => {
+  it("platform_adminは入力検証・安全ゲート・Vault RPCまで到達できる", async () => {
     const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
     const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
     const refreshAccessToken = vi.fn().mockResolvedValue(successfulOAuthResult());
@@ -168,24 +208,347 @@ describe("handleConcurOAuthCheckRequest（認証・認可）", () => {
   });
 });
 
+describe("handleConcurOAuthCheckRequest（入力検証：会社別OAuth接続対応で追加）", () => {
+  it("parseBodyが例外を投げる（不正なJSON）場合はinvalid_json（400）。resolveOAuthCompanyId・Vaultは呼ばれない", async () => {
+    const resolveOAuthCompanyId = vi.fn();
+    const getRefreshTokenForEdge = vi.fn();
+
+    const { status, body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput({
+        parseBody: async () => {
+          throw new SyntaxError("bad json");
+        },
+        resolveOAuthCompanyId,
+      }),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+    });
+
+    expect(status).toBe(400);
+    expect(body.error.code).toBe("invalid_json");
+    expect(resolveOAuthCompanyId).not.toHaveBeenCalled();
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+  });
+
+  it("companyCodeが無い場合はconcur_oauth_check_invalid_request（400）。resolveOAuthCompanyId・Vaultは呼ばれない", async () => {
+    const resolveOAuthCompanyId = vi.fn();
+    const getRefreshTokenForEdge = vi.fn();
+
+    const { status, body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput({ parseBody: parseBodyFor({}), resolveOAuthCompanyId }),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+    });
+
+    expect(status).toBe(400);
+    expect(body.error.code).toBe("concur_oauth_check_invalid_request");
+    expect(resolveOAuthCompanyId).not.toHaveBeenCalled();
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+  });
+
+  it("companyCodeが空白のみの場合もconcur_oauth_check_invalid_request", async () => {
+    const { status, body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput({ parseBody: parseBodyFor({ companyCode: "   " }) }),
+      env: buildEnv(),
+      getRefreshTokenForEdge: vi.fn(),
+    });
+
+    expect(status).toBe(400);
+    expect(body.error.code).toBe("concur_oauth_check_invalid_request");
+  });
+});
+
 describe("handleConcurOAuthCheckRequest（安全ゲート）", () => {
   it.each([undefined, "false", "TRUE", true])(
-    "CONCUR_OAUTH_CHECK_ENABLEDが%sの場合はdisabledを返し、Vault RPCは呼ばれない",
+    "CONCUR_OAUTH_CHECK_ENABLEDが%sの場合はdisabledを返し、resolveOAuthCompanyId・Vault RPCは呼ばれない",
     async (value) => {
       const getRefreshTokenForEdge = vi.fn();
+      const resolveOAuthCompanyId = vi.fn();
 
       const { status, body } = await handleConcurOAuthCheckRequest({
         method: "POST",
-        ...buildAuthedInput(),
+        ...buildAuthedInput({ resolveOAuthCompanyId }),
         env: buildEnv({ CONCUR_OAUTH_CHECK_ENABLED: value }),
         getRefreshTokenForEdge,
       });
 
       expect(status).toBe(200);
       expect(body.result).toEqual({ connected: false, status: "disabled" });
+      expect(resolveOAuthCompanyId).not.toHaveBeenCalled();
       expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
     },
   );
+
+  it("ゲートOFFでもcompanyCode自体の検証は行われる（不正な入力はdisabledより先にvalidation errorになる）", async () => {
+    const { status, body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput({ parseBody: parseBodyFor({}) }),
+      env: buildEnv({ CONCUR_OAUTH_CHECK_ENABLED: "false" }),
+      getRefreshTokenForEdge: vi.fn(),
+    });
+
+    expect(status).toBe(400);
+    expect(body.error.code).toBe("concur_oauth_check_invalid_request");
+  });
+});
+
+describe("handleConcurOAuthCheckRequest（会社別OAuth接続の境界：company-scoped resolveOAuthCompanyId→getRefreshTokenForEdge）", () => {
+  it("resolveOAuthCompanyIdへ、JWTで検証済みのuserIdと本文のcompanyCode（company_code）が渡る", async () => {
+    const resolveOAuthCompanyId = vi.fn().mockResolvedValue(DUMMY_COMPANY_UUID);
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(successfulOAuthResult());
+
+    await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    expect(resolveOAuthCompanyId).toHaveBeenCalledWith({ userId: VALID_USER.id, companyCode: DUMMY_COMPANY_CODE });
+  });
+
+  it("A社のリクエストは、resolveOAuthCompanyIdが返したA社UUIDだけをgetRefreshTokenForEdgeへ渡す", async () => {
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(successfulOAuthResult());
+
+    await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_UUID });
+  });
+
+  it("B社のリクエストは、resolveOAuthCompanyIdが返したB社UUIDだけをgetRefreshTokenForEdgeへ渡す（A社のUUIDが混ざらない）", async () => {
+    const resolveOAuthCompanyId = vi.fn(async ({ companyCode }) => {
+      if (companyCode === DUMMY_COMPANY_CODE) return DUMMY_COMPANY_UUID;
+      if (companyCode === DUMMY_COMPANY_B_CODE) return DUMMY_COMPANY_B_UUID;
+      return null;
+    });
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(successfulOAuthResult());
+
+    await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId, parseBody: parseBodyFor({ companyCode: DUMMY_COMPANY_B_CODE }) }),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_B_UUID });
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_UUID });
+  });
+
+  it("A社リクエストでA社所属userかつA社companyCode → A社UUIDのみ使用（複数社所属でも一意に解決される）", async () => {
+    // resolveOAuthCompanyIdはuserId・companyCodeの組み合わせで一意に決まる
+    // 実装（実際のRPCと同じ挙動）を使い、同じuserがA社・B社どちらの
+    // companyCodeを指定するかによって解決先が変わることを確認する。
+    const resolveOAuthCompanyId = vi.fn(async ({ userId, companyCode }) => {
+      if (userId !== VALID_USER.id) return null;
+      if (companyCode === DUMMY_COMPANY_CODE) return DUMMY_COMPANY_UUID;
+      if (companyCode === DUMMY_COMPANY_B_CODE) return DUMMY_COMPANY_B_UUID;
+      return null;
+    });
+    const getRefreshTokenForEdgeForA = vi.fn().mockResolvedValue(buildLease());
+    const getRefreshTokenForEdgeForB = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(successfulOAuthResult());
+
+    await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId, getRefreshTokenForEdge: getRefreshTokenForEdgeForA }),
+      env: buildEnv(),
+      getRefreshTokenForEdge: getRefreshTokenForEdgeForA,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+    await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput({
+        resolveOAuthCompanyId,
+        parseBody: parseBodyFor({ companyCode: DUMMY_COMPANY_B_CODE }),
+      }),
+      env: buildEnv(),
+      getRefreshTokenForEdge: getRefreshTokenForEdgeForB,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    expect(getRefreshTokenForEdgeForA).toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_UUID });
+    expect(getRefreshTokenForEdgeForB).toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_B_UUID });
+  });
+
+  it("A社userがB社のcompanyCodeを指定（未所属）→ resolveOAuthCompanyIdがnullを返し拒否される（concur_oauth_not_connected）", async () => {
+    // 実際のresolve_concur_oauth_company_id RPCは「p_user_idがp_company_codeの
+    // 会社へ所属しているか」を検証し、所属していなければNULLを返す設計。
+    // ここではその挙動をモックで再現する。
+    const resolveOAuthCompanyId = vi.fn(async ({ companyCode }) =>
+      companyCode === DUMMY_COMPANY_CODE ? DUMMY_COMPANY_UUID : null,
+    );
+    const getRefreshTokenForEdge = vi.fn();
+
+    const { status, body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput({
+        resolveOAuthCompanyId,
+        parseBody: parseBodyFor({ companyCode: DUMMY_COMPANY_B_CODE }),
+      }),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+    });
+
+    expect(status).toBe(503);
+    expect(body.error.code).toBe("concur_oauth_not_connected");
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+  });
+
+  it("resolveOAuthCompanyIdがnullを返す（未解決・未所属・接続無しのいずれも含む）場合、Vaultリース取得自体を行わずconcur_oauth_not_connectedを返す（既定接続へフォールバックしない）", async () => {
+    const resolveOAuthCompanyId = vi.fn().mockResolvedValue(null);
+    const getRefreshTokenForEdge = vi.fn();
+
+    const { status, body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+    });
+
+    expect(status).toBe(503);
+    expect(body.error.code).toBe("concur_oauth_not_connected");
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+  });
+
+  it("resolveOAuthCompanyIdが空文字を返した場合も未解決として扱いfail-closed", async () => {
+    const resolveOAuthCompanyId = vi.fn().mockResolvedValue("");
+    const getRefreshTokenForEdge = vi.fn();
+
+    const { status, body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+    });
+
+    expect(status).toBe(503);
+    expect(body.error.code).toBe("concur_oauth_not_connected");
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+  });
+
+  it("resolveOAuthCompanyId自体が例外を投げた場合はinternal_error。Vaultリース取得へは進まない", async () => {
+    const resolveOAuthCompanyId = vi.fn().mockRejectedValue(new Error("db error"));
+    const getRefreshTokenForEdge = vi.fn();
+
+    const { status, body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+    });
+
+    expect(status).toBe(500);
+    expect(body.error.code).toBe("internal_error");
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+  });
+
+  it("リクエスト本文のcompanyCode（company_codeの文字列）がそのままgetRefreshTokenForEdgeへ渡ることはない（company_codeとcompany UUIDの取り違え防止）", async () => {
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(successfulOAuthResult());
+
+    await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_CODE });
+    expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_UUID });
+  });
+
+  it("クライアントがcompany UUIDらしき値を本文に紛れ込ませても、それは使われない（常にresolveOAuthCompanyIdの戻り値だけを使う）", async () => {
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(successfulOAuthResult());
+    const attackerSuppliedUuid = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+
+    await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput({
+        // companyCodeはcompany_code（スラッグ）を指す契約であり、リクエスト
+        // スキーマにcompany UUID用の別フィールドは存在しない
+        // （validateConcurOAuthCheckRequest.js参照）。ここではその上で、
+        // 万一クライアントが無関係な値をどこかに含めても無視されることを
+        // 示すため、スキーマ外のフィールドとして紛れ込ませる。
+        parseBody: parseBodyFor({ companyCode: DUMMY_COMPANY_CODE, companyId: attackerSuppliedUuid }),
+      }),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalledWith({ companyId: attackerSuppliedUuid });
+    expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_UUID });
+  });
+
+  it("応答・ログにcompany UUID（resolveOAuthCompanyIdの戻り値）が一切含まれない", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(successfulOAuthResult());
+
+    const { body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    const allLoggedText = [...logSpy.mock.calls, ...errorSpy.mock.calls].flat().join(" ");
+    expect(allLoggedText).not.toContain(DUMMY_COMPANY_UUID);
+    expect(JSON.stringify(body)).not.toContain(DUMMY_COMPANY_UUID);
+
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  it("認証済みuser.id（UUID）自体もレスポンスへ一切含まれない", async () => {
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
+    const refreshAccessToken = vi.fn().mockResolvedValue(successfulOAuthResult());
+
+    const { body } = await handleConcurOAuthCheckRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      completeOAuthRefresh,
+      refreshAccessToken,
+    });
+
+    expect(JSON.stringify(body)).not.toContain(VALID_USER.id);
+  });
 });
 
 describe("handleConcurOAuthCheckRequest（Token取得〜成功）", () => {
@@ -249,24 +612,6 @@ describe("handleConcurOAuthCheckRequest（Token取得〜成功）", () => {
     expect(completeOAuthRefresh).toHaveBeenCalledWith(
       expect.objectContaining({ newRefreshToken: "DUMMY_NEW_REFRESH_TOKEN", success: true }),
     );
-  });
-
-  it("会社別接続を指定した場合、companyIdがgetRefreshTokenForEdgeへそのまま渡される", async () => {
-    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
-    const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
-    const refreshAccessToken = vi.fn().mockResolvedValue(successfulOAuthResult());
-
-    await handleConcurOAuthCheckRequest({
-      method: "POST",
-      ...buildAuthedInput(),
-      env: buildEnv(),
-      companyId: "dummy-company-id",
-      getRefreshTokenForEdge,
-      completeOAuthRefresh,
-      refreshAccessToken,
-    });
-
-    expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: "dummy-company-id" });
   });
 });
 
@@ -433,10 +778,6 @@ describe("handleConcurOAuthCheckRequest（未接続・ロック中）", () => {
   });
 
   it("Vault Secretが不在／空文字（RPC側で単一UPDATE...FROM...RETURNINGが0行になるケース）でも同じconcur_oauth_not_connected。OAuth通信は発生しない", async () => {
-    // get_concur_refresh_token_for_edge()の改訂後は、Vault Secretが存在しない・
-    // 空文字・空白のみの場合、RPC自体が0行を返す（接続行のstatus等は一切
-    // 変更されない）。アダプタ層ではこれも「未登録」「ロック中」と同じnullとして
-    // 表れるため、ハンドラー側の外部レスポンスは変わらないことを確認する。
     const getRefreshTokenForEdge = vi.fn().mockResolvedValue(null);
     const refreshAccessToken = vi.fn();
     const completeOAuthRefresh = vi.fn();
@@ -453,15 +794,10 @@ describe("handleConcurOAuthCheckRequest（未接続・ロック中）", () => {
     expect(status).toBe(503);
     expect(body.error.code).toBe("concur_oauth_not_connected");
     expect(refreshAccessToken).not.toHaveBeenCalled();
-    // Vault Secret不在の場合、RPC側でリース自体が獲得されない（改訂後の設計）
-    // ため、Edge Function側がcompleteを呼んでリースを解放する必要も無い。
     expect(completeOAuthRefresh).not.toHaveBeenCalled();
   });
 
   it("（防御的コード）getRefreshTokenForEdgeがconnectionId／leaseIdはあるがrefreshTokenを含まない不正な形の値を返してもconcur_oauth_not_connectedとして安全に扱う", async () => {
-    // 改訂後のRPC設計では本来起こり得ない形（アダプタ側のバグ等を想定した
-    // 防御的なテスト）。handleConcurOAuthCheckRequest.js側のガード
-    // （!lease.refreshToken）が引き続き機能することを確認する。
     const getRefreshTokenForEdge = vi.fn().mockResolvedValue({
       connectionId: "dummy-connection-id",
       leaseId: "dummy-lease-id",

@@ -25,6 +25,8 @@ const { lookupConcurUserIdentity, classifyLookupConcurUserFunctionError } = awai
 );
 
 const DUMMY_USER_NAME = "user@example.com";
+// 【会社別OAuth接続対応で追加】確認対象の会社（company_code）。
+const DUMMY_COMPANY_CODE = "connect-company";
 
 function mockValidSession() {
   getSessionMock.mockResolvedValue({ data: { session: { access_token: "valid-token" } } });
@@ -48,7 +50,7 @@ describe("lookupConcurUserIdentity", () => {
   it("Supabase未設定なら呼び出さずエラーを返す", async () => {
     mockState.isSupabaseConfigured = false;
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(result.result).toBeNull();
     expect(result.error).not.toBeNull();
@@ -59,28 +61,30 @@ describe("lookupConcurUserIdentity", () => {
     const success = { found: true, hasUserId: true, multipleMatches: false };
     invokeMock.mockResolvedValue({ data: { result: success }, error: null });
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(result.error).toBeNull();
     expect(result.result).toEqual(success);
   });
 
-  it("userNameをbodyに含めてPOSTで呼び出す", async () => {
+  it("userName・companyCode（会社別OAuth接続対応で追加）をbodyに含めてPOSTで呼び出す（company UUIDは送らない）", async () => {
     invokeMock.mockResolvedValue({ data: { result: { found: false, status: "disabled" } }, error: null });
 
-    await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(invokeMock).toHaveBeenCalledWith("lookup-concur-user", {
-      body: { userName: DUMMY_USER_NAME },
+      body: { userName: DUMMY_USER_NAME, companyCode: DUMMY_COMPANY_CODE },
       timeout: expect.any(Number),
     });
+    const [, options] = invokeMock.mock.calls[0];
+    expect(Object.keys(options.body).sort()).toEqual(["companyCode", "userName"]);
   });
 
   it("安全ゲート無効時（found:false, status:disabled）もエラーではなく成功として返す", async () => {
     const disabled = { found: false, status: "disabled" };
     invokeMock.mockResolvedValue({ data: { result: disabled }, error: null });
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(result.error).toBeNull();
     expect(result.result).toEqual(disabled);
@@ -92,7 +96,7 @@ describe("lookupConcurUserIdentity", () => {
     };
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsHttpError(context) });
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(result.result).toBeNull();
     expect(result.error).toEqual({ type: "concur_user_not_found" });
@@ -103,7 +107,7 @@ describe("lookupConcurUserIdentity", () => {
     const context = { json: async () => ({ error: { code: "concur_user_ambiguous", message: "x" } }) };
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsHttpError(context) });
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(result.error.type).toBe("concur_user_ambiguous");
   });
@@ -112,7 +116,7 @@ describe("lookupConcurUserIdentity", () => {
     const context = { json: async () => ({ error: { code: "unauthorized", message: "再度ログインしてください。" } }) };
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsHttpError(context) });
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(result.error.type).toBe("unauthorized");
   });
@@ -121,7 +125,7 @@ describe("lookupConcurUserIdentity", () => {
     const context = { json: async () => { throw new Error("not json"); } };
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsHttpError(context) });
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(result.error.type).toBe("unknown");
   });
@@ -130,7 +134,7 @@ describe("lookupConcurUserIdentity", () => {
     const context = { status: 401, json: async () => ({ message: "Missing authorization header" }) };
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsHttpError(context) });
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(result.error.type).toBe("unauthorized");
   });
@@ -138,7 +142,7 @@ describe("lookupConcurUserIdentity", () => {
   it("ネットワーク到達不可（FunctionsFetchError）はnetworkとして分類する", async () => {
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsFetchError({}) });
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(result.error.type).toBe("network");
   });
@@ -147,7 +151,7 @@ describe("lookupConcurUserIdentity", () => {
     const abortError = Object.assign(new Error("The operation was aborted"), { name: "AbortError" });
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsFetchError(abortError) });
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(result.error.type).toBe("timeout");
   });
@@ -155,7 +159,7 @@ describe("lookupConcurUserIdentity", () => {
   it("Supabaseリレー側のエラー（FunctionsRelayError）はunknownとして分類する", async () => {
     invokeMock.mockResolvedValue({ data: null, error: new FunctionsRelayError({}) });
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(result.error.type).toBe("unknown");
   });
@@ -163,7 +167,7 @@ describe("lookupConcurUserIdentity", () => {
   it("invoke自体が例外を投げた場合はnetworkとして分類する", async () => {
     invokeMock.mockRejectedValue(new Error("boom"));
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(result.result).toBeNull();
     expect(result.error.type).toBe("network");
@@ -172,7 +176,7 @@ describe("lookupConcurUserIdentity", () => {
   it("セッションが無く、refreshSessionでも復元できない場合はEdge Functionを呼ばずunauthorizedを返す", async () => {
     mockNoSession();
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(invokeMock).not.toHaveBeenCalled();
     expect(result.result).toBeNull();
@@ -182,7 +186,7 @@ describe("lookupConcurUserIdentity", () => {
   it("getSession/refreshSession自体が例外を投げた場合もEdge Functionを呼ばずunauthorizedを返す（fail-closed）", async () => {
     getSessionMock.mockRejectedValue(new Error("network down"));
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(invokeMock).not.toHaveBeenCalled();
     expect(result.error.type).toBe("unauthorized");
@@ -191,7 +195,7 @@ describe("lookupConcurUserIdentity", () => {
   it("有効なセッションがある場合はrefreshSessionを呼ばずにEdge Functionを呼ぶ", async () => {
     invokeMock.mockResolvedValue({ data: { result: { found: false, status: "disabled" } }, error: null });
 
-    await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(refreshSessionMock).not.toHaveBeenCalled();
     expect(invokeMock).toHaveBeenCalledTimes(1);
@@ -203,7 +207,7 @@ describe("lookupConcurUserIdentity", () => {
       error: null,
     });
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     Object.values(result.result).forEach((value) => {
       expect(typeof value).toBe("boolean");
@@ -216,7 +220,7 @@ describe("lookupConcurUserIdentity", () => {
       error: null,
     });
 
-    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME);
+    const result = await lookupConcurUserIdentity(DUMMY_USER_NAME, DUMMY_COMPANY_CODE);
 
     expect(JSON.stringify(result)).not.toContain(DUMMY_USER_NAME);
   });

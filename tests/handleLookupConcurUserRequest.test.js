@@ -9,18 +9,43 @@ const DUMMY_SERVICE_ROLE_KEY = "DUMMY_SERVICE_ROLE_KEY_SHOULD_NOT_LEAK";
 const DUMMY_USER_NAME = "user@example.com";
 const DUMMY_GEOLOCATION = "https://example-dummy.concursolutions.test";
 const VALID_USER_ID = "3df11695-e8bb-40ff-8e98-c85913ab2789";
+const PLATFORM_ADMIN_USER_ID = "platform-admin-user";
+
+// 【会社別OAuth接続対応】以前はcompanyIdを常にnull固定で呼び出し元が直接
+// 渡していたが、resolveOAuthCompanyId({ userId, companyCode })
+// （resolve_concur_oauth_company_id RPC相当）がauthResult.user.idとリクエスト
+// 本文のcompanyCodeから解決したUUIDだけをgetRefreshTokenForEdgeへ渡すように
+// なった。
+const DUMMY_COMPANY_CODE = "connect-company";
+const DUMMY_COMPANY_UUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DUMMY_COMPANY_B_CODE = "other-company";
+const DUMMY_COMPANY_B_UUID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
 function buildEnv(overrides = {}) {
   return { CONCUR_IDENTITY_LOOKUP_ENABLED: "true", ...overrides };
 }
 
+// resolveOAuthCompanyIdの既定モック：DUMMY_COMPANY_CODEが指定された場合だけ
+// DUMMY_COMPANY_UUIDを返す。
+function defaultResolveOAuthCompanyId() {
+  return vi.fn(async ({ companyCode }) => (companyCode === DUMMY_COMPANY_CODE ? DUMMY_COMPANY_UUID : null));
+}
+
 function buildAuthedInput(overrides = {}) {
   return {
     authHeader: "Bearer dummy-jwt",
-    fetchUser: async () => ({ id: "platform-admin-user" }),
+    fetchUser: async () => ({ id: PLATFORM_ADMIN_USER_ID }),
     isPlatformAdmin: async () => true,
+    resolveOAuthCompanyId: defaultResolveOAuthCompanyId(),
     ...overrides,
   };
+}
+
+// リクエスト本文の既定値。userName・companyCodeの両方を含む
+// （create-concur-quick-expenseのtests/handleQuickExpenseRequest.test.jsの
+// buildValidBody()と同じ方針）。
+function buildValidBody(overrides = {}) {
+  return { userName: DUMMY_USER_NAME, companyCode: DUMMY_COMPANY_CODE, ...overrides };
 }
 
 function buildLease(overrides = {}) {
@@ -38,45 +63,51 @@ function buildSuccessfulOAuthResult(overrides = {}) {
 }
 
 describe("handleLookupConcurUserRequest（HTTPメソッド）", () => {
-  it("POST以外はmethod_not_allowed（405）。認証・Vault・Identity APIのいずれも呼ばれない", async () => {
+  it("POST以外はmethod_not_allowed（405）。認証・resolveOAuthCompanyId・Vault・Identity APIのいずれも呼ばれない", async () => {
     const fetchUser = vi.fn();
     const getRefreshTokenForEdge = vi.fn();
+    const resolveOAuthCompanyId = vi.fn();
 
     const { status, body } = await handleLookupConcurUserRequest({
       method: "GET",
       authHeader: null,
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       fetchUser,
       isPlatformAdmin: vi.fn(),
       env: buildEnv(),
+      resolveOAuthCompanyId,
       getRefreshTokenForEdge,
     });
 
     expect(status).toBe(405);
     expect(body.error.code).toBe("method_not_allowed");
     expect(fetchUser).not.toHaveBeenCalled();
+    expect(resolveOAuthCompanyId).not.toHaveBeenCalled();
     expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
   });
 });
 
 describe("handleLookupConcurUserRequest（認証・認可）", () => {
-  it("未認証はunauthorized（401）。Vault・Identity APIは呼ばれない", async () => {
+  it("未認証はunauthorized（401）。resolveOAuthCompanyId・Vault・Identity APIは呼ばれない", async () => {
     const getRefreshTokenForEdge = vi.fn();
     const lookupUser = vi.fn();
+    const resolveOAuthCompanyId = vi.fn();
 
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       authHeader: null,
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       fetchUser: vi.fn(),
       isPlatformAdmin: vi.fn(),
       env: buildEnv(),
+      resolveOAuthCompanyId,
       getRefreshTokenForEdge,
       lookupUser,
     });
 
     expect(status).toBe(401);
     expect(body.error.code).toBe("unauthorized");
+    expect(resolveOAuthCompanyId).not.toHaveBeenCalled();
     expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
     expect(lookupUser).not.toHaveBeenCalled();
   });
@@ -85,7 +116,7 @@ describe("handleLookupConcurUserRequest（認証・認可）", () => {
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput({ isPlatformAdmin: async () => false }),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
     });
 
@@ -99,7 +130,7 @@ describe("handleLookupConcurUserRequest（認証・認可）", () => {
       authHeader: "Bearer dummy-jwt",
       fetchUser: async () => ({ id: "company-admin-user" }),
       isPlatformAdmin: async () => false,
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
     });
 
@@ -113,7 +144,7 @@ describe("handleLookupConcurUserRequest（認証・認可）", () => {
       authHeader: "Bearer dummy-jwt",
       fetchUser: async () => ({ id: "spoofed-user" }),
       isPlatformAdmin: async () => false,
-      body: { userName: DUMMY_USER_NAME, role: "platform_admin", isPlatformAdmin: true },
+      body: buildValidBody({ role: "platform_admin", isPlatformAdmin: true }),
       env: buildEnv(),
     });
 
@@ -121,16 +152,17 @@ describe("handleLookupConcurUserRequest（認証・認可）", () => {
     expect(body.error.code).toBe("forbidden");
   });
 
-  it("platform_adminはVault・Identity APIの呼び出しへ進める", async () => {
+  it("platform_adminはresolveOAuthCompanyId・Vault・Identity APIの呼び出しへ進める", async () => {
     const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
     const refreshAccessToken = vi.fn().mockResolvedValue(buildSuccessfulOAuthResult());
     const completeOAuthRefresh = vi.fn().mockResolvedValue(true);
     const lookupUser = vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID });
+    const resolveOAuthCompanyId = defaultResolveOAuthCompanyId();
 
     const { status } = await handleLookupConcurUserRequest({
       method: "POST",
-      ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge,
       refreshAccessToken,
@@ -139,20 +171,22 @@ describe("handleLookupConcurUserRequest（認証・認可）", () => {
     });
 
     expect(status).toBe(200);
+    expect(resolveOAuthCompanyId).toHaveBeenCalledTimes(1);
     expect(getRefreshTokenForEdge).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("handleLookupConcurUserRequest（安全ゲート）", () => {
-  it("CONCUR_IDENTITY_LOOKUP_ENABLEDが無効の場合、found:falseかつVault・OAuth・Identity APIのいずれも呼ばない", async () => {
+  it("CONCUR_IDENTITY_LOOKUP_ENABLEDが無効の場合、found:falseかつresolveOAuthCompanyId・Vault・OAuth・Identity APIのいずれも呼ばない", async () => {
     const getRefreshTokenForEdge = vi.fn();
     const refreshAccessToken = vi.fn();
     const lookupUser = vi.fn();
+    const resolveOAuthCompanyId = vi.fn();
 
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
-      ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      body: buildValidBody(),
       env: buildEnv({ CONCUR_IDENTITY_LOOKUP_ENABLED: undefined }),
       getRefreshTokenForEdge,
       refreshAccessToken,
@@ -161,6 +195,7 @@ describe("handleLookupConcurUserRequest（安全ゲート）", () => {
 
     expect(status).toBe(200);
     expect(body).toEqual({ result: { found: false, status: "disabled" }, error: null });
+    expect(resolveOAuthCompanyId).not.toHaveBeenCalled();
     expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
     expect(refreshAccessToken).not.toHaveBeenCalled();
     expect(lookupUser).not.toHaveBeenCalled();
@@ -172,7 +207,7 @@ describe("handleLookupConcurUserRequest（安全ゲート）", () => {
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: { CONCUR_OAUTH_CHECK_ENABLED: "true" },
       getRefreshTokenForEdge,
     });
@@ -184,19 +219,21 @@ describe("handleLookupConcurUserRequest（安全ゲート）", () => {
 });
 
 describe("handleLookupConcurUserRequest（入力検証）", () => {
-  it("userNameが無い場合はconcur_identity_invalid_request（400）。Vaultは呼ばれない", async () => {
+  it("userNameが無い場合はconcur_identity_invalid_request（400）。resolveOAuthCompanyId・Vaultは呼ばれない", async () => {
     const getRefreshTokenForEdge = vi.fn();
+    const resolveOAuthCompanyId = vi.fn();
 
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
-      ...buildAuthedInput(),
-      body: {},
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      body: { companyCode: DUMMY_COMPANY_CODE },
       env: buildEnv(),
       getRefreshTokenForEdge,
     });
 
     expect(status).toBe(400);
     expect(body.error.code).toBe("concur_identity_invalid_request");
+    expect(resolveOAuthCompanyId).not.toHaveBeenCalled();
     expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
   });
 
@@ -206,7 +243,7 @@ describe("handleLookupConcurUserRequest（入力検証）", () => {
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: "   " },
+      body: buildValidBody({ userName: "   " }),
       env: buildEnv(),
       getRefreshTokenForEdge,
     });
@@ -233,11 +270,263 @@ describe("handleLookupConcurUserRequest（入力検証）", () => {
     const { body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: `${secretLikeInput}%` },
+      body: buildValidBody({ userName: `${secretLikeInput}%` }),
       env: buildEnv(),
     });
 
     expect(JSON.stringify(body)).not.toContain(secretLikeInput);
+  });
+
+  // 【会社別OAuth接続対応で追加】
+  describe("companyCode", () => {
+    it("companyCodeが無い場合はconcur_identity_invalid_request。resolveOAuthCompanyId・Vaultは呼ばれない", async () => {
+      const getRefreshTokenForEdge = vi.fn();
+      const resolveOAuthCompanyId = vi.fn();
+
+      const { status, body } = await handleLookupConcurUserRequest({
+        method: "POST",
+        ...buildAuthedInput({ resolveOAuthCompanyId }),
+        body: { userName: DUMMY_USER_NAME },
+        env: buildEnv(),
+        getRefreshTokenForEdge,
+      });
+
+      expect(status).toBe(400);
+      expect(body.error.code).toBe("concur_identity_invalid_request");
+      expect(resolveOAuthCompanyId).not.toHaveBeenCalled();
+      expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+    });
+
+    it("companyCodeが空白のみの場合もconcur_identity_invalid_request", async () => {
+      const { status, body } = await handleLookupConcurUserRequest({
+        method: "POST",
+        ...buildAuthedInput(),
+        body: buildValidBody({ companyCode: "   " }),
+        env: buildEnv(),
+      });
+
+      expect(status).toBe(400);
+      expect(body.error.code).toBe("concur_identity_invalid_request");
+    });
+  });
+});
+
+describe("handleLookupConcurUserRequest（会社別OAuth接続の境界：company-scoped resolveOAuthCompanyId→getRefreshTokenForEdge）", () => {
+  it("resolveOAuthCompanyIdへ、JWTで検証済みのuserIdと本文のcompanyCode（company_code）が渡る", async () => {
+    const resolveOAuthCompanyId = vi.fn().mockResolvedValue(DUMMY_COMPANY_UUID);
+
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      body: buildValidBody(),
+      env: buildEnv(),
+      getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
+      refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+    });
+
+    expect(resolveOAuthCompanyId).toHaveBeenCalledWith({ userId: PLATFORM_ADMIN_USER_ID, companyCode: DUMMY_COMPANY_CODE });
+  });
+
+  it("A社のリクエストは、resolveOAuthCompanyIdが返したA社UUIDだけをgetRefreshTokenForEdgeへ渡す", async () => {
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      body: buildValidBody(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+    });
+
+    expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_UUID });
+  });
+
+  it("B社のリクエストは、resolveOAuthCompanyIdが返したB社UUIDだけをgetRefreshTokenForEdgeへ渡す（A社のUUIDが混ざらない）", async () => {
+    const resolveOAuthCompanyId = vi.fn(async ({ companyCode }) => {
+      if (companyCode === DUMMY_COMPANY_CODE) return DUMMY_COMPANY_UUID;
+      if (companyCode === DUMMY_COMPANY_B_CODE) return DUMMY_COMPANY_B_UUID;
+      return null;
+    });
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      body: buildValidBody({ companyCode: DUMMY_COMPANY_B_CODE }),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+    });
+
+    expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_B_UUID });
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_UUID });
+  });
+
+  it("同じuserでもcompanyCodeによってA社UUID・B社UUIDが使い分けられる（複数社所属でも一意に解決される）", async () => {
+    const resolveOAuthCompanyId = vi.fn(async ({ userId, companyCode }) => {
+      if (userId !== PLATFORM_ADMIN_USER_ID) return null;
+      if (companyCode === DUMMY_COMPANY_CODE) return DUMMY_COMPANY_UUID;
+      if (companyCode === DUMMY_COMPANY_B_CODE) return DUMMY_COMPANY_B_UUID;
+      return null;
+    });
+    const getRefreshTokenForEdgeForA = vi.fn().mockResolvedValue(buildLease());
+    const getRefreshTokenForEdgeForB = vi.fn().mockResolvedValue(buildLease());
+    const sharedMocks = {
+      refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+    };
+
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      body: buildValidBody(),
+      env: buildEnv(),
+      getRefreshTokenForEdge: getRefreshTokenForEdgeForA,
+      ...sharedMocks,
+    });
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      body: buildValidBody({ companyCode: DUMMY_COMPANY_B_CODE }),
+      env: buildEnv(),
+      getRefreshTokenForEdge: getRefreshTokenForEdgeForB,
+      ...sharedMocks,
+    });
+
+    expect(getRefreshTokenForEdgeForA).toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_UUID });
+    expect(getRefreshTokenForEdgeForB).toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_B_UUID });
+  });
+
+  it("A社userがB社のcompanyCodeを指定（未所属）→ resolveOAuthCompanyIdがnullを返し拒否される（concur_oauth_not_connected）", async () => {
+    const resolveOAuthCompanyId = vi.fn(async ({ companyCode }) =>
+      companyCode === DUMMY_COMPANY_CODE ? DUMMY_COMPANY_UUID : null,
+    );
+    const getRefreshTokenForEdge = vi.fn();
+
+    const { status, body } = await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      body: buildValidBody({ companyCode: DUMMY_COMPANY_B_CODE }),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+    });
+
+    expect(status).toBe(503);
+    expect(body.error.code).toBe("concur_oauth_not_connected");
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+  });
+
+  it("resolveOAuthCompanyIdがnullを返す場合、Vaultリース取得自体を行わずconcur_oauth_not_connectedを返す（既定接続へフォールバックしない）", async () => {
+    const resolveOAuthCompanyId = vi.fn().mockResolvedValue(null);
+    const getRefreshTokenForEdge = vi.fn();
+
+    const { status, body } = await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      body: buildValidBody(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+    });
+
+    expect(status).toBe(503);
+    expect(body.error.code).toBe("concur_oauth_not_connected");
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+  });
+
+  it("resolveOAuthCompanyIdが空文字を返した場合も未解決として扱いfail-closed", async () => {
+    const resolveOAuthCompanyId = vi.fn().mockResolvedValue("");
+    const getRefreshTokenForEdge = vi.fn();
+
+    const { status, body } = await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      body: buildValidBody(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+    });
+
+    expect(status).toBe(503);
+    expect(body.error.code).toBe("concur_oauth_not_connected");
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+  });
+
+  it("resolveOAuthCompanyId自体が例外を投げた場合はinternal_error。Vaultリース取得へは進まない", async () => {
+    const resolveOAuthCompanyId = vi.fn().mockRejectedValue(new Error("db error"));
+    const getRefreshTokenForEdge = vi.fn();
+
+    const { status, body } = await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput({ resolveOAuthCompanyId }),
+      body: buildValidBody(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+    });
+
+    expect(status).toBe(500);
+    expect(body.error.code).toBe("internal_error");
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalled();
+  });
+
+  it("リクエスト本文のcompanyCode（company_codeの文字列）がそのままgetRefreshTokenForEdgeへ渡ることはない（company_codeとcompany UUIDの取り違え防止）", async () => {
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      body: buildValidBody(),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+    });
+
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_CODE });
+    expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_UUID });
+  });
+
+  it("クライアントがcompany UUIDらしき値を本文に紛れ込ませても、それは使われない（常にresolveOAuthCompanyIdの戻り値だけを使う）", async () => {
+    const getRefreshTokenForEdge = vi.fn().mockResolvedValue(buildLease());
+    const attackerSuppliedUuid = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+
+    await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      body: buildValidBody({ companyId: attackerSuppliedUuid }),
+      env: buildEnv(),
+      getRefreshTokenForEdge,
+      refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+    });
+
+    expect(getRefreshTokenForEdge).not.toHaveBeenCalledWith({ companyId: attackerSuppliedUuid });
+    expect(getRefreshTokenForEdge).toHaveBeenCalledWith({ companyId: DUMMY_COMPANY_UUID });
+  });
+
+  it("応答・ログにcompany UUID（resolveOAuthCompanyIdの戻り値）・認証済みuser.idが一切含まれない", async () => {
+    const { body } = await handleLookupConcurUserRequest({
+      method: "POST",
+      ...buildAuthedInput(),
+      body: buildValidBody(),
+      env: buildEnv(),
+      getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
+      refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
+      completeOAuthRefresh: vi.fn().mockResolvedValue(true),
+      lookupUser: vi.fn().mockResolvedValue({ ok: true, userId: VALID_USER_ID }),
+    });
+
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain(DUMMY_COMPANY_UUID);
+    expect(serialized).not.toContain(PLATFORM_ADMIN_USER_ID);
   });
 });
 
@@ -249,7 +538,7 @@ describe("handleLookupConcurUserRequest（Vault・OAuth連携）", () => {
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(null),
       refreshAccessToken,
@@ -266,7 +555,7 @@ describe("handleLookupConcurUserRequest（Vault・OAuth連携）", () => {
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockRejectedValue(new Error("db error")),
     });
@@ -282,7 +571,7 @@ describe("handleLookupConcurUserRequest（Vault・OAuth連携）", () => {
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockResolvedValue({
@@ -311,7 +600,7 @@ describe("handleLookupConcurUserRequest（Vault・OAuth連携）", () => {
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockRejectedValue(new Error("boom")),
@@ -331,7 +620,7 @@ describe("handleLookupConcurUserRequest（Vault・OAuth連携）", () => {
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
@@ -350,7 +639,7 @@ describe("handleLookupConcurUserRequest（Vault・OAuth連携）", () => {
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
@@ -369,7 +658,7 @@ describe("handleLookupConcurUserRequest（Vault・OAuth連携）", () => {
     await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockResolvedValue(
@@ -396,7 +685,7 @@ describe("handleLookupConcurUserRequest（Identity API連携・保存成功後�
     await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
@@ -414,7 +703,7 @@ describe("handleLookupConcurUserRequest（Identity API連携・保存成功後�
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
@@ -430,7 +719,7 @@ describe("handleLookupConcurUserRequest（Identity API連携・保存成功後�
     const { body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
@@ -445,7 +734,7 @@ describe("handleLookupConcurUserRequest（Identity API連携・保存成功後�
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
@@ -464,7 +753,7 @@ describe("handleLookupConcurUserRequest（Identity API連携・保存成功後�
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
@@ -483,7 +772,7 @@ describe("handleLookupConcurUserRequest（Identity API連携・保存成功後�
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
@@ -501,7 +790,7 @@ describe("handleLookupConcurUserRequest（Identity API連携・保存成功後�
     const { status, body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),
@@ -520,7 +809,7 @@ describe("handleLookupConcurUserRequest（セキュリティ・非露出）", ()
     const { body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv({ SUPABASE_SERVICE_ROLE_KEY: DUMMY_SERVICE_ROLE_KEY }),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockResolvedValue(
@@ -563,7 +852,7 @@ describe("handleLookupConcurUserRequest（セキュリティ・非露出）", ()
       const { body } = await handleLookupConcurUserRequest({
         method: "POST",
         ...buildAuthedInput(),
-        body: { userName: DUMMY_USER_NAME },
+        body: buildValidBody(),
         env: buildEnv(),
         ...scenario.setup,
       });
@@ -578,7 +867,7 @@ describe("handleLookupConcurUserRequest（セキュリティ・非露出）", ()
     const { body } = await handleLookupConcurUserRequest({
       method: "POST",
       ...buildAuthedInput(),
-      body: { userName: DUMMY_USER_NAME },
+      body: buildValidBody(),
       env: buildEnv(),
       getRefreshTokenForEdge: vi.fn().mockResolvedValue(buildLease()),
       refreshAccessToken: vi.fn().mockResolvedValue(buildSuccessfulOAuthResult()),

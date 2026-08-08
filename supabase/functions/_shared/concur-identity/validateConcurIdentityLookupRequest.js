@@ -28,6 +28,15 @@
 // 失敗理由は区別せず、呼び出し元へは単一の固定コード
 // （concur_identity_invalid_request）としてのみ伝える（入力値そのものは
 // ログ・レスポンスへ一切含めない）。
+//
+// 【会社別OAuth接続対応で追加】companyCode（company_code）も必須項目として
+// 受け取るようになった。以前はlookup-concur-userもcompanyId:null固定
+// （既定接続）を使っており、リクエスト本文にはuserNameしか無かった。
+// resolve_concur_oauth_company_id RPCへ渡すp_company_codeの入力として使う
+// （検証自体は_shared/validateCompanyCodeValue.jsへ委譲。userNameとは無関係の
+// 別の値のため、判定基準を混在させない）。
+import { validateCompanyCodeValue } from "../validateCompanyCodeValue.js";
+
 const MAX_USER_NAME_LENGTH = 320;
 
 // eslint-disable-next-line no-useless-escape -- 文字クラス内の記号を明示的に列挙するため
@@ -64,12 +73,22 @@ export function validateConcurUserNameValue(value) {
 
 /**
  * @param {unknown} body リクエスト本文をJSON.parseした値。
- * @returns {{ ok: true, userName: string } | { ok: false }}
+ * @returns {{ ok: true, userName: string, companyCode: string } | { ok: false }}
  */
 export function validateConcurIdentityLookupRequest(body) {
   if (!body || typeof body !== "object") {
     return { ok: false };
   }
 
-  return validateConcurUserNameValue(body.userName);
+  const userNameCheck = validateConcurUserNameValue(body.userName);
+  if (!userNameCheck.ok) {
+    return { ok: false };
+  }
+
+  const companyCodeCheck = validateCompanyCodeValue(body.companyCode);
+  if (!companyCodeCheck.ok) {
+    return { ok: false };
+  }
+
+  return { ok: true, userName: userNameCheck.userName, companyCode: companyCodeCheck.companyCode };
 }

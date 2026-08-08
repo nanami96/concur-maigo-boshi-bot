@@ -309,7 +309,7 @@ function AdminWorkspace({
             {settingsTab === "policies" && <PolicySettings editor={editor} />}
             {settingsTab === "expenseTypes" && <ExpenseTypeSettings editor={editor} />}
             {settingsTab === "integrations" && (
-              <ExternalServiceSettings isPlatformAdmin={Boolean(isPlatformAdmin)} />
+              <ExternalServiceSettings isPlatformAdmin={Boolean(isPlatformAdmin)} companyCode={companyCode} />
             )}
           </div>
         </>

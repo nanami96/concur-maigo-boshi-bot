@@ -8,6 +8,23 @@
 // 出せない（platform_adminだけに制限。resolveConcurOAuthCheckAuthorization.js
 // 参照）。
 //
+// 【会社別OAuth接続対応で変更】以前はrequest bodyを一切読み取らず、
+// 常にcompanyId: null（company_id IS NULLの既定接続）だけを確認していた。
+// 会社ごとに異なるConcur OAuth接続を持てるようになったことに伴い、
+// リクエスト本文のcompanyCode（company_code。管理画面で現在表示中の会社）を
+// 受け取り、service_role専用RPC resolve_concur_oauth_company_id
+// （create-concur-quick-expenseがCommit 11で新設したものと同一RPC。
+// supabase/schema.sql参照）で、認証済みのplatform_adminのuser.idと
+// companyCodeから対象会社のConcur OAuth Vault接続識別子（companies.id）を
+// 解決する。クライアントからcompany UUIDを直接受け取ることはない。
+// 【重要な制約】resolve_concur_oauth_company_idは「p_user_idがp_company_code
+// の会社へcompany_membersとして所属しているか」を検証するRPCのため、
+// platform_admin自身がその会社のcompany_membersに登録されていない場合は
+// 解決できずconcur_oauth_not_connectedになる（platform_admin権限だけでは
+// 自動的に全社を横断できない。create_platform_company()は作成者を
+// company_membersへ自動追加しないため、対象会社の疎通確認を行うには
+// platform_admin自身もその会社へ所属している必要がある）。
+//
 // 通常は何もしない（安全ゲート）：
 // CONCUR_OAUTH_CHECK_ENABLEDというSecretが厳密に文字列"true"でない限り、
 // token endpointへの実通信（refreshConcurAccessToken()の呼び出し）は
@@ -161,11 +178,33 @@ function buildServiceRoleClient(createClient) {
   });
 }
 
-// get_concur_refresh_token_for_edge / complete_concur_oauth_refresh
-// （supabase/schema.sql Phase 12）を、handleConcurOAuthCheckRequest.jsが
-// 期待するDeno非依存のインターフェースへ変換するアダプタ。
+// get_concur_refresh_token_for_edge / complete_concur_oauth_refresh /
+// resolve_concur_oauth_company_id（いずれもsupabase/schema.sql Phase 12）を、
+// handleConcurOAuthCheckRequest.jsが期待するDeno非依存のインターフェースへ
+// 変換するアダプタ。resolve_concur_oauth_company_idはcreate-concur-quick-expense/
+// index.tsのbuildVaultAdapters()と全く同じ実装（会社別OAuth接続の会社境界
+// 解決という同じ目的で共有するRPCのため）。
 function buildVaultAdapters(serviceClient, log) {
   return {
+    // resolve_concur_oauth_company_id(p_user_id, p_company_code)は
+    // service_roleのみEXECUTE可（supabase/schema.sql参照）。呼び出し元の
+    // JWTコンテキストが無いservice_roleクライアントではauth.uid()が使えない
+    // ため、userId（authAdapters.fetchUser()が既に検証済みの値）を明示的に
+    // 渡す。戻り値は該当行が無ければNULL、supabase-jsからはスカラー値として
+    // そのまま返る（returns tableではないため配列では返らない）。
+    resolveOAuthCompanyId: async ({ userId, companyCode }) => {
+      const { data, error } = await serviceClient.rpc("resolve_concur_oauth_company_id", {
+        p_user_id: userId,
+        p_company_code: companyCode,
+      });
+
+      if (error) {
+        log(`Vault会社UUID解決エラー (code=${error.code ?? "?"})`);
+        throw error;
+      }
+
+      return typeof data === "string" && data.trim() !== "" ? data : null;
+    },
     getRefreshTokenForEdge: async ({ companyId }) => {
       const { data, error } = await serviceClient.rpc("get_concur_refresh_token_for_edge", {
         p_company_id: companyId ?? null,
@@ -258,10 +297,11 @@ Deno.serve(async (req) => {
   const { status, body } = await handleConcurOAuthCheckRequest({
     method: req.method,
     authHeader,
+    parseBody: () => req.json(),
     fetchUser: authAdapters.fetchUser,
     isPlatformAdmin: authAdapters.isPlatformAdmin,
     env,
-    companyId: null, // 現時点では単一の既定接続のみ（複数会社対応は将来の拡張）。
+    resolveOAuthCompanyId: vaultAdapters.resolveOAuthCompanyId,
     getRefreshTokenForEdge: vaultAdapters.getRefreshTokenForEdge,
     completeOAuthRefresh: vaultAdapters.completeOAuthRefresh,
   });

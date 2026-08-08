@@ -79,7 +79,13 @@ export function shouldDisableConcurUserIdentityLookup({ status, userNameInput })
 // ため、最終的なセキュリティ境界は引き続きサーバー側（RPC・Edge Function）に
 // ある。isPlatformAdminがfalseの場合はセクション自体を描画しない
 // （company_admin・一般ユーザーには一切表示されない）。
-export default function ExternalServiceSettings({ isPlatformAdmin = false }) {
+//
+// 【会社別OAuth接続対応で追加】companyCodeは呼び出し元（AdminRoot.jsxの
+// AdminWorkspace）が既に保持している、現在管理画面で表示中の会社の
+// company_codeをそのまま受け取るだけで、この画面自身が会社を選択・解決する
+// ロジックは持たない。checkConcurOAuthConnection()・lookupConcurUserIdentity()
+// （どちらもこの会社のConcur OAuth接続を対象に確認する）へそのまま渡す。
+export default function ExternalServiceSettings({ isPlatformAdmin = false, companyCode }) {
   const [concurCheckState, setConcurCheckState] = useState({
     status: "idle", // idle | checking | result | error
     result: null,
@@ -104,7 +110,7 @@ export default function ExternalServiceSettings({ isPlatformAdmin = false }) {
 
     setConcurCheckState({ status: "checking", result: null, errorType: null });
 
-    const { result, error } = await checkConcurOAuthConnection();
+    const { result, error } = await checkConcurOAuthConnection(companyCode);
 
     if (error) {
       // 利用者へは固定エラーコードだけを見せる（Token・Secret・レスポンス本文は
@@ -125,7 +131,7 @@ export default function ExternalServiceSettings({ isPlatformAdmin = false }) {
 
     setIdentityLookupState({ status: "checking", result: null, errorType: null });
 
-    const { result, error } = await lookupConcurUserIdentity(identityLookupUserName.trim());
+    const { result, error } = await lookupConcurUserIdentity(identityLookupUserName.trim(), companyCode);
 
     if (error) {
       // 利用者へは固定エラーコードだけを見せる（Token・Secret・利用者プロフィール・

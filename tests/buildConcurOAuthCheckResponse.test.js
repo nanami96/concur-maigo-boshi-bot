@@ -94,6 +94,9 @@ describe("buildConcurOAuthCheckError / classifyConcurOAuthCheckHttpStatus", () =
     ["concur_oauth_completion_failed", 500],
     ["concur_oauth_storage_failed", 500],
     ["internal_error", 500],
+    // 【会社別OAuth接続対応で追加】
+    ["invalid_json", 400],
+    ["concur_oauth_check_invalid_request", 400],
   ])("%sは%iへ変換される", (code, expectedStatus) => {
     expect(classifyConcurOAuthCheckHttpStatus(code)).toBe(expectedStatus);
   });
@@ -102,7 +105,14 @@ describe("buildConcurOAuthCheckError / classifyConcurOAuthCheckHttpStatus", () =
     expect(classifyConcurOAuthCheckHttpStatus("unknown_code")).toBe(500);
   });
 
-  it.each(["concur_oauth_not_connected", "concur_oauth_completion_failed", "concur_oauth_storage_failed", "internal_error"])(
+  it.each([
+    "concur_oauth_not_connected",
+    "concur_oauth_completion_failed",
+    "concur_oauth_storage_failed",
+    "internal_error",
+    "invalid_json",
+    "concur_oauth_check_invalid_request",
+  ])(
     "%sは固定メッセージを持つ",
     (code) => {
       const error = buildConcurOAuthCheckError(code);

@@ -3,45 +3,63 @@
 // handleQuickExpenseRequest.jsと同じ「呼び出し元がI/Oを注入する」パターンを
 // 踏襲し、Deno無しにNode/vitestから直接テストできる。
 //
-// 処理順序：
+// 処理順序（【会社別OAuth接続対応で変更】）：
 //   1. HTTPメソッド確認（POST以外はmethod_not_allowed）
 //   2. 認証・権限確認（resolveConcurOAuthCheckAuthorization.js）
 //      - 未認証 → unauthorized（401）
 //      - platform_adminでない → forbidden（403）。この時点でVault関連の
 //        getRefreshTokenForEdge/completeOAuthRefreshは一切呼ばれない。
-//   3. 安全ゲート確認（isConcurOAuthCheckEnabled.js）
+//   3. リクエスト本文のJSON解析（invalid_json）・companyCode検証
+//      （validateConcurOAuthCheckRequest.js。concur_oauth_check_invalid_request）。
+//      安全ゲートの確認より前に行う（不正な入力に対して無駄なVault呼び出しを
+//      発生させないため。ただし実際のRPC呼び出しはまだ発生しない）。
+//   4. 安全ゲート確認（isConcurOAuthCheckEnabled.js）
 //      CONCUR_OAUTH_CHECK_ENABLEDが厳密に"true"でない場合は、
-//      Vault RPC・refreshConcurAccessToken()を一切呼ばず、
-//      { connected: false, status: "disabled" } を返す（200）。
-//   4. getRefreshTokenForEdge()（get_concur_refresh_token_for_edge RPC相当）で
-//      現在のRefresh Token・connection_id・lease_idを取得する。取得できない
-//      場合（未接続・ロック中のいずれか。理由は区別しない）は
-//      concur_oauth_not_connectedを返す。token endpointへは通信しない。
-//   5. refreshConcurAccessToken()でtoken endpointへRefresh Token Grantを
+//      resolveOAuthCompanyId・Vault RPC・refreshConcurAccessToken()を
+//      一切呼ばず、{ connected: false, status: "disabled" } を返す（200）。
+//   5. resolveOAuthCompanyId({ userId, companyCode })
+//      （service_role専用RPC resolve_concur_oauth_company_id相当。
+//      supabase/schema.sql参照）で、手順2で検証済みのauthResult.user.idと
+//      手順3で検証済みのcompanyCodeから、対象会社のConcur OAuth Vault接続
+//      識別子（concur_oauth_connections.company_id、Supabase内部UUID）を
+//      解決する。クライアントからcompany UUIDを直接受け取る経路は無い
+//      （リクエストスキーマにそのようなフィールドは存在しない）。未解決
+//      （platform_adminがその会社のcompany_membersに存在しない場合を含む。
+//      理由は区別しない）の場合はconcur_oauth_not_connectedを返し、
+//      getRefreshTokenForEdge以降には一切進まない（既定接続company_id IS
+//      NULLへのフォールバックはしない）。
+//   6. getRefreshTokenForEdge({ companyId: 解決したUUID })
+//      （get_concur_refresh_token_for_edge RPC相当）で現在のRefresh Token・
+//      connection_id・lease_idを取得する。取得できない場合（未接続・ロック中の
+//      いずれか。理由は区別しない）はconcur_oauth_not_connectedを返す。
+//      token endpointへは通信しない。
+//   7. refreshConcurAccessToken()でtoken endpointへRefresh Token Grantを
 //      実行する。
-//   6. 失敗した場合：completeOAuthRefresh({success:false, errorCode})を
+//   8. 失敗した場合：completeOAuthRefresh({success:false, errorCode})を
 //      呼んでリースを解放し（ベストエフォート）、元のエラーコードを返す。
-//   7. 成功した場合：completeOAuthRefresh({success:true, newRefreshToken})を
+//   9. 成功した場合：completeOAuthRefresh({success:true, newRefreshToken})を
 //      呼ぶ（rotated:falseならnewRefreshTokenはnull）。
 //      - trueが返れば、保存成功として初めてconnected:trueを返す
 //      - falseが返れば（lease不一致＝リースが既に別処理へ引き継がれていた）
 //        concur_oauth_completion_failedを返す
 //      - 例外が発生すれば（Vault更新自体が失敗）concur_oauth_storage_failed
 //        を返す
-//   8. 保存成功後、evaluateConcurRequiredScopes.jsでAccess Tokenのscopeに
+//  10. 保存成功後、evaluateConcurRequiredScopes.jsでAccess Tokenのscopeに
 //      quickexpense.writeonly／user.read／identity.user.ids.readが実際に
 //      含まれているかを真偽値だけで判定し、成功レスポンスへ含める
 //      （Quick Expense API・Identity APIへの実通信前チェック。scope全文・
 //      他のスコープ名は一切含めない）。
 //
-// request bodyは一切読み取らない・使わない（認証情報・token URL・Refresh
-// Tokenは全てSecrets/Vault由来であり、フロントから送られた値を信用する
-// 余地自体が存在しない）。
+// request bodyはcompanyCode以外一切読み取らない・使わない（認証情報・
+// token URL・Refresh Tokenは全てSecrets/Vault由来であり、フロントから
+// 送られた値を信用する余地自体が存在しない）。
 //
 // このFunctionが返しうるエラーコード：
 //   - method_not_allowed              … POST以外のメソッド
 //   - unauthorized                    … 未認証
 //   - forbidden                       … platform_adminでない
+//   - invalid_json                    … リクエストボディがJSONとして解析できない
+//   - concur_oauth_check_invalid_request … companyCodeが不正・未指定
 //   - concur_not_configured           … 必須Secrets不足、またはrefreshToken未取得
 //   - concur_oauth_timeout            … token endpointのタイムアウト
 //   - concur_oauth_network_error      … 通信失敗
@@ -49,12 +67,14 @@
 //   - concur_oauth_rate_limited       … 429
 //   - concur_oauth_service_error      … 5xx
 //   - concur_oauth_invalid_response   … 2xxだが形式不正
-//   - concur_oauth_not_connected      … 対象接続が無い、またはロック中（区別しない）
+//   - concur_oauth_not_connected      … 対象会社UUIDが未解決、対象接続が無い、
+//                                        またはロック中（いずれも区別しない）
 //   - concur_oauth_completion_failed  … 完了RPCがfalse（lease不一致。想定外の競合）
 //   - concur_oauth_storage_failed     … 完了RPCが例外（Vault更新自体が失敗）
 //   - internal_error                  … 上記以外の予期しない例外
 import { resolveConcurOAuthCheckAuthorization } from "./resolveConcurOAuthCheckAuthorization.js";
 import { isConcurOAuthCheckEnabled } from "./isConcurOAuthCheckEnabled.js";
+import { validateConcurOAuthCheckRequest } from "./validateConcurOAuthCheckRequest.js";
 import {
   buildConcurOAuthCheckError,
   buildConcurOAuthCheckSuccessResponse,
@@ -94,10 +114,22 @@ async function safeCompleteFailure(completeOAuthRefresh, connectionId, leaseId, 
  * @param {object} input
  * @param {string} input.method
  * @param {string|null} input.authHeader
+ * @param {() => Promise<unknown>} input.parseBody リクエストボディをJSONとして
+ *   読み取る非同期関数（Denoでは () => req.json()）。JSONとして解析できない
+ *   場合は例外を投げる想定。
  * @param {(authHeader: string) => Promise<object|null>} input.fetchUser
  * @param {(user: object) => Promise<boolean>} input.isPlatformAdmin
  * @param {Record<string, string|undefined>} input.env
- * @param {string|null} [input.companyId] 対象会社（現時点では常にnull＝既定接続）。
+ * @param {(input: { userId: string, companyCode: string }) => Promise<string|null>} input.resolveOAuthCompanyId
+ *   Concur OAuth Vault接続の会社境界（concur_oauth_connections.company_id）を
+ *   解決する、service_role専用RPC（resolve_concur_oauth_company_id。
+ *   supabase/schema.sql参照）の呼び出し。安全ゲートがtrueの場合だけ呼ばれる。
+ *   userIdはauthResult.user.id（fetchUserで検証済み）、companyCodeは
+ *   validateConcurOAuthCheckRequest.jsで検証済みの値を渡す。対象の所属が
+ *   無ければnullを返す想定。この関数の外部入力パラメータとしての
+ *   companyId（Vault接続識別子そのもの）は存在しない（以前は呼び出し元が
+ *   companyIdを直接渡せたが、常にnull固定で呼ばれており、会社別接続対応後は
+ *   cross-company接続混在のリスクがあったため廃止した）。
  * @param {(input: { companyId: string|null }) => Promise<{ connectionId: string, leaseId: string, refreshToken: string } | null>} input.getRefreshTokenForEdge
  *   get_concur_refresh_token_for_edge RPC相当。service_role専用クライアントで呼ぶこと
  *   （index.ts参照。呼び出し元JWTクライアントからは呼ばない）。
@@ -111,10 +143,11 @@ async function safeCompleteFailure(completeOAuthRefresh, connectionId, leaseId, 
 export async function handleConcurOAuthCheckRequest({
   method,
   authHeader,
+  parseBody,
   fetchUser,
   isPlatformAdmin,
   env,
-  companyId = null,
+  resolveOAuthCompanyId,
   getRefreshTokenForEdge,
   completeOAuthRefresh,
   resolveAuthorization = resolveConcurOAuthCheckAuthorization,
@@ -139,6 +172,20 @@ export async function handleConcurOAuthCheckRequest({
     return { status: 403, body: errorBody("forbidden", FORBIDDEN_MESSAGE) };
   }
 
+  let rawBody;
+  try {
+    rawBody = await parseBody();
+  } catch {
+    // リクエスト本文自体はログへ出さない（機密情報を含みうるため）。
+    return respondWithLocalCode("invalid_json");
+  }
+
+  const inputValidation = validateConcurOAuthCheckRequest(rawBody);
+  if (!inputValidation.ok) {
+    return respondWithLocalCode("concur_oauth_check_invalid_request");
+  }
+  const { companyCode } = inputValidation;
+
   // 200を返す理由：認証・認可は正しく通過しており、リクエスト自体は正常に
   // 処理できている。「安全ゲートが無効なので疎通確認していない」という
   // 正しい状態を返しているだけであり、リクエスト側の誤り（4xx）でも
@@ -149,9 +196,28 @@ export async function handleConcurOAuthCheckRequest({
     return { status: 200, body: { result: { connected: false, status: "disabled" }, error: null } };
   }
 
+  // 会社境界（重要）：Vaultから取得するRefresh Tokenの対象会社は、必ず
+  // resolveOAuthCompanyId({ userId, companyCode })が、authResult.user.id
+  // （手順2で検証済み）とcompanyCode（手順3で検証済み）から解決した
+  // companies.idだけを使う。クライアントはcompany UUIDを一切送ってこない
+  // ため、信用できるのはこのRPCの解決結果以外にない。未解決（platform_admin
+  // がその会社のcompany_membersに存在しない場合を含む）の場合は、既定接続
+  // （company_id IS NULLの共有接続）へフォールバックせず、Vaultリース取得
+  // 自体を行わずfail-closedにする。
+  let vaultCompanyId = null;
+  try {
+    vaultCompanyId = await resolveOAuthCompanyId({ userId: authResult.user.id, companyCode });
+  } catch {
+    return respondWithLocalCode("internal_error");
+  }
+
+  if (typeof vaultCompanyId !== "string" || vaultCompanyId.trim() === "") {
+    return respondWithLocalCode("concur_oauth_not_connected");
+  }
+
   let lease = null;
   try {
-    lease = await getRefreshTokenForEdge({ companyId });
+    lease = await getRefreshTokenForEdge({ companyId: vaultCompanyId });
   } catch {
     return respondWithLocalCode("internal_error");
   }

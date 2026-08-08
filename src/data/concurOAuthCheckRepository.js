@@ -96,9 +96,17 @@ async function ensureValidSession() {
 
 /**
  * platform_admin専用：Concur OAuth（Refresh Token Grant）の疎通確認を行う
- * check-concur-oauth Edge Functionを呼び出す。リクエスト本文は送らない
- * （Edge Function側もbodyを一切読み取らない設計。index.ts冒頭コメント参照）。
+ * check-concur-oauth Edge Functionを呼び出す。
  *
+ * 【会社別OAuth接続対応で変更】以前はリクエスト本文を送らなかったが
+ * （Edge Function側もbodyを一切読み取らない設計だったため）、会社ごとに
+ * 異なるConcur OAuth接続を持てるようになったことに伴い、確認対象の会社
+ * （companyCode、company_code）を本文で送るようになった。company UUIDは
+ * 一切送らない（Edge Function側がcompanyCodeからサーバー側で解決する。
+ * supabase/functions/check-concur-oauth/index.ts参照）。
+ *
+ * @param {string} companyCode 確認対象の会社（company_code）。管理画面で
+ *   現在表示中の会社を渡す想定（呼び出し元：src/admin/ExternalServiceSettings.jsx）。
  * @returns {Promise<{
  *   result: {
  *     connected: boolean,
@@ -114,7 +122,7 @@ async function ensureValidSession() {
  *   error: { type: string } | null
  * }>}
  */
-export async function checkConcurOAuthConnection() {
+export async function checkConcurOAuthConnection(companyCode) {
   if (!isSupabaseConfigured) {
     return { result: null, error: { type: "unknown" } };
   }
@@ -125,6 +133,7 @@ export async function checkConcurOAuthConnection() {
 
   try {
     const { data, error } = await supabase.functions.invoke(CHECK_CONCUR_OAUTH_FUNCTION_NAME, {
+      body: { companyCode },
       timeout: CHECK_CONCUR_OAUTH_INVOKE_TIMEOUT_MS,
     });
 

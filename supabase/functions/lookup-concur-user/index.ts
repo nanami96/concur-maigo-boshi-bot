@@ -16,6 +16,21 @@
 // platform_adminが検索対象のConcurログインIDを直接入力する一時的な
 // 検索ツールとして実装する。入力値をDBへ保存する処理は一切行わない。
 //
+// 【会社別OAuth接続対応で変更】以前はrequest bodyにuserNameしか無く、
+// 常にcompanyId: null（company_id IS NULLの既定接続）だけを確認していた。
+// 会社ごとに異なるConcur OAuth接続を持てるようになったことに伴い、
+// リクエスト本文へcompanyCode（company_code。管理画面で現在表示中の会社）を
+// 追加し、service_role専用RPC resolve_concur_oauth_company_id
+// （create-concur-quick-expenseがCommit 11で新設したものと同一RPC。
+// supabase/schema.sql参照）で、認証済みのplatform_adminのuser.idと
+// companyCodeから対象会社のConcur OAuth Vault接続識別子（companies.id）を
+// 解決する。クライアントからcompany UUIDを直接受け取ることはない。
+// 【重要な制約】check-concur-oauth/index.tsと同じ制約：resolve_concur_oauth_
+// company_idはp_user_idがp_company_codeの会社へcompany_membersとして
+// 所属しているかを検証するため、platform_admin自身がその会社の
+// company_membersに登録されていない場合は解決できずconcur_oauth_not_connected
+// になる。
+//
 // 通常は何もしない（安全ゲート）：
 // CONCUR_IDENTITY_LOOKUP_ENABLEDというSecretが厳密に文字列"true"でない限り、
 // Vault RPC・token endpoint・Identity APIへの実通信は一切発生せず、
@@ -153,12 +168,32 @@ function buildServiceRoleClient(createClient) {
   });
 }
 
-// get_concur_refresh_token_for_edge / complete_concur_oauth_refresh
-// （supabase/schema.sql Phase 12、check-concur-oauthと共有する既存RPC）を、
+// get_concur_refresh_token_for_edge / complete_concur_oauth_refresh /
+// resolve_concur_oauth_company_id（いずれもsupabase/schema.sql Phase 12、
+// check-concur-oauth・create-concur-quick-expenseと共有する既存RPC）を、
 // handleLookupConcurUserRequest.jsが期待するDeno非依存のインターフェースへ
 // 変換するアダプタ。
 function buildVaultAdapters(serviceClient, log) {
   return {
+    // resolve_concur_oauth_company_id(p_user_id, p_company_code)は
+    // service_roleのみEXECUTE可（supabase/schema.sql参照）。呼び出し元の
+    // JWTコンテキストが無いservice_roleクライアントではauth.uid()が使えない
+    // ため、userId（authAdapters.fetchUser()が既に検証済みの値）を明示的に
+    // 渡す。戻り値は該当行が無ければNULL、supabase-jsからはスカラー値として
+    // そのまま返る（returns tableではないため配列では返らない）。
+    resolveOAuthCompanyId: async ({ userId, companyCode }) => {
+      const { data, error } = await serviceClient.rpc("resolve_concur_oauth_company_id", {
+        p_user_id: userId,
+        p_company_code: companyCode,
+      });
+
+      if (error) {
+        log(`Vault会社UUID解決エラー (code=${error.code ?? "?"})`);
+        throw error;
+      }
+
+      return typeof data === "string" && data.trim() !== "" ? data : null;
+    },
     getRefreshTokenForEdge: async ({ companyId }) => {
       const { data, error } = await serviceClient.rpc("get_concur_refresh_token_for_edge", {
         p_company_id: companyId ?? null,
@@ -261,7 +296,7 @@ Deno.serve(async (req) => {
     fetchUser: authAdapters.fetchUser,
     isPlatformAdmin: authAdapters.isPlatformAdmin,
     env,
-    companyId: null, // 現時点では単一の既定接続のみ（複数会社対応は将来の拡張）。
+    resolveOAuthCompanyId: vaultAdapters.resolveOAuthCompanyId,
     getRefreshTokenForEdge: vaultAdapters.getRefreshTokenForEdge,
     completeOAuthRefresh: vaultAdapters.completeOAuthRefresh,
   });

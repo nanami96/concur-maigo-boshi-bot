@@ -22,6 +22,9 @@ const LOCAL_ERROR_MESSAGES = {
   concur_oauth_completion_failed: "処理を確定できませんでした。もう一度お試しください。",
   concur_oauth_storage_failed: "認証情報の保存に失敗しました。もう一度お試しください。",
   internal_error: "処理中にエラーが発生しました。",
+  // 【会社別OAuth接続対応で追加】
+  invalid_json: "リクエストの形式が不正です。",
+  concur_oauth_check_invalid_request: "対象の会社を指定してください。",
 };
 
 const ERROR_HTTP_STATUS = {
@@ -36,6 +39,9 @@ const ERROR_HTTP_STATUS = {
   concur_oauth_completion_failed: 500,
   concur_oauth_storage_failed: 500,
   internal_error: 500,
+  // 【会社別OAuth接続対応で追加】
+  invalid_json: 400,
+  concur_oauth_check_invalid_request: 400,
 };
 
 /**

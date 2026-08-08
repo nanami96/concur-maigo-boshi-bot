@@ -86,14 +86,23 @@ async function ensureValidSession() {
  * platform_admin専用：指定したConcurログインID（userName）に対応する利用者を
  * Concur Identity APIで検索するlookup-concur-user Edge Functionを呼び出す。
  *
+ * 【会社別OAuth接続対応で変更】以前はリクエスト本文にuserNameしか含めず、
+ * 常に既定のConcur OAuth接続を使っていたが、会社ごとに異なる接続を持てる
+ * ようになったことに伴い、確認対象の会社（companyCode、company_code）も
+ * 本文で送るようになった。company UUIDは一切送らない（Edge Function側が
+ * companyCodeからサーバー側で解決する。supabase/functions/lookup-concur-user/
+ * index.ts参照）。
+ *
  * @param {string} userName 検索対象のConcurログインID（未trimでも可。
  *   Edge Function側で改めてtrim・検証される）。
+ * @param {string} companyCode 確認対象の会社（company_code）。管理画面で
+ *   現在表示中の会社を渡す想定（呼び出し元：src/admin/ExternalServiceSettings.jsx）。
  * @returns {Promise<{
  *   result: { found: boolean, hasUserId: boolean, multipleMatches: boolean, status?: string } | null,
  *   error: { type: string } | null
  * }>}
  */
-export async function lookupConcurUserIdentity(userName) {
+export async function lookupConcurUserIdentity(userName, companyCode) {
   if (!isSupabaseConfigured) {
     return { result: null, error: { type: "unknown" } };
   }
@@ -104,7 +113,7 @@ export async function lookupConcurUserIdentity(userName) {
 
   try {
     const { data, error } = await supabase.functions.invoke(LOOKUP_CONCUR_USER_FUNCTION_NAME, {
-      body: { userName },
+      body: { userName, companyCode },
       timeout: LOOKUP_CONCUR_USER_INVOKE_TIMEOUT_MS,
     });
 
