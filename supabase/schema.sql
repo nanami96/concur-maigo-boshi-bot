@@ -879,6 +879,72 @@ comment on function get_my_public_config(text) is
 revoke all on function get_my_public_config(text) from public;
 grant execute on function get_my_public_config(text) to authenticated;
 
+-- --- 7-3-2. list_my_companies(): ログイン中ユーザー自身の所属会社一覧 -----------
+--
+-- 【複数社所属対応（Commit 3）で追加】get_my_public_config()は「1つの会社」を
+-- 解決するためのRPCであり、複数社所属時にどの会社を選ぶかをフロントで
+-- 決められるようにするための「一覧」は返さない（所属2件以上ではraise
+-- exceptionでfail-closedにする設計。上のコメント参照）。会社切替UI
+-- （Commit 4以降）が「A社／B社／C社」という選択肢を表示するには、この
+-- 一覧を取得する手段が別途必要になる。list_my_companies()はその一覧だけを
+-- 返す、責務を分離した専用のRPCである。
+--
+-- 返す情報は「会社選択に必要な最小限」に絞る：company_code・company_name・
+-- （その会社での）role。以下は意図的に返さない：
+--   ・companies.id（Supabase内部UUID） … 一般利用者向けクライアントは
+--     company_codeだけを識別子として扱う設計（get_my_public_config()も
+--     同様にUUIDを返さない。src/lib/concurRegistrationData.js冒頭コメント・
+--     src/data/resolveCurrentCompany.js参照）。
+--   ・invite_code_hash・draft_configs・published_versions（config本体）・
+--     OAuth/Vault関連列 … 会社選択の一覧表示に一切不要なため。
+--
+-- 認可：company_members.user_id = auth.uid() の行だけを対象にする
+-- （クライアントからuser_idを受け取らない。他人の所属会社一覧を取得できる
+-- 経路は存在しない）。
+--
+-- platform_adminについて：is_platform_admin()は一切参照しない。
+-- list_my_companies()は「本人がcompany_membersとして所属している会社」だけを
+-- 返すRPCであり、platform_adminだからといって全社を返す仕様にはしない
+-- （全社の一覧・管理はlist_platform_companies()（8章、is_platform_admin()判定）
+-- の責務であり、混同しない）。
+--
+-- 0件（未所属）の場合はエラーにせず空配列を返す（Commit 2のno-membership状態と
+-- そのまま連携できるようにするため）。1件・複数件のいずれでも、該当する行を
+-- 全て返す（data[0]・LIMIT 1・maybeSingle()等で暗黙的に1件へ縮退させることは
+-- しない。複数件をどう1件に決定するかはクライアント側のresolveCurrentCompany.js
+-- の責務であり、このRPCの責務ではない）。
+--
+-- ORDER BYはDBの偶然の行順（挿入順序等）に依存させず、company_name・
+-- company_codeの順で決定的にする（company_codeは一意なため、company_nameが
+-- 重複していても最終的に一意な順序になる）。この並び順はUI表示を安定させる
+-- ためだけのものであり、「先頭の会社を既定選択にしてよい」という意味を
+-- 一切持たない（先頭を機械的に選ばないことはresolveCurrentCompany.js・
+-- CompanyContext.jsx側で保証する。詳細はそちらのコメント参照）。
+create or replace function list_my_companies()
+returns table (company_code text, company_name text, role text)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select c.company_code, c.company_name, cm.role
+  from company_members cm
+  join companies c on c.id = cm.company_id
+  where cm.user_id = auth.uid()
+  order by c.company_name, c.company_code;
+$$;
+
+comment on function list_my_companies() is
+  'ログイン中ユーザー(auth.uid())が所属する会社一覧を、会社選択に必要な最小限の'
+  'metadata（company_code・company_name・role）だけで返す。他人の所属は返さない。'
+  'platform_adminであっても本人の所属会社だけを返す（全社一覧はlist_platform_'
+  'companies()の責務）。所属0件なら空配列（エラーにしない）。company_name・'
+  'company_codeの順で決定的に並べるが、これは表示の安定化のみが目的であり、'
+  '既定選択の根拠にはしない。';
+
+revoke all on function list_my_companies() from public;
+grant execute on function list_my_companies() to authenticated;
+
 -- --- 7-4. redeem_invite_code(): 招待コードで会社へ所属する（role=userのみ） ---
 --
 -- 権限昇格を防ぐ設計：

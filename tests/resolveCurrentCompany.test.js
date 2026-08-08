@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { resolveCurrentCompany } from "../src/data/resolveCurrentCompany";
 
+function companyOf(overrides = {}) {
+  return { companyCode: "company-a", companyName: "A株式会社", role: "user", ...overrides };
+}
+
 function membershipOf(overrides = {}) {
   return {
     companyCode: "company-a",
@@ -12,129 +16,159 @@ function membershipOf(overrides = {}) {
   };
 }
 
-describe("resolveCurrentCompany（起動時にどの会社をcurrentCompanyにするか）", () => {
-  it("所属0件の場合、no-membershipになる", async () => {
-    const fetchMembership = vi.fn().mockResolvedValue({ membership: null, error: null, ambiguous: false });
-    const readLastCompanyCode = vi.fn().mockReturnValue(null);
-    const clearLastCompanyCode = vi.fn();
+function buildDeps(overrides = {}) {
+  return {
+    fetchCompanies: vi.fn(),
+    fetchMembership: vi.fn(),
+    readLastCompanyCode: vi.fn().mockReturnValue(null),
+    clearLastCompanyCode: vi.fn(),
+    ...overrides,
+  };
+}
 
-    const result = await resolveCurrentCompany({ fetchMembership, readLastCompanyCode, clearLastCompanyCode });
+describe("resolveCurrentCompany（list_my_companies()→currentCompany決定→get_my_public_config()の2段階パイプライン）", () => {
+  it("所属0件の場合、no-membershipになり、get_my_public_config()を一切呼ばない", async () => {
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies: [], error: null }),
+    });
 
-    expect(result).toEqual({ status: "no-membership", currentCompany: null, membership: null });
-    expect(fetchMembership).toHaveBeenCalledWith();
-    // 所属0件の時点でlocalStorageを参照する必要は無い。
-    expect(readLastCompanyCode).not.toHaveBeenCalled();
+    const result = await resolveCurrentCompany(deps);
+
+    expect(result).toEqual({ status: "no-membership", currentCompany: null, membership: null, companies: [] });
+    expect(deps.fetchMembership).not.toHaveBeenCalled();
+    expect(deps.readLastCompanyCode).not.toHaveBeenCalled();
   });
 
-  it("所属1件の場合、サーバー側の自動解決結果をそのままcurrentCompanyにする（既存1社利用者との後方互換）", async () => {
+  it("所属1件の場合、その会社を自動選択し、その会社のcompanyCodeでget_my_public_config()を呼ぶ", async () => {
+    const companies = [companyOf()];
     const membership = membershipOf();
-    const fetchMembership = vi.fn().mockResolvedValue({ membership, error: null, ambiguous: false });
-    const readLastCompanyCode = vi.fn();
-    const clearLastCompanyCode = vi.fn();
-
-    const result = await resolveCurrentCompany({ fetchMembership, readLastCompanyCode, clearLastCompanyCode });
-
-    expect(result).toEqual({
-      status: "ready",
-      currentCompany: { companyCode: "company-a", companyName: "A株式会社", role: "user" },
-      membership,
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies, error: null }),
+      fetchMembership: vi.fn().mockResolvedValue({ membership, error: null }),
     });
-    // 所属1件はサーバー側で既に一意に解決済みのため、localStorageは不要。
-    expect(readLastCompanyCode).not.toHaveBeenCalled();
+
+    const result = await resolveCurrentCompany(deps);
+
+    expect(result).toEqual({ status: "ready", currentCompany: companies[0], membership, companies });
+    expect(deps.fetchMembership).toHaveBeenCalledWith("company-a");
+    // 所属1件はサーバー側の一覧だけで一意に決まるため、localStorageは不要。
+    expect(deps.readLastCompanyCode).not.toHaveBeenCalled();
   });
 
   it("所属1件だが未公開の場合、statusがunpublishedになる", async () => {
+    const companies = [companyOf()];
     const membership = membershipOf({ configSnapshot: null, publishedAt: null });
-    const fetchMembership = vi.fn().mockResolvedValue({ membership, error: null, ambiguous: false });
-
-    const result = await resolveCurrentCompany({
-      fetchMembership,
-      readLastCompanyCode: vi.fn(),
-      clearLastCompanyCode: vi.fn(),
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies, error: null }),
+      fetchMembership: vi.fn().mockResolvedValue({ membership, error: null }),
     });
+
+    const result = await resolveCurrentCompany(deps);
 
     expect(result.status).toBe("unpublished");
-    expect(result.currentCompany).toEqual({ companyCode: "company-a", companyName: "A株式会社", role: "user" });
+    expect(result.currentCompany).toEqual(companies[0]);
   });
 
-  it("所属2件以上・localStorageにlastCompanyCodeが無い場合、先頭を機械的に選ばずselection-requiredになる", async () => {
-    const fetchMembership = vi.fn().mockResolvedValue({ membership: null, error: null, ambiguous: true });
-    const readLastCompanyCode = vi.fn().mockReturnValue(null);
-    const clearLastCompanyCode = vi.fn();
-
-    const result = await resolveCurrentCompany({ fetchMembership, readLastCompanyCode, clearLastCompanyCode });
-
-    expect(result).toEqual({ status: "selection-required", currentCompany: null, membership: null });
-    expect(fetchMembership).toHaveBeenCalledTimes(1);
-    expect(clearLastCompanyCode).not.toHaveBeenCalled();
-  });
-
-  it("所属2件以上・localStorageのlastCompanyCodeに今も所属している場合、その会社を明示指定で再取得し復元する", async () => {
-    const restoredMembership = membershipOf({ companyCode: "company-b", companyName: "B株式会社", role: "admin" });
-    const fetchMembership = vi
-      .fn()
-      .mockResolvedValueOnce({ membership: null, error: null, ambiguous: true })
-      .mockResolvedValueOnce({ membership: restoredMembership, error: null, ambiguous: false });
-    const readLastCompanyCode = vi.fn().mockReturnValue("company-b");
-    const clearLastCompanyCode = vi.fn();
-
-    const result = await resolveCurrentCompany({ fetchMembership, readLastCompanyCode, clearLastCompanyCode });
-
-    expect(result).toEqual({
-      status: "ready",
-      currentCompany: { companyCode: "company-b", companyName: "B株式会社", role: "admin" },
-      membership: restoredMembership,
-    });
-    expect(fetchMembership).toHaveBeenNthCalledWith(1);
-    expect(fetchMembership).toHaveBeenNthCalledWith(2, "company-b");
-    expect(clearLastCompanyCode).not.toHaveBeenCalled();
-  });
-
-  it("所属2件以上・localStorageのlastCompanyCodeに既に所属していない場合、localStorageを破棄しselection-requiredになる", async () => {
-    const fetchMembership = vi
-      .fn()
-      .mockResolvedValueOnce({ membership: null, error: null, ambiguous: true })
-      .mockResolvedValueOnce({ membership: null, error: null, ambiguous: false });
-    const readLastCompanyCode = vi.fn().mockReturnValue("company-removed");
-    const clearLastCompanyCode = vi.fn();
-
-    const result = await resolveCurrentCompany({ fetchMembership, readLastCompanyCode, clearLastCompanyCode });
-
-    expect(result).toEqual({ status: "selection-required", currentCompany: null, membership: null });
-    expect(clearLastCompanyCode).toHaveBeenCalledTimes(1);
-  });
-
-  it("最初の取得でエラーの場合、statusがerrorになる", async () => {
-    const fetchMembership = vi.fn().mockResolvedValue({
-      membership: null,
-      error: { type: "unknown", message: "boom" },
-      ambiguous: false,
-    });
-
-    const result = await resolveCurrentCompany({
-      fetchMembership,
-      readLastCompanyCode: vi.fn(),
-      clearLastCompanyCode: vi.fn(),
-    });
-
-    expect(result).toEqual({ status: "error", currentCompany: null, membership: null });
-  });
-
-  it("lastCompanyCodeでの再取得時にエラーが起きた場合も、statusがerrorになる（selection-requiredへは倒さない）", async () => {
-    const fetchMembership = vi
-      .fn()
-      .mockResolvedValueOnce({ membership: null, error: null, ambiguous: true })
-      .mockResolvedValueOnce({ membership: null, error: { type: "network", message: "boom" }, ambiguous: false });
-    const clearLastCompanyCode = vi.fn();
-
-    const result = await resolveCurrentCompany({
-      fetchMembership,
+  it("所属2件以上・有効なlastCompanyCodeがある場合、該当会社を選択しconfigを取得する（先頭会社は選ばない）", async () => {
+    const companies = [companyOf({ companyCode: "company-a" }), companyOf({ companyCode: "company-b", role: "admin" })];
+    const membership = membershipOf({ companyCode: "company-b", role: "admin" });
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies, error: null }),
+      fetchMembership: vi.fn().mockResolvedValue({ membership, error: null }),
       readLastCompanyCode: vi.fn().mockReturnValue("company-b"),
-      clearLastCompanyCode,
     });
 
-    expect(result).toEqual({ status: "error", currentCompany: null, membership: null });
-    // 通信エラー等でlocalStorageの値自体が無効だったかは分からないため、破棄しない。
-    expect(clearLastCompanyCode).not.toHaveBeenCalled();
+    const result = await resolveCurrentCompany(deps);
+
+    expect(result).toEqual({ status: "ready", currentCompany: companies[1], membership, companies });
+    expect(deps.fetchMembership).toHaveBeenCalledWith("company-b");
+    expect(deps.clearLastCompanyCode).not.toHaveBeenCalled();
+  });
+
+  it("所属2件以上・lastCompanyCodeが既に所属外の場合、localStorageを破棄しselection-requiredになる（get_my_public_config()は呼ばない）", async () => {
+    const companies = [companyOf({ companyCode: "company-a" }), companyOf({ companyCode: "company-b" })];
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies, error: null }),
+      readLastCompanyCode: vi.fn().mockReturnValue("company-removed"),
+    });
+
+    const result = await resolveCurrentCompany(deps);
+
+    expect(result).toEqual({ status: "selection-required", currentCompany: null, membership: null, companies });
+    expect(deps.clearLastCompanyCode).toHaveBeenCalledTimes(1);
+    expect(deps.fetchMembership).not.toHaveBeenCalled();
+  });
+
+  it("所属2件以上・lastCompanyCodeが無い場合、先頭会社(companies[0])を機械的に選ばずselection-requiredになる（get_my_public_config()は呼ばない）", async () => {
+    const companies = [companyOf({ companyCode: "company-a" }), companyOf({ companyCode: "company-b" })];
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies, error: null }),
+      readLastCompanyCode: vi.fn().mockReturnValue(null),
+    });
+
+    const result = await resolveCurrentCompany(deps);
+
+    expect(result).toEqual({ status: "selection-required", currentCompany: null, membership: null, companies });
+    expect(deps.fetchMembership).not.toHaveBeenCalled();
+    expect(deps.clearLastCompanyCode).not.toHaveBeenCalled();
+  });
+
+  it("会社一覧の取得でエラーの場合、statusがerrorになる", async () => {
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies: [], error: { type: "unknown", message: "boom" } }),
+    });
+
+    const result = await resolveCurrentCompany(deps);
+
+    expect(result).toEqual({ status: "error", currentCompany: null, membership: null, companies: [] });
+    expect(deps.fetchMembership).not.toHaveBeenCalled();
+  });
+
+  it("currentCompany確定後のconfig取得でエラーの場合、statusがerrorになる", async () => {
+    const companies = [companyOf()];
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies, error: null }),
+      fetchMembership: vi.fn().mockResolvedValue({ membership: null, error: { type: "network", message: "boom" } }),
+    });
+
+    const result = await resolveCurrentCompany(deps);
+
+    expect(result).toEqual({ status: "error", currentCompany: null, membership: null, companies });
+  });
+
+  it("一覧には存在したのにconfig取得時には見つからない（競合）場合も、矛盾したconfigを使わずerrorにする", async () => {
+    const companies = [companyOf()];
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies, error: null }),
+      fetchMembership: vi.fn().mockResolvedValue({ membership: null, error: null }),
+    });
+
+    const result = await resolveCurrentCompany(deps);
+
+    expect(result).toEqual({ status: "error", currentCompany: null, membership: null, companies });
+  });
+
+  it("既存1社ユーザーの動作が壊れない（1件→自動選択→ready、という一連の流れ）", async () => {
+    const companies = [companyOf({ companyCode: "sample-company", companyName: "サンプル会社", role: "admin" })];
+    const membership = membershipOf({
+      companyCode: "sample-company",
+      companyName: "サンプル会社",
+      role: "admin",
+      configSnapshot: { questions: [], rules: [] },
+    });
+    const deps = buildDeps({
+      fetchCompanies: vi.fn().mockResolvedValue({ companies, error: null }),
+      fetchMembership: vi.fn().mockResolvedValue({ membership, error: null }),
+    });
+
+    const result = await resolveCurrentCompany(deps);
+
+    expect(result.status).toBe("ready");
+    expect(result.currentCompany).toEqual({
+      companyCode: "sample-company",
+      companyName: "サンプル会社",
+      role: "admin",
+    });
+    expect(result.membership).toBe(membership);
   });
 });

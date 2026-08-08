@@ -162,6 +162,39 @@ export async function fetchMyMembership(companyCode) {
   }
 }
 
+// ログイン中ユーザー(auth.uid())が所属する会社一覧を取得する（Commit 3で追加）。
+// list_my_companies() RPC（supabase/schema.sql参照）はcompany_members.user_id =
+// auth.uid()の行だけを対象にする（クライアントからuser_idを渡す経路は無い）ため、
+// 他人の所属会社が混ざることはない。platform_adminであっても本人の所属会社
+// だけが返る（全社一覧はfetchPlatformCompanies()の責務。混同しない）。
+//
+// companies: [{companyCode, companyName, role}, ...]
+//   所属0件なら空配列（エラーではない）。複数件あればその全件を返す
+//   （fetchMyMembership()と異なり、ここでは1件へ絞り込まない）。
+export async function fetchMyCompanies() {
+  if (!isSupabaseConfigured) {
+    return { companies: [], error: null };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc("list_my_companies");
+
+    if (error) {
+      return { companies: [], error: { type: "unknown", message: error.message } };
+    }
+
+    const companies = (Array.isArray(data) ? data : []).map((row) => ({
+      companyCode: row.company_code,
+      companyName: row.company_name,
+      role: row.role,
+    }));
+
+    return { companies, error: null };
+  } catch (caughtError) {
+    return { companies: [], error: { type: "network", message: caughtError.message } };
+  }
+}
+
 // 招待コードを検証し、ログイン中ユーザーをrole=userとして会社へ所属させる。
 // roleはサーバー側（redeem_invite_code RPC内）で固定されており、
 // クライアントから渡すことはできない。

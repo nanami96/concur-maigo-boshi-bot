@@ -126,6 +126,55 @@ describe("schema.sql: get_my_public_config(p_company_code)は会社を明示指�
   });
 });
 
+describe("schema.sql: list_my_companies()はauth.uid()自身の所属会社一覧だけを、最小限のmetadataで返す（Commit 3）", () => {
+  const block = extractBlock(
+    "create or replace function list_my_companies()",
+    "comment on function list_my_companies()",
+  );
+
+  it("company_members.user_id = auth.uid()の行だけを対象にしている（他ユーザーの所属は返さない）", () => {
+    expect(block).toMatch(/where cm\.user_id = auth\.uid\(\)/);
+  });
+
+  it("クライアントからuser_idを受け取るパラメータを持たない（引数無しの関数）", () => {
+    expect(schemaSql).toMatch(/create or replace function list_my_companies\(\)\s*returns table/);
+  });
+
+  it("戻り値はcompany_code・company_name・roleのみ（company_id等の内部列を含まない）", () => {
+    expect(block).toMatch(/returns table \(company_code text, company_name text, role text\)/);
+  });
+
+  it("invite_code_hash・draft_configs・published_versions・OAuth/Vault関連の列を一切参照しない", () => {
+    expect(block).not.toMatch(/invite_code_hash/);
+    expect(block).not.toMatch(/draft_configs/);
+    expect(block).not.toMatch(/published_versions/);
+    expect(block).not.toMatch(/vault/i);
+    expect(block).not.toMatch(/oauth/i);
+  });
+
+  it("is_platform_admin()を参照しない（platform_adminでも本人の所属会社だけを返す。全社一覧はlist_platform_companies()の責務）", () => {
+    expect(block).not.toMatch(/is_platform_admin/);
+  });
+
+  it("company_name・company_codeの順で決定的にORDER BYしている（DBの行順に依存しない）", () => {
+    expect(block).toMatch(/order by c\.company_name, c\.company_code;/);
+  });
+
+  it("data[0]・LIMIT 1・maybeSingleに相当する縮退を行わない（複数件をそのまま返す設計）", () => {
+    expect(block).not.toMatch(/limit 1/i);
+  });
+
+  it("SECURITY DEFINERかつsearch_pathを固定している（乗っ取り防止。他のSECURITY DEFINER関数と同じ方針）", () => {
+    expect(block).toMatch(/security definer/);
+    expect(block).toMatch(/set search_path = public/);
+  });
+
+  it("EXECUTE権限はauthenticatedのみに付与されている", () => {
+    expect(schemaSql).toMatch(/revoke all on function list_my_companies\(\) from public;/);
+    expect(schemaSql).toMatch(/grant execute on function list_my_companies\(\) to authenticated;/);
+  });
+});
+
 describe("schema.sql: list_my_company_members(p_company_id)は対象会社を明示指定し、他社admin権限では取得できない", () => {
   it("旧・引数無し版を明示的にdrop functionしてから作り直している", () => {
     const dropIndex = schemaSql.indexOf("drop function if exists list_my_company_members();");

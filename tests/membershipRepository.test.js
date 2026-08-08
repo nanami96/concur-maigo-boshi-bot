@@ -27,6 +27,7 @@ function makeSelectChain(result) {
 const {
   classifyMembershipRpcError,
   fetchMyMembership,
+  fetchMyCompanies,
   redeemInviteCode,
   fetchMyCompanyMembers,
   updateMemberRole,
@@ -207,6 +208,65 @@ describe("fetchMyMembership", () => {
 
       expect(rpcMock).toHaveBeenCalledWith("get_my_public_config");
     });
+  });
+});
+
+describe("fetchMyCompanies（Commit 3：本人の所属会社一覧）", () => {
+  it("Supabase未設定なら呼び出さず空配列を返す", async () => {
+    mockState.isSupabaseConfigured = false;
+    const result = await fetchMyCompanies();
+    expect(result).toEqual({ companies: [], error: null });
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it("所属0件なら空配列（エラーではない）", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
+    const result = await fetchMyCompanies();
+    expect(result).toEqual({ companies: [], error: null });
+    expect(rpcMock).toHaveBeenCalledWith("list_my_companies");
+  });
+
+  it("所属1件なら1件をそのまま返す", async () => {
+    rpcMock.mockResolvedValue({
+      data: [{ company_code: "company-a", company_name: "A株式会社", role: "user" }],
+      error: null,
+    });
+    const result = await fetchMyCompanies();
+    expect(result).toEqual({
+      companies: [{ companyCode: "company-a", companyName: "A株式会社", role: "user" }],
+      error: null,
+    });
+  });
+
+  it("所属複数件なら、勝手に1件へ絞り込まず全件を会社ごとのroleと共に返す", async () => {
+    rpcMock.mockResolvedValue({
+      data: [
+        { company_code: "company-a", company_name: "A株式会社", role: "admin" },
+        { company_code: "company-b", company_name: "B株式会社", role: "user" },
+      ],
+      error: null,
+    });
+    const result = await fetchMyCompanies();
+    expect(result.companies).toEqual([
+      { companyCode: "company-a", companyName: "A株式会社", role: "admin" },
+      { companyCode: "company-b", companyName: "B株式会社", role: "user" },
+    ]);
+  });
+
+  it("RPCエラー時は空配列とエラーを返す（生のSupabaseエラーをそのまま露出しない）", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+    const result = await fetchMyCompanies();
+    expect(result.companies).toEqual([]);
+    expect(result.error).toEqual({ type: "unknown", message: "boom" });
+  });
+
+  it("通信例外時はnetworkエラーを返す", async () => {
+    rpcMock.mockImplementation(() => {
+      throw new Error("network down");
+    });
+    const result = await fetchMyCompanies();
+    expect(result.companies).toEqual([]);
+    expect(result.error.type).toBe("network");
   });
 });
 
