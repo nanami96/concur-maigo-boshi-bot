@@ -147,6 +147,39 @@ describe("一連の流れ（判定結果→OCR確認データ→buildConcurRegis
     expect(registrationData.expenseTypeId).toBe("taxi");
   });
 
+  it("【複数社所属対応・Commit 4】ConcurRegistrationPanelのcompanyCode propが、Quick Expenseへ送るcompanyIdとしてconfig埋め込みのcompany.company_idより優先される", () => {
+    // BotConversation.jsx→ConcurRegistrationPanel.jsxがcurrentCompany.companyCode
+    // （CompanyContext.jsx）をcompanyCode propとして渡す想定（実際のprops配線は
+    // BotConversation.jsx参照）。ConcurRegistrationPanel.jsx自身はこの値を
+    // そのままbuildConcurRegistrationData()へ転送するだけなので、ここでは
+    // その転送後の呼び出しと同じ形でbuildConcurRegistrationData()を直接検証する。
+    const result = {
+      rule: { id: "r002-g1" },
+      expenseType: { id: "taxi", name: "タクシー", policyId: "normal_expense", receiptRequired: false },
+    };
+    const receiptData = {
+      transactionDate: "2026-07-29",
+      merchantName: "株式会社あんしんネット21",
+      totalAmount: 1200,
+      currencyCode: "JPY",
+    };
+
+    // company.company_id（config埋め込みの複製値）が、万一currentCompanyと
+    // 異なる値（例：古いconfigが残っている）でも、companyCode propが優先される
+    // ことを確認するため、意図的に異なる値にしておく。
+    const { result: registrationData, error } = buildConcurRegistrationData({
+      company: buildCompany({ company_id: "stale-config-embedded-company" }),
+      companyCode: "company-a",
+      result,
+      receiptData,
+    });
+
+    expect(error).toBeNull();
+    expect(registrationData.companyId).toBe("company-a");
+    // B社（別会社）のcompanyCodeは一切送られない。
+    expect(registrationData.companyId).not.toBe("stale-config-embedded-company");
+  });
+
   it("領収書不要の経費タイプでも到達できる（OCR未実施でも領収書表示が崩れない）", () => {
     const result = {
       rule: { id: "r001-g1" },

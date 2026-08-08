@@ -121,6 +121,83 @@ function NoMembershipGate({ onJoined }) {
   return <InviteCodeScreen onJoined={onJoined} initialErrorMessage={autoErrorMessage} />;
 }
 
+// 2社以上に所属しており、かつlocalStorageに有効な前回会社が無い状態
+// （resolveCurrentCompany.js参照）で表示する、明示的な会社選択画面（Commit 4）。
+// 独自dropdownは実装せず、標準の<button>を1社ずつ並べる（キーボード操作可能な
+// 標準UIを優先する方針。CandidateList（経費タイプ候補の選択）と同じ
+// candidateList/candidateCard/candidateSelectButtonクラスを再利用し、新しい
+// CSSを増やさない）。選択に成功するとCompanyContextのstatusが
+// ready/unpublishedへ遷移し、この画面から自然に抜ける。
+export function CompanySelectionGate({ companies, isSwitching, onSelect }) {
+  return (
+    <main className="appShell">
+      <section className="chatPanel botStatusPanel" aria-label="Concur迷子防止Botの質問">
+        <h1>会社を選択してください</h1>
+        <p>複数の会社に所属しています。利用する会社を選んでください。</p>
+        <div className="candidateList">
+          {companies.map((company) => (
+            <div className="candidateCard" key={company.companyCode}>
+              <h4 className="candidateName">{company.companyName}</h4>
+              <button
+                className="candidateSelectButton"
+                type="button"
+                disabled={isSwitching}
+                onClick={() => onSelect(company.companyCode)}
+              >
+                この会社を利用する
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+// ヘッダー（BotConversation.jsxのheaderActions）へ表示する、現在利用中会社の
+// 表示・切替UI（Commit 4）。
+//
+// 1社所属の場合：companySelector/companySelectorLabelクラス（既存の
+// App.jsx・admin/AdminRoot.jsxの会社セレクタと同じスタイル定義、
+// styles.css参照）を再利用しつつ、テキスト表示だけにする（select等は
+// 表示しない。不要なdropdownを出さない方針）。
+//
+// 2社以上の場合：同じくApp.jsx・AdminRoot.jsxと全く同じマークアップ構造
+// （label.companySelector > span.companySelectorLabel + span.companySelectWrap
+// > select）を再利用した標準の<select>で切替できるようにする。
+// option側にはcompanyCode（内部値）、表示テキストにはcompanyName
+// （利用者向け名称）を使う。切替処理自体はCompanyContext.selectCompany()へ
+// 委譲し、ここではSupabase呼び出しを一切行わない。
+export function CompanyHeaderIndicator({ currentCompany, companies, isSwitching, onSelectCompany }) {
+  if (companies.length <= 1) {
+    return (
+      <span className="companySelector">
+        <span className="companySelectorLabel">会社：{currentCompany.companyName}</span>
+      </span>
+    );
+  }
+
+  return (
+    <label className="companySelector">
+      <span className="companySelectorLabel">会社</span>
+      <span className="companySelectWrap">
+        <select
+          aria-label="会社を選択"
+          value={currentCompany.companyCode}
+          disabled={isSwitching}
+          onChange={(event) => onSelectCompany(event.target.value)}
+        >
+          {companies.map((company) => (
+            <option key={company.companyCode} value={company.companyCode}>
+              {company.companyName}
+            </option>
+          ))}
+        </select>
+      </span>
+    </label>
+  );
+}
+
 // ログイン済みであることが確定した後（AppAuthGate経由）に表示する、
 // 一般利用者Bot画面の本体。
 //
@@ -144,7 +221,7 @@ export default function AuthenticatedBotScreen({ onSignOut }) {
 }
 
 function AuthenticatedBotScreenContent({ onSignOut }) {
-  const { status, currentCompany, membership, reload } = useCompanyContext();
+  const { status, currentCompany, membership, companies, isSwitching, reload, selectCompany } = useCompanyContext();
 
   if (status === "loading") {
     return (
@@ -171,17 +248,10 @@ function AuthenticatedBotScreenContent({ onSignOut }) {
   }
 
   // 2社以上に所属しており、かつlocalStorageに有効な前回会社が無い状態
-  // （resolveCurrentCompany.js参照）。会社を選ばせるUIはまだ無いため、
-  // 今回はこの状態を案内するだけの非対話的な文言に留める（ドロップダウン等の
-  // 選択UIはCommit 3以降で追加する）。
+  // （resolveCurrentCompany.js参照）。Commit 4で、所属会社一覧から明示的に
+  // 選んでもらう画面（CompanySelectionGate）へ置き換えた。
   if (status === "selection-required") {
-    return (
-      <main className="appShell">
-        <section className="chatPanel botStatusPanel" aria-label="Concur迷子防止Botの質問">
-          <p>複数の会社に所属しています。会社を選択する機能は近日提供予定です。</p>
-        </section>
-      </main>
-    );
+    return <CompanySelectionGate companies={companies} isSwitching={isSwitching} onSelect={selectCompany} />;
   }
 
   const isAdmin = currentCompany.role === "admin";
@@ -191,11 +261,27 @@ function AuthenticatedBotScreenContent({ onSignOut }) {
   // スマホ幅では意味を持たない。adminLinkButtonクラスでCSS側から
   // 1024px未満のみ非表示にする（styles.css参照。role='admin'かどうかの
   // 判定自体はここでは変更していない）。
-  const headerActions = isAdmin ? (
-    <a className="resetButton adminLinkButton" href="#admin">
-      管理画面へ
-    </a>
-  ) : null;
+  //
+  // 【複数社所属対応・Commit 4で追加】会社表示・切替（CompanyHeaderIndicator）を
+  // headerActionsの先頭へ追加した。1社所属時はテキスト表示のみ（select無し）、
+  // 2社以上ではApp.jsx・admin/AdminRoot.jsxと同じ既存の.companySelector構造を
+  // 再利用した標準<select>にする（新しいdropdown実装・大規模レイアウト変更は
+  // 行っていない）。
+  const headerActions = (
+    <>
+      <CompanyHeaderIndicator
+        currentCompany={currentCompany}
+        companies={companies}
+        isSwitching={isSwitching}
+        onSelectCompany={selectCompany}
+      />
+      {isAdmin && (
+        <a className="resetButton adminLinkButton" href="#admin">
+          管理画面へ
+        </a>
+      )}
+    </>
+  );
 
   if (status === "unpublished") {
     return (
@@ -227,6 +313,7 @@ function AuthenticatedBotScreenContent({ onSignOut }) {
       // このpropを渡していないため既定のfalseのままとなり、OCRの導線自体が
       // 表示されない（実際の認証・権限チェックはEdge Function側が最終防御）。
       enableReceiptOcr
+      currentCompanyCode={currentCompany.companyCode}
     />
   );
 }

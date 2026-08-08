@@ -35,6 +35,40 @@
 //            機械的に選ぶことは絶対に行わない。"selection-required"として
 //            扱う（fail-closed）。実際に会社を選ばせるUIはCommit 4以降で
 //            追加する。
+// companiesの中にcompanyCodeが実在するかを確認したうえで、その会社の公開config
+// （get_my_public_config(p_company_code)相当）を取得する共通処理。起動時の
+// 自動解決（resolveCurrentCompany）と、利用者による明示的な会社切替
+// （selectCompany）の両方から使う。
+//
+// companiesに存在しないcompanyCodeを渡した場合はfail-closedにする
+// （outcome: "not-a-member"）。クライアント側のcompanies一覧に存在しない
+// companyCodeが渡ってくること自体、通常のUI操作では起こり得ないが、万一
+// 不正な値が渡された場合でも、ここで早期に弾き、get_my_public_config()すら
+// 呼ばない。ただしここでの検証はあくまで早期防御であり、最終防衛線は
+// Commit 1で実装済みのバックエンド側の所属照合（get_my_public_config内の
+// company_members照合）である（フロント側の一覧だけを信用した設計にはしない）。
+async function resolveCompanyByCode({ companies, companyCode, fetchMembership }) {
+  const matched = companies.find((company) => company.companyCode === companyCode);
+  if (!matched) {
+    return { outcome: "not-a-member", currentCompany: null, membership: null };
+  }
+
+  const { membership, error } = await fetchMembership(companyCode);
+
+  if (error) {
+    return { outcome: "error", currentCompany: null, membership: null };
+  }
+
+  if (!membership) {
+    // 一覧には存在したのに、config取得時には見つからない（呼び出しの間に
+    // 削除される等、極めて稀な競合）。matchedをそのまま確定させず、
+    // 呼び出し元にnot-a-memberとして扱わせる（安全側）。
+    return { outcome: "not-a-member", currentCompany: null, membership: null };
+  }
+
+  return { outcome: "ok", currentCompany: matched, membership };
+}
+
 export async function resolveCurrentCompany({
   fetchCompanies,
   fetchMembership,
@@ -51,43 +85,69 @@ export async function resolveCurrentCompany({
     return { status: "no-membership", currentCompany: null, membership: null, companies };
   }
 
-  let currentCompany;
-
   if (companies.length === 1) {
-    currentCompany = companies[0];
-  } else {
-    const lastCompanyCode = readLastCompanyCode();
-    if (!lastCompanyCode) {
-      return { status: "selection-required", currentCompany: null, membership: null, companies };
+    const resolved = await resolveCompanyByCode({ companies, companyCode: companies[0].companyCode, fetchMembership });
+    if (resolved.outcome !== "ok") {
+      return { status: "error", currentCompany: null, membership: null, companies };
     }
-
-    const matched = companies.find((company) => company.companyCode === lastCompanyCode);
-    if (!matched) {
-      clearLastCompanyCode();
-      return { status: "selection-required", currentCompany: null, membership: null, companies };
-    }
-
-    currentCompany = matched;
+    return {
+      status: resolved.membership.configSnapshot ? "ready" : "unpublished",
+      currentCompany: resolved.currentCompany,
+      membership: resolved.membership,
+      companies,
+    };
   }
 
-  const { membership, error: membershipError } = await fetchMembership(currentCompany.companyCode);
-
-  if (membershipError) {
-    return { status: "error", currentCompany: null, membership: null, companies };
+  const lastCompanyCode = readLastCompanyCode();
+  if (!lastCompanyCode) {
+    return { status: "selection-required", currentCompany: null, membership: null, companies };
   }
 
-  if (!membership) {
-    // list_my_companies()では所属していたはずなのに、get_my_public_config()側では
-    // 見つからない（呼び出しの間に削除される等、極めて稀な競合が起きた場合の
-    // 防御）。currentCompanyを確定させたまま矛盾したconfigを使うより、
-    // 安全側（error）に倒し、再読み込みで解決させる。
+  if (!companies.some((company) => company.companyCode === lastCompanyCode)) {
+    clearLastCompanyCode();
+    return { status: "selection-required", currentCompany: null, membership: null, companies };
+  }
+
+  const resolved = await resolveCompanyByCode({ companies, companyCode: lastCompanyCode, fetchMembership });
+
+  if (resolved.outcome !== "ok") {
     return { status: "error", currentCompany: null, membership: null, companies };
   }
 
   return {
-    status: membership.configSnapshot ? "ready" : "unpublished",
-    currentCompany,
-    membership,
+    status: resolved.membership.configSnapshot ? "ready" : "unpublished",
+    currentCompany: resolved.currentCompany,
+    membership: resolved.membership,
     companies,
+  };
+}
+
+// 利用者が明示的に会社を切り替えたときに呼ぶ（Commit 4）。resolveCurrentCompanyと
+// 同じresolveCompanyByCodeを共有し、「companiesに実在するcompanyCodeだけを
+// 受け付け、その会社のconfigが実際に取得できた場合だけ切替を確定する」という
+// 検証を、起動時の自動解決と全く同じロジックで行う。
+//
+// atomicな切替のため、呼び出し元（CompanyContext.jsx）は戻り値のstatusが
+// "ready"/"unpublished"の場合だけcurrentCompany/membershipを更新すること。
+// "rejected"（companiesに存在しない・既に所属していない）・"error"
+// （通信エラー等）の場合は、呼び出し元は現在のcurrentCompany/membershipを
+// 一切変更してはならない（A社選択中にB社への切替に失敗しても、A社の状態を
+// 維持する）。lastCompanyCodeの保存も、呼び出し元が"ready"/"unpublished"を
+// 確認してから行う（失敗した切替でlastCompanyCodeを書き換えない）。
+export async function selectCompany({ companyCode, companies, fetchMembership }) {
+  const resolved = await resolveCompanyByCode({ companies, companyCode, fetchMembership });
+
+  if (resolved.outcome === "not-a-member") {
+    return { status: "rejected", currentCompany: null, membership: null };
+  }
+
+  if (resolved.outcome === "error") {
+    return { status: "error", currentCompany: null, membership: null };
+  }
+
+  return {
+    status: resolved.membership.configSnapshot ? "ready" : "unpublished",
+    currentCompany: resolved.currentCompany,
+    membership: resolved.membership,
   };
 }

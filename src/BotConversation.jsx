@@ -179,6 +179,13 @@ export default function BotConversation({
   headerActions,
   onSignOut,
   enableReceiptOcr = false,
+  // 【複数社所属対応・Commit 4で追加】現在選択中会社(CompanyContext.jsxの
+  // currentCompany.companyCode)。ConcurRegistrationPanel.jsxへそのまま渡すだけで、
+  // このコンポーネント自身は「どの会社を使っているか」を一切解釈しない
+  // （ファイル冒頭コメントの設計方針のとおり）。呼び出し側（App.jsx）が
+  // 渡さない場合はundefinedのままで、ConcurRegistrationPanel側は既存どおり
+  // config.company.company_idへフォールバックする（後方互換）。
+  currentCompanyCode,
 }) {
   const engine = useMemo(() => (config ? new QuestionEngine(config) : null), [config]);
   const [currentQuestion, setCurrentQuestion] = useState(() => engine?.getFirstQuestion() ?? null);
@@ -583,6 +590,7 @@ export default function BotConversation({
                   よい。 */}
               <ConcurRegistrationPanel
                 company={config?.company}
+                companyCode={currentCompanyCode}
                 result={result}
                 receiptData={receiptData}
                 expenseTypeName={result.expenseType?.name}

@@ -31,6 +31,15 @@ import {
 // 計算済みの値（expenseTypeName・policyName）をそのまま受け取るだけにする
 // （内部IDから名称を再変換する不要なmappingを増やさないため）。
 //
+// companyCodeについて（Commit 4で追加）：CompanyContext.jsx（currentCompany.
+// companyCode）から、BotConversation.jsx経由でそのまま受け取る。
+// buildConcurRegistrationData()側で、company.company_id（config埋め込みの
+// 複製値）より優先してcompanyIdとして使われる（src/lib/concurRegistrationData.js
+// 冒頭コメント参照）。これにより、複数社所属で会社を切り替えた直後でも、
+// Quick Expenseへ送るcompanyIdが必ず「今まさに選択中の会社」と一致する
+// （config自体は既にcurrentCompanyの会社のものに更新済みだが、company_id
+// フィールドは万一config側の値が古い場合に備えた二重の安全策）。
+//
 // buildConcurRegistrationData()（src/lib/concurRegistrationData.js）の呼び出しは
 // このコンポーネント自身の内部で行う（ReceiptOcrPanel.jsxがanalyzeReceiptImage()
 // を自身の内部で呼ぶのと同じ構成）。経費タイプID＝Concur EXP_KEYという設計
@@ -43,6 +52,7 @@ import {
 // 既存画面へ留める）。
 export default function ConcurRegistrationPanel({
   company,
+  companyCode,
   result,
   receiptData,
   expenseTypeName,
@@ -57,6 +67,7 @@ export default function ConcurRegistrationPanel({
 
   const { result: registrationData, error } = buildConcurRegistrationData({
     company,
+    companyCode,
     result,
     receiptData,
     concurLoginId,
